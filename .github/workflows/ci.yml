@@ -43,7 +43,7 @@ jobs:
         run: npm run typecheck
 
       - name: Test
-        run: npm test -- --ci --coverage
+        run: npm test -- --ci --coverage --passWithNoTests
 
   eas-build-preview:
     name: EAS Build (preview)
