@@ -1,8 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2019",
-    "lib": ["ES2019"],
-    "types": ["jest"],
+    "lib": [
+      "ES2019"
+    ],
     "allowJs": true,
     "jsx": "react-native",
     "noEmit": true,
@@ -13,15 +14,18 @@
     "isolatedModules": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "types": [
+      "jest"
+    ],
     "baseUrl": "."
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    ".expo/types/**/*.d.ts",
-    "expo-env.d.ts"
+    ".expo/types/**/*.d.ts"
   ],
   "exclude": [
     "node_modules"
-  ]
+  ],
+  "extends": "expo/tsconfig.base"
 }
