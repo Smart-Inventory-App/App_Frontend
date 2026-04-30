@@ -15,9 +15,16 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "types": [
+      "node",
       "jest"
     ],
-    "baseUrl": "."
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@/*": [
+        "src/*"
+      ]
+    }
   },
   "include": [
     "**/*.ts",
