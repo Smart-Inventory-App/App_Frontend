@@ -9,7 +9,7 @@
     "web": "expo start --web",
     "test": "jest --watchAll=false --passWithNoTests",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
-    "build": "expo export --platform web",
+    "build": "node -v && expo export --platform web",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
