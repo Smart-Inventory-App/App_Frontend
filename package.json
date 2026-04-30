@@ -47,7 +47,7 @@
   },
   "id": "engines",
   "engines": {
-    "node": "18.x"
+    "node": ">=20"
   },
   "jest": {
     "preset": "jest-expo",
