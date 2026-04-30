@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useState } from 'react';
 
 
-
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 export default function HomeScreen() {
   const [status, setStatus] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -11,7 +11,7 @@ export default function HomeScreen() {
     setLoading(true);
     setStatus('Conectando...');
     try {
-      const API_URL = process.env.EXPO_PUBLIC_API_URL;
+      
       const response = await fetch(`${API_URL}/test`);
       const data = await response.json();
       console.log("API_URL:", API_URL);

@@ -8,7 +8,7 @@ import { trpc } from './trpc';
  * Handles authentication tokens and API URL configuration
  */
 export function getTRPCClient() {
-  const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   return trpc.createClient({
     links: [
