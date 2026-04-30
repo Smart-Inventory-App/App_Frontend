@@ -46,6 +46,10 @@
     "react-test-renderer": "19.1.0",
     "typescript": "~5.9.2"
   },
+  "id": "engines",
+  "engines": {
+    "node": "18.x"
+  },
   "jest": {
     "preset": "jest-expo",
     "transformIgnorePatterns": [
