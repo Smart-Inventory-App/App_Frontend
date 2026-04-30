@@ -18,7 +18,6 @@
     "@trpc/client": "^10.45.0",
     "@trpc/react-query": "^10.45.0",
     "@trpc/server": "^10.45.0",
-    "app_backend": "github.com:Smart-Inventory-App/App_backend",
     "axios": "^1.6.5",
     "expo": "~54.0.33",
     "expo-linking": "~8.0.12",
