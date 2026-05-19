@@ -1,18 +1,33 @@
 import { View, Text, StyleSheet } from 'react-native';
+import {useFonts, Figtree_400Regular} from '@expo-google-fonts/figtree'
 
 type Props = {
   title: string;
   value: string;
   label: string;
-  labelColor: string;
+  labelColor: 'green' | 'yellow' | 'red';
 };
 
 export default function StatCard({ title, value, label, labelColor }: Props) {
+  const [] = useFonts({Figtree_400Regular})
+  const getLabelStyle = () => {
+    switch(labelColor) {
+      case 'green':
+        return styles.labelGreen
+      case 'yellow':
+        return styles.labelYellow
+      case 'red':
+        return styles.labelRed
+      default:
+        return styles.labelGreen
+    }
+  }
+
   return (
     <View style={styles.card}>
       <Text style={styles.value}>{value}</Text>
       <Text style={styles.title}>{title}</Text>
-      <Text style={[styles.label, { backgroundColor: labelColor }]}>{label}</Text>
+      <View style={getLabelStyle()}>{label}</View>
     </View>
   );
 }
@@ -20,24 +35,50 @@ export default function StatCard({ title, value, label, labelColor }: Props) {
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    margin: 8,
+    marginHorizontal: 4,
+    marginVertical: 8,
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#fff',
     elevation: 2,
   },
-  value: { fontSize: 22, fontWeight: 'bold' },
-  title: { fontSize: 14, color: '#555' },
-  // label: { fontSize: 12, marginTop: 4 },
-  label: {
-    fontSize: 12,
-    marginTop: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    color: '#fff',        // texto blanco para contraste
-    alignSelf: 'flex-start', // que no ocupe todo el ancho
-    fontWeight: '600',
+  value: { fontSize: 22, fontWeight: 'bold', fontFamily: 'Figtree_400Regular' },
+  title: { fontSize: 14, fontFamily: 'Figtree_400Regular' },
+  labelGreen: {
+    fontFamily: 'Figtree_400Regular',
+    fontSize: 10,
+    color: '#14554b',
+    borderRadius: 10,
+    backgroundColor: '#2db7a352',
+    width: 101,
+    height: 17,
+    alignItems: 'center',
+    flexDirection: 'row',
+    paddingHorizontal: 10,
+  },
+  labelYellow: {
+    fontFamily: 'Figtree_400Regular',
+    fontSize: 10,
+    color: '#564209',
+    borderRadius: 10,
+    backgroundColor: '#fbbc059d',
+    width: 101,
+    height: 17,
+    alignItems: 'center',
+    flexDirection: 'row',
+    paddingHorizontal: 10
+  },
+  labelRed: {
+    fontFamily: 'Figtree_400Regular',
+    fontSize: 10,
+    color: '#671a1c',    
+    borderRadius: 10,
+    backgroundColor: '#e5484d8f',
+    width: 101,
+    height: 17,
+    alignItems: 'center',
+    flexDirection: 'row',
+    paddingHorizontal: 10
   }
 
 });

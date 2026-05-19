@@ -14,7 +14,7 @@ export default function HomeScreen() {
       </View>
       <View style={styles.statsRow}>
         <StatCard title="Por vencer" value="32" label="Esta semana" labelColor="green" />
-        <StatCard title="A reponer" value="12" label="Stock bajo" labelColor="orange" />
+        <StatCard title="A reponer" value="12" label="Stock bajo" labelColor="yellow" />
       </View>
 
       {/* Lista de productos recientes */}
