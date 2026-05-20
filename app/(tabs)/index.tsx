@@ -1,8 +1,11 @@
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import StatCard from '@/components/StatCard';
 import ProductItem from '@/components/ProductItem';
+import { Figtree_400Regular, useFonts } from '@expo-google-fonts/figtree';
 
 export default function HomeScreen() {
+  const [] = useFonts({Figtree_400Regular})
+  //TODO: consulta a api y guardar los valores
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.header}>JohDoestri, Johnson</Text>
@@ -28,7 +31,7 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f2f3f6', padding: 16 },
-  header: { fontSize: 20, fontWeight: 'bold', marginBottom: 12 },
+  header: { fontSize: 20, fontWeight: 'bold', marginBottom: 12, fontFamily: 'Figtree_400Regular' },
   statsRow: { flexDirection: 'row' },
-  section: { fontSize: 18, fontWeight: 'bold', marginTop: 20, marginBottom: 10 },
+  section: { fontSize: 14, fontWeight: 'bold', marginTop: 20, marginBottom: 10, fontFamily: 'Figtree_400Regular' },
 });
