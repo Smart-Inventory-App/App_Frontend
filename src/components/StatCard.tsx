@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native';
 import {useFonts, Figtree_400Regular} from '@expo-google-fonts/figtree'
+import {RobotoFlex_400Regular} from '@expo-google-fonts/roboto-flex'
 
 type Props = {
   title: string;
@@ -9,7 +10,7 @@ type Props = {
 };
 
 export default function StatCard({ title, value, label, labelColor }: Props) {
-  const [] = useFonts({Figtree_400Regular})
+  const [] = useFonts({Figtree_400Regular, RobotoFlex_400Regular })
   const getLabelStyle = () => {
     switch(labelColor) {
       case 'green':
@@ -41,9 +42,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#fff',
     elevation: 2,
+    height: 131,
+    // justifyContent: 'space-between'
   },
-  value: { fontSize: 22, fontWeight: 'bold', fontFamily: 'Figtree_400Regular' },
-  title: { fontSize: 14, fontFamily: 'Figtree_400Regular' },
+  value: { fontSize: 36, fontFamily: 'RobotoFlex_400Regular', marginBottom: 15 },
+  title: { fontSize: 14, fontFamily: 'Figtree_400Regular', marginBottom: 15 },
   labelGreen: {
     fontFamily: 'Figtree_400Regular',
     fontSize: 10,
