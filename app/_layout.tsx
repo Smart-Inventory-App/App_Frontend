@@ -6,7 +6,19 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <SafeAreaProvider>
-        <Stack screenOptions={{ headerShown: false }} />
+        <Stack screenOptions={{ headerShown: false}}>
+          {/* Grupo de auth (sin navbar) */}
+          <Stack.Screen
+            name="auth"
+            options={{ headerShown: false }}
+          />
+
+          {/* Grupo de tabs (con navbar) */}
+          <Stack.Screen
+            name="tabs"
+            options={{ headerShown: false }}
+          />
+        </Stack>
       </SafeAreaProvider>
     </AuthProvider>
   );
