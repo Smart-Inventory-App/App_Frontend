@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { authService } from '../services/authService';
 
 const TOKEN_KEY = 'kc_access_token';
+const REFRESH_KEY = 'kc_refresh_token';
 
 // expo-secure-store doesn't work on web — fall back to AsyncStorage
 const storage = {
@@ -44,14 +45,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsLoading(false));
   }, []);
 
+  const _storeTokens = async (accessToken: string, refreshToken?: string) => {
+    await storage.set(TOKEN_KEY, accessToken);
+    if (refreshToken) await storage.set(REFRESH_KEY, refreshToken);
+    setToken(accessToken);
+  };
+
   const login = async (email: string, password: string) => {
     const result = await authService.login(email, password);
-    await storage.set(TOKEN_KEY, result.access_token);
-    setToken(result.access_token);
+    await _storeTokens(result.access_token, result.refresh_token);
   };
 
   const logout = async () => {
+    const refreshToken = await storage.get(REFRESH_KEY);
+    if (refreshToken) {
+      try {
+        await authService.logout(refreshToken);
+      } catch {
+        // Si falla el logout en Keycloak igual limpiamos la sesión local
+      }
+    }
     await storage.delete(TOKEN_KEY);
+    await storage.delete(REFRESH_KEY);
     setToken(null);
   };
 
@@ -61,8 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithGoogle = async (code: string, redirectUri: string, codeVerifier?: string) => {
     const result = await authService.socialCallback(code, redirectUri, codeVerifier);
-    await storage.set(TOKEN_KEY, result.access_token);
-    setToken(result.access_token);
+    await _storeTokens(result.access_token, result.refresh_token);
   };
 
   return (
