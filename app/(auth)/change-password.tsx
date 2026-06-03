@@ -11,22 +11,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { authService } from '../../src/services/authService';
-
-interface Rule {
-  label: string;
-  test: (pw: string, repeat: string) => boolean;
-}
-
-const PASSWORD_RULES: Rule[] = [
-  { label: 'Mínimo de 8 caracteres', test: (pw) => pw.length >= 8 },
-  { label: 'Contiene mayúsculas', test: (pw) => /[A-Z]/.test(pw) },
-  { label: 'Contiene minúsculas', test: (pw) => /[a-z]/.test(pw) },
-  { label: 'Contiene número y/o carácter especial', test: (pw) => /[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pw) },
-  // "Distinta a las anteriores" is enforced server-side by Keycloak password policy
-  { label: 'Distinta a las anteriores', test: () => true },
-];
 
 function RuleRow({ valid, label }: { valid: boolean; label: string }) {
   return (
@@ -42,13 +29,22 @@ function RuleRow({ valid, label }: { valid: boolean; label: string }) {
 }
 
 export default function ChangePasswordScreen() {
+  const { t } = useTranslation();
   const { reset_token } = useLocalSearchParams<{ reset_token: string }>();
   const [password, setPassword] = useState('');
   const [repeat, setRepeat] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const allValid = PASSWORD_RULES.slice(0, 4).every((r) => r.test(password, repeat)) && password === repeat;
+  const rules = [
+    { key: 'minLength', test: (pw: string) => pw.length >= 8 },
+    { key: 'uppercase', test: (pw: string) => /[A-Z]/.test(pw) },
+    { key: 'lowercase', test: (pw: string) => /[a-z]/.test(pw) },
+    { key: 'numberOrSpecial', test: (pw: string) => /[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pw) },
+    { key: 'differentFromPrevious', test: () => true },
+  ];
+
+  const allValid = rules.slice(0, 4).every((r) => r.test(password)) && password === repeat;
 
   const handleChange = async () => {
     if (!allValid) return;
@@ -60,9 +56,9 @@ export default function ChangePasswordScreen() {
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
       if (detail === 'PASSWORD_POLICY_VIOLATION') {
-        setError('La contraseña no cumple con las políticas requeridas');
+        setError(t('changePassword.policyError'));
       } else {
-        setError('No se pudo cambiar la contraseña. Intentá de nuevo.');
+        setError(t('changePassword.genericError'));
       }
     } finally {
       setLoading(false);
@@ -79,7 +75,7 @@ export default function ChangePasswordScreen() {
         <Text style={styles.titleSmart}>Smart</Text>
         <Text style={styles.titleInventory}>Inventory</Text>
 
-        <Text style={styles.label}>Nueva contraseña</Text>
+        <Text style={styles.label}>{t('changePassword.newPassword')}</Text>
         <TextInput
           style={styles.input}
           placeholder="••••••••"
@@ -89,7 +85,7 @@ export default function ChangePasswordScreen() {
           secureTextEntry
         />
 
-        <Text style={styles.label}>Repetir Contraseña</Text>
+        <Text style={styles.label}>{t('changePassword.repeatPassword')}</Text>
         <TextInput
           style={styles.input}
           placeholder="••••••••"
@@ -100,11 +96,11 @@ export default function ChangePasswordScreen() {
         />
 
         <View style={styles.rulesContainer}>
-          {PASSWORD_RULES.map((rule) => (
+          {rules.map((rule) => (
             <RuleRow
-              key={rule.label}
-              valid={rule.test(password, repeat)}
-              label={rule.label}
+              key={rule.key}
+              valid={rule.test(password)}
+              label={t(`changePassword.rules.${rule.key}` as any)}
             />
           ))}
         </View>
@@ -116,7 +112,7 @@ export default function ChangePasswordScreen() {
           onPress={handleChange}
           disabled={!allValid || loading}
         >
-          <Text style={styles.buttonText}>{loading ? 'Cambiando...' : 'Cambiar Contraseña'}</Text>
+          <Text style={styles.buttonText}>{loading ? t('changePassword.changing') : t('changePassword.changePassword')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
