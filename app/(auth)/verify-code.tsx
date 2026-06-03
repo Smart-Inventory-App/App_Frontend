@@ -11,12 +11,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { authService } from '../../src/services/authService';
 
 const CODE_LENGTH = 6;
 
 export default function VerifyCodeScreen() {
+  const { t } = useTranslation();
   const { email } = useLocalSearchParams<{ email: string }>();
   const [digits, setDigits] = useState<string[]>(Array(CODE_LENGTH).fill(''));
   const [error, setError] = useState('');
@@ -51,7 +53,7 @@ export default function VerifyCodeScreen() {
       const reset_token = await authService.verifyCode(email, code);
       router.push({ pathname: '/(auth)/change-password', params: { reset_token } });
     } catch {
-      setError('Código inválido o expirado');
+      setError(t('verifyCode.invalidCode'));
     } finally {
       setLoading(false);
     }
@@ -79,10 +81,7 @@ export default function VerifyCodeScreen() {
         <Text style={styles.titleSmart}>Smart</Text>
         <Text style={styles.titleInventory}>Inventory</Text>
 
-        <Text style={styles.description}>
-          Si el email indicado corresponde a una cuenta registrada, recibirás un correo con un código de 6 dígitos.
-          El mismo tendrá una validez de 1 hora.{'\n'}Ingrese el código:
-        </Text>
+        <Text style={styles.description}>{t('verifyCode.description')}</Text>
 
         <View style={styles.codeRow}>
           {digits.map((d, i) => (
@@ -108,11 +107,11 @@ export default function VerifyCodeScreen() {
           onPress={handleVerify}
           disabled={code.length < CODE_LENGTH || loading}
         >
-          <Text style={styles.buttonText}>{loading ? 'Verificando...' : 'Recuperar Cuenta'}</Text>
+          <Text style={styles.buttonText}>{loading ? t('verifyCode.verifying') : t('verifyCode.recoverAccount')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={handleResend} disabled={resending}>
-          <Text style={styles.resendLink}>{resending ? 'Reenviando...' : 'Reenviar Código'}</Text>
+          <Text style={styles.resendLink}>{resending ? t('verifyCode.resending') : t('verifyCode.resendCode')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>

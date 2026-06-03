@@ -30,7 +30,10 @@
     "scheme": "app-frontend",
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      "expo-web-browser",
+      "expo-secure-store",
+      "expo-localization"
     ]
   }
 }
