@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { authService } from '../services/authService';
+import { setAuthToken } from '../services/api';
 
 const TOKEN_KEY = 'kc_access_token';
 
@@ -40,18 +41,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     storage.get(TOKEN_KEY)
-      .then((stored) => setToken(stored ?? null))
+      .then((stored) => {
+        setAuthToken(stored ?? null);
+        setToken(stored ?? null);
+      })
       .finally(() => setIsLoading(false));
   }, []);
 
   const login = async (email: string, password: string) => {
     const result = await authService.login(email, password);
     await storage.set(TOKEN_KEY, result.access_token);
+    setAuthToken(result.access_token);
     setToken(result.access_token);
   };
 
   const logout = async () => {
     await storage.delete(TOKEN_KEY);
+    setAuthToken(null);
     setToken(null);
   };
 
@@ -62,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithGoogle = async (code: string, redirectUri: string, codeVerifier?: string) => {
     const result = await authService.socialCallback(code, redirectUri, codeVerifier);
     await storage.set(TOKEN_KEY, result.access_token);
+    setAuthToken(result.access_token);
     setToken(result.access_token);
   };
 

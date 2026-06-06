@@ -9,8 +9,17 @@ const api = axios.create({
   },
 });
 
+let _token: string | null = null;
+
+export function setAuthToken(token: string | null) {
+  _token = token;
+}
+
 api.interceptors.request.use((config: AxiosRequestConfig) => {
-  // Add auth token here if needed
+  if (_token) {
+    config.headers = config.headers ?? {};
+    config.headers['Authorization'] = `Bearer ${_token}`;
+  }
   return config;
 });
 

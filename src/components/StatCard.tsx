@@ -28,7 +28,7 @@ export default function StatCard({ title, value, label, labelColor }: Props) {
     <View style={styles.card}>
       <Text style={styles.value}>{value}</Text>
       <Text style={styles.title}>{title}</Text>
-      <View style={getLabelStyle()}>{label}</View>
+      <Text style={getLabelStyle()}>{label}</Text>
     </View>
   );
 }
@@ -55,9 +55,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#2db7a352',
     width: 101,
     height: 17,
-    alignItems: 'center',
-    flexDirection: 'row',
-    paddingHorizontal: 10,
+    lineHeight: 17,
+    textAlign: 'center',
   },
   labelYellow: {
     fontFamily: 'Figtree_400Regular',
@@ -67,21 +66,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#fbbc059d',
     width: 101,
     height: 17,
-    alignItems: 'center',
-    flexDirection: 'row',
-    paddingHorizontal: 10
+    lineHeight: 17,
+    textAlign: 'center',
   },
   labelRed: {
     fontFamily: 'Figtree_400Regular',
     fontSize: 10,
-    color: '#671a1c',    
+    color: '#671a1c',
     borderRadius: 10,
     backgroundColor: '#e5484d8f',
     width: 101,
     height: 17,
-    alignItems: 'center',
-    flexDirection: 'row',
-    paddingHorizontal: 10
+    lineHeight: 17,
+    textAlign: 'center',
   }
 
 });
