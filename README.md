@@ -1,295 +1,156 @@
-# App Frontend - TPP
+# App Frontend — Smart Inventory
 
-React Native + Expo frontend para Smart Inventory Application.
-
----
-
-## 📋 Tabla de Contenidos
-
-1. [Setup Local](#setup-local)
-2. [Desarrollo](#desarrollo)
-3. [Testing](#testing)
-4. [Preparar para Deployment](#preparar-para-deployment)
-5. [Deployment](#deployment)
-6. [Troubleshooting](#troubleshooting)
+React Native + Expo (web/iOS/Android) frontend para Smart Inventory.
 
 ---
 
-## Setup Local
+## Requisitos
 
-### Requisitos Previos
-
-- **Node.js 18+** (descargar desde https://nodejs.org/)
-- **npm o yarn**
-- **Expo CLI** (se instala con npm)
+- **Node.js 18+**
+- **npm**
 - **Backend corriendo** en `http://localhost:8000` (ver `App_backend/README.md`)
-- **Git**
 
-### Paso 1: Clonar y navegar al proyecto
+---
+
+## Setup local
+
+### 1. Instalar dependencias
 
 ```bash
 cd App_Frontend
-```
-
-### Paso 2: Crear archivo `.env` para desarrollo
-
-```bash
-cat > .env << 'EOF'
-EXPO_PUBLIC_API_URL=http://localhost:8000
-ENV=development
-EOF
-```
-
-### Paso 3: Instalar dependencias
-
-```bash
 npm install --legacy-peer-deps
 ```
 
-Si tienes problemas:
+### 2. Crear `.env`
 
 ```bash
-# Limpiar caché de npm
-npm cache clean --force
-
-# Eliminar node_modules
-rm -rf node_modules package-lock.json
-
-# Reinstalar
-npm install --legacy-peer-deps
-```
-
-### Paso 4: Iniciar el servidor de desarrollo
-
-```bash
-npm start
-```
-
-Verás un output como:
-
-```
-› Metro waiting on exp://172.18.0.1:8081
-› Scan the QR code above with Expo Go (Android) or the Camera app (iOS)
-```
-
-### Paso 5: Abrir en navegador (más fácil para desarrollo)
-
-Presiona **`w`** en el terminal para abrir en navegador.
-
-Se abrirá en: http://localhost:8081
-
----
-
-## Desarrollo
-
-### Estructura del Proyecto
-
-```
-App_Frontend/
-├── app/                         # Rutas con Expo Router
-│   ├── _layout.tsx             # Layout principal
-│   └── index.tsx               # Home screen
-├── src/
-│   ├── components/             # Componentes reutilizables
-│   ├── context/
-│   │   └── AuthContext.tsx      # Context de autenticación
-│   ├── hooks/                   # Custom hooks
-│   │   ├── useAuth.ts          # Hook de auth
-│   │   └── useFetch.ts         # Hook de requests HTTP
-│   ├── services/
-│   │   └── api.ts              # Llamadas API
-│   ├── types/
-│   │   └── navigation.ts       # Tipos de TypeScript
-│   └── utils/
-│       ├── storage.ts          # AsyncStorage helpers
-│       ├── trpc.ts             # Configuración tRPC
-│       ├── trpcClient.ts       # Cliente tRPC
-│       └── TRPCProvider.tsx     # Provider tRPC
-├── __tests__/                   # Tests
-├── package.json
-├── tsconfig.json
-├── babel.config.js
-├── eas.json                     # Configuración EAS
-└── .env                         # Variables de ambiente
-```
-
-### Hot Reload en Desarrollo
-
-Expo tiene fast refresh automático. Cada vez que guardas un archivo, la app se recarga.
-
-Si necesitas control manual:
-
-```
-En el terminal mientras corre Expo:
-- Presiona 'r' → Forzar reload
-- Presiona 'i' → Abrir en iOS Simulator
-- Presiona 'a' → Abrir en Android Emulator
-- Presiona 'w' → Abrir en Web
-- Presiona 'm' → Ver más opciones
-```
-
-### Conectar a Backend Local
-
-El archivo `.env` controla la URL:
-
-```env
-EXPO_PUBLIC_API_URL=http://localhost:8000
-```
-
-### Ver logs de la app
-
-```bash
-# En el terminal donde corre expo
-# Los logs aparecen automáticamente
-
-# O abre las DevTools presionando 'd' en el terminal
-```
-
-### Comandos útiles en desarrollo
-
-```bash
-# Limpiar caché de Expo
-npx expo start -c
-
-# Limpiar caché de Metro bundler
-npx expo start --clear
-
-# Ver versión de Expo
-npx expo -v
-
-# Actualizar paquetes
-npm update
-```
-
----
-
-## Testing
-
-### Ejecutar tests unitarios
-
-```bash
-npm test
-```
-
-### Tests disponibles
-
-```bash
-# Todos los tests
-npm test
-
-# Solo tests de HomeScreen
-npm test HomeScreen.test.tsx
-
-# Watch mode (rerun tests on file changes)
-npm test -- --watch
-
-# Coverage
-npm test -- --coverage
-```
----
-
-## Resumen: Git Push → Deployment
-
-```bash
-# 1. Crear rama de desarrollo
-git checkout -b feature/nueva-feature
-
-# 2. Hacer cambios y tests
-npm test
-
-# 3. Commit
-git add .
-git commit -m "feat: descripción del cambio"
-
-# 4. Push a rama
-git push origin feature/nueva-feature
-
-# 5. Crear Pull Request en GitHub
-
-# 6. Una vez merged a main, los workflows CI/CD:
-#    - Ejecutan tests
-#    - Buildan
-#    - Deployan automáticamente
-
-# 7. Monitorear deployment
-eas build --status
-```
-
----
-
-## Links Útiles
-
-- [Expo Documentation](https://docs.expo.dev/)
-- [React Native Docs](https://reactnative.dev/)
-- [Expo Router](https://docs.expo.dev/routing/introduction/)
-- [EAS Build](https://docs.expo.dev/build/introduction/)
-- [tRPC Docs](https://trpc.io/)
-
----
-
-## 📱 Ejecutar en dispositivo
-
-### Con Expo Go (teléfono)
-
-1. Descarga "Expo Go" en App Store o Google Play
-2. Escanea el QR que aparece en el terminal
-3. Se abrirá en tu teléfono
-
-### Generar APK/IPA
-
-```bash
-eas build --platform android
-```
-
-(Requiere cuenta en Expo)
-
----
-
-## 🐛 Troubleshooting
-
-**"Module not found" errors:**
-```bash
-npm install --legacy-peer-deps
-# O si falla
-rm -rf node_modules package-lock.json
-npm install --legacy-peer-deps
-```
-
-**"EXPO_PUBLIC_API_URL is undefined":**
-```bash
-# Verifica .env existe
-cat .env
-# Si no está, crea o edita:
 echo "EXPO_PUBLIC_API_URL=http://localhost:8000" > .env
 ```
 
-**"Cannot connect to backend":**
+### 3. Levantar el frontend
+
 ```bash
-# Verifica que backend esté corriendo
+npx expo start --web
+```
+
+Se abre en: http://localhost:8081
+
+---
+
+## Levantar todo para desarrollo local
+
+En total se necesitan **3 terminales WSL** (además del frontend):
+
+| Terminal | Directorio | Comando |
+|----------|-----------|---------|
+| 1 | `App_backend` | `docker-compose up` — Postgres + Keycloak |
+| 2 | `App_backend` | `source venv/bin/activate && python main.py` — Backend FastAPI |
+| 3 | `App_Frontend` | `npx expo start --web` — Frontend Expo |
+
+> Si hay migraciones nuevas, correr `alembic upgrade head` (con venv activado) antes de levantar el backend.
+
+> Si el backend devuelve 401, el token de Keycloak expiró (~5 min). Hacer logout/login en la app.
+
+---
+
+## Estructura del proyecto
+
+```
+App_Frontend/
+├── app/                         # Rutas (Expo Router file-based)
+│   ├── _layout.tsx             # Layout raíz con AuthProvider
+│   ├── (auth)/                 # Pantallas sin tab bar
+│   │   ├── login.tsx
+│   │   ├── register.tsx
+│   │   └── ...
+│   └── (tabs)/                 # Pantallas con tab bar
+│       ├── _layout.tsx         # Tab bar config
+│       ├── index.tsx           # Home — resumen del inventario
+│       ├── inventario.tsx      # Lista de productos con filtros
+│       ├── cargar.tsx          # Alta de producto
+│       ├── alertas.tsx         # Alertas (placeholder)
+│       └── perfil.tsx          # Perfil de usuario
+├── src/
+│   ├── components/
+│   │   ├── ProductFormFields.tsx  # Formulario reutilizable de producto
+│   │   ├── ProductItem.tsx
+│   │   └── StatCard.tsx
+│   ├── constants/
+│   │   └── colors.ts
+│   ├── context/
+│   │   └── AuthContext.tsx     # Token Keycloak — login/logout
+│   ├── i18n/
+│   │   ├── index.ts            # Configuración i18next
+│   │   └── locales/
+│   │       ├── es.ts           # Español (default)
+│   │       └── en.ts           # English
+│   ├── services/
+│   │   ├── api.ts              # Axios instance con interceptor Bearer token
+│   │   ├── authService.ts      # Login, register, recuperación de contraseña
+│   │   ├── productService.ts   # CRUD de productos
+│   │   └── profileService.ts   # Perfil de usuario (get/update)
+│   └── types/
+│       └── product.ts          # Tipos Product, ProductCreate
+├── .env                        # No se commitea
+├── package.json
+└── tsconfig.json
+```
+
+---
+
+## Comandos útiles
+
+```bash
+# Iniciar (web)
+npx expo start --web
+
+# Limpiar caché de Metro
+npx expo start --clear
+
+# Abrir en dispositivo (con Expo Go)
+npx expo start        # luego escanear el QR
+
+# Tests
+npm test
+npm test -- --coverage
+```
+
+---
+
+## Internacionalización (i18n)
+
+El idioma se cambia desde la pantalla de Perfil. Persiste entre sesiones via `AsyncStorage`.
+
+- Español: `src/i18n/locales/es.ts`
+- English: `src/i18n/locales/en.ts`
+
+---
+
+## Troubleshooting
+
+**"Module not found"**
+```bash
+npm install --legacy-peer-deps
+# O si falla:
+rm -rf node_modules package-lock.json && npm install --legacy-peer-deps
+```
+
+**"EXPO_PUBLIC_API_URL is undefined"**
+```bash
+echo "EXPO_PUBLIC_API_URL=http://localhost:8000" > .env
+```
+
+**No conecta al backend**
+```bash
 curl http://localhost:8000/health
-
-# Si falla, inicia Docker
-docker-compose up -d -C App_backend
+# Si falla, verificar que docker-compose y python main.py estén corriendo
 ```
 
-**Puerto 19000 en uso:**
-```bash
-npm start -- --port 19001
-```
+**401 en todas las llamadas**
+- Token expirado. Hacer logout/login en la app.
 
 ---
 
-## 🔗 Backend
+## Backend
 
-Documentación del backend: [App_backend/README.md](../App_backend/README.md)
-
-Conexión: Se comunica via HTTP con tRPC en `http://localhost:8000/trpc`
-
----
-
-## 📚 Recursos
-
-- [Expo Docs](https://docs.expo.dev)
-- [React Native Docs](https://reactnative.dev)
-- [Expo Router](https://docs.expo.dev/router/introduction)
-- [tRPC Docs](https://trpc.io/docs)
+Ver [App_backend/README.md](../App_backend/README.md)

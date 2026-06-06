@@ -10,11 +10,12 @@ import { useAuth } from '@/context/AuthContext';
 import { productService } from '@/services/productService';
 import { Product } from '@/types/product';
 
-function decodeEmail(token: string | null): string {
+function decodeName(token: string | null): string {
   if (!token) return '';
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.email ?? payload.preferred_username ?? '';
+    const p = JSON.parse(atob(token.split('.')[1]));
+    const full = [p.given_name, p.family_name].filter(Boolean).join(' ');
+    return full || p.preferred_username || p.email || '';
   } catch {
     return '';
   }
@@ -27,7 +28,7 @@ export default function HomeScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const email = useMemo(() => decodeEmail(token), [token]);
+  const displayName = useMemo(() => decodeName(token), [token]);
 
   const fetchProducts = useCallback(() => {
     if (!token) return;
@@ -55,7 +56,7 @@ export default function HomeScreen() {
   return (
     <>
       <View style={styles.headerContainer}>
-        <Text style={styles.header}>{email || t('home.welcome')}</Text>
+        <Text style={styles.header}>{displayName || t('home.welcome')}</Text>
       </View>
       <ScrollView style={styles.container}>
         {loading ? (

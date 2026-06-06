@@ -8,6 +8,7 @@ export interface Product {
   vencimiento?: string;
   descripcion?: string;
   imagen_url?: string;
+  ubicacion?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -20,4 +21,5 @@ export interface ProductCreate {
   vencimiento?: string;
   descripcion?: string;
   imagen_url?: string;
+  ubicacion?: string;
 }

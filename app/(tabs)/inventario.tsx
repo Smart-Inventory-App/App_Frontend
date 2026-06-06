@@ -25,9 +25,11 @@ export default function InventarioScreen() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
+  const [selectedUbicacion, setSelectedUbicacion] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editForm, setEditForm] = useState<Partial<ProductCreate>>({});
   const [saving, setSaving] = useState(false);
+  const [extraUbicaciones, setExtraUbicaciones] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,6 +50,11 @@ export default function InventarioScreen() {
     return [...new Set(cats)];
   }, [allProducts]);
 
+  const ubicaciones = useMemo(() => {
+    const locs = allProducts.map(p => p.ubicacion).filter((u): u is string => Boolean(u));
+    return [...new Set([...locs, ...extraUbicaciones])];
+  }, [allProducts, extraUbicaciones]);
+
   const products = useMemo(() => {
     let list = allProducts;
     if (search.trim()) {
@@ -59,12 +66,13 @@ export default function InventarioScreen() {
     if (selectedCategoria) {
       list = list.filter(p => p.categoria === selectedCategoria);
     }
+    if (selectedUbicacion) {
+      list = list.filter(p => p.ubicacion === selectedUbicacion);
+    }
     return list;
-  }, [allProducts, search, selectedCategoria]);
+  }, [allProducts, search, selectedCategoria, selectedUbicacion]);
 
-  const handleSearch = (text: string) => {
-    setSearch(text);
-  };
+  const handleSearch = (text: string) => setSearch(text);
 
   const handleDelete = (product: Product) => {
     Alert.alert(
@@ -97,6 +105,7 @@ export default function InventarioScreen() {
       stock: product.stock,
       vencimiento: product.vencimiento,
       descripcion: product.descripcion,
+      ubicacion: product.ubicacion,
     });
   };
 
@@ -127,7 +136,7 @@ export default function InventarioScreen() {
   const renderItem = ({ item }: { item: Product }) => {
     const color = getStatusColor(item);
     const labelStyle = [
-      styles.label,
+      styles.dotLabel,
       color === 'green' && styles.labelGreen,
       color === 'yellow' && styles.labelYellow,
       color === 'red' && styles.labelRed,
@@ -137,7 +146,12 @@ export default function InventarioScreen() {
         <View style={styles.itemInfo}>
           <Text style={styles.itemName}>{item.nombre}</Text>
           {item.marca ? <Text style={styles.itemSub}>{item.marca}</Text> : null}
-          <Text style={styles.itemSub}>Categoría: {item.categoria}</Text>
+          <Text style={styles.itemSub}>{t('inventory.filterCategory')}: {item.categoria}</Text>
+          {item.ubicacion ? (
+            <Text style={styles.itemSub}>
+              <Ionicons name="location-outline" size={11} /> {item.ubicacion}
+            </Text>
+          ) : null}
           <View style={styles.itemRow}>
             <Text style={styles.itemDetail}>Stock: {item.stock}</Text>
             {item.vencimiento ? (
@@ -157,6 +171,8 @@ export default function InventarioScreen() {
       </View>
     );
   };
+
+  const hasActiveFilters = !!(search || selectedCategoria || selectedUbicacion);
 
   return (
     <View style={styles.container}>
@@ -181,32 +197,67 @@ export default function InventarioScreen() {
       </View>
 
       {categories.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.chipsScroll}
-          contentContainerStyle={styles.chipsContent}
-        >
-          <TouchableOpacity
-            style={[styles.chip, !selectedCategoria && styles.chipActive]}
-            onPress={() => setSelectedCategoria(null)}
+        <View style={styles.filterRow}>
+          <Text style={styles.filterLabel}>{t('inventory.filterCategory')}</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.chipsScroll}
+            contentContainerStyle={styles.chipsContent}
           >
-            <Text style={[styles.chipText, !selectedCategoria && styles.chipTextActive]}>
-              Todas
-            </Text>
-          </TouchableOpacity>
-          {categories.map(cat => (
             <TouchableOpacity
-              key={cat}
-              style={[styles.chip, selectedCategoria === cat && styles.chipActive]}
-              onPress={() => setSelectedCategoria(prev => prev === cat ? null : cat)}
+              style={[styles.chip, !selectedCategoria && styles.chipActive]}
+              onPress={() => setSelectedCategoria(null)}
             >
-              <Text style={[styles.chipText, selectedCategoria === cat && styles.chipTextActive]}>
-                {cat}
+              <Text style={[styles.chipText, !selectedCategoria && styles.chipTextActive]}>
+                {t('inventory.allCategories')}
               </Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+            {categories.map(cat => (
+              <TouchableOpacity
+                key={cat}
+                style={[styles.chip, selectedCategoria === cat && styles.chipActive]}
+                onPress={() => setSelectedCategoria(prev => prev === cat ? null : cat)}
+              >
+                <Text style={[styles.chipText, selectedCategoria === cat && styles.chipTextActive]}>
+                  {cat}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {ubicaciones.length > 0 && (
+        <View style={styles.filterRow}>
+          <Text style={styles.filterLabel}>{t('inventory.filterLocation')}</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.chipsScroll}
+            contentContainerStyle={styles.chipsContent}
+          >
+            <TouchableOpacity
+              style={[styles.chip, !selectedUbicacion && styles.chipActive]}
+              onPress={() => setSelectedUbicacion(null)}
+            >
+              <Text style={[styles.chipText, !selectedUbicacion && styles.chipTextActive]}>
+                {t('inventory.allLocations')}
+              </Text>
+            </TouchableOpacity>
+            {ubicaciones.map(loc => (
+              <TouchableOpacity
+                key={loc}
+                style={[styles.chip, selectedUbicacion === loc && styles.chipActive]}
+                onPress={() => setSelectedUbicacion(prev => prev === loc ? null : loc)}
+              >
+                <Text style={[styles.chipText, selectedUbicacion === loc && styles.chipTextActive]}>
+                  {loc}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
       )}
 
       {loading ? (
@@ -215,7 +266,7 @@ export default function InventarioScreen() {
         <View style={styles.empty}>
           <Ionicons name="cube-outline" size={48} color={Colors.placeholder} />
           <Text style={styles.emptyText}>
-            {search || selectedCategoria ? t('inventory.noResults') : t('inventory.empty')}
+            {hasActiveFilters ? t('inventory.noResults') : t('inventory.empty')}
           </Text>
         </View>
       ) : (
@@ -227,7 +278,6 @@ export default function InventarioScreen() {
         />
       )}
 
-      {/* Modal de edición */}
       <Modal visible={!!editingProduct} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
@@ -238,7 +288,12 @@ export default function InventarioScreen() {
               </TouchableOpacity>
             </View>
             <ScrollView>
-              <ProductFormFields form={editForm} onChange={setEditForm} />
+              <ProductFormFields
+                form={editForm}
+                onChange={setEditForm}
+                ubicacionOptions={ubicaciones}
+                onAddUbicacion={loc => setExtraUbicaciones(prev => [...new Set([...prev, loc])])}
+              />
             </ScrollView>
             <TouchableOpacity
               style={[styles.saveBtn, saving && { opacity: 0.6 }]}
@@ -263,6 +318,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fff',
     margin: 16,
+    marginBottom: 8,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -270,6 +326,30 @@ const styles = StyleSheet.create({
   },
   searchIcon: { marginRight: 8 },
   searchInput: { flex: 1, fontSize: 14, color: Colors.textPrimary },
+  filterRow: { marginBottom: 4 },
+  filterLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingHorizontal: 16,
+    marginBottom: 4,
+    marginTop: 6,
+  },
+  chipsScroll: { flexGrow: 0 },
+  chipsContent: { paddingHorizontal: 16, paddingBottom: 4, gap: 8, flexDirection: 'row' },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: Colors.inputBorder ?? '#ddd',
+  },
+  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  chipText: { fontSize: 13, color: Colors.textSecondary },
+  chipTextActive: { color: '#fff', fontWeight: '600' },
   item: {
     backgroundColor: '#fff',
     borderRadius: 10,
@@ -286,23 +366,10 @@ const styles = StyleSheet.create({
   itemDetail: { fontSize: 12, color: Colors.textSecondary },
   itemActions: { flexDirection: 'column', gap: 8 },
   actionBtn: { padding: 6 },
-  label: { width: 10, height: 10, borderRadius: 5 },
+  dotLabel: { width: 10, height: 10, borderRadius: 5 },
   labelGreen: { backgroundColor: '#2db7a3' },
   labelYellow: { backgroundColor: '#fbbc05' },
   labelRed: { backgroundColor: '#e5484d' },
-  chipsScroll: { flexGrow: 0 },
-  chipsContent: { paddingHorizontal: 16, paddingBottom: 8, gap: 8, flexDirection: 'row' },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: Colors.inputBorder ?? '#ddd',
-  },
-  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  chipText: { fontSize: 13, color: Colors.textSecondary },
-  chipTextActive: { color: '#fff', fontWeight: '600' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   emptyText: { color: Colors.textSecondary, fontSize: 15 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },

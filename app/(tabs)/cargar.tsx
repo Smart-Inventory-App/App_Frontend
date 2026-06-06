@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
@@ -24,6 +25,16 @@ export default function CargarScreen() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ubicacionOptions, setUbicacionOptions] = useState<string[]>([]);
+
+  useFocusEffect(useCallback(() => {
+    productService.getProducts()
+      .then(products => {
+        const locs = products.map(p => p.ubicacion).filter((u): u is string => Boolean(u));
+        setUbicacionOptions([...new Set(locs)]);
+      })
+      .catch(() => {});
+  }, []));
 
   const validate = (): string | null => {
     if (!form.nombre?.trim()) return t('product.validationNombre');
@@ -56,6 +67,10 @@ export default function CargarScreen() {
     setError(null);
   };
 
+  const handleAddUbicacion = (loc: string) => {
+    setUbicacionOptions(prev => [...new Set([...prev, loc])]);
+  };
+
   if (success) {
     return (
       <View style={styles.successContainer}>
@@ -84,7 +99,12 @@ export default function CargarScreen() {
         <Text style={styles.title}>{t('product.loadTitle')}</Text>
       </View>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <ProductFormFields form={form} onChange={setForm} />
+        <ProductFormFields
+          form={form}
+          onChange={setForm}
+          ubicacionOptions={ubicacionOptions}
+          onAddUbicacion={handleAddUbicacion}
+        />
 
         {error && <Text style={styles.errorText}>{error}</Text>}
 
