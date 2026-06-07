@@ -5,7 +5,7 @@ import { Platform } from 'react-native';
 import { authService } from '../services/authService';
 import { setAuthToken } from '../services/api';
 
-const TOKEN_KEY = 'kc_access_token';
+const TOKEN_KEY = 'auth_access_token';
 
 // expo-secure-store doesn't work on web — fall back to AsyncStorage
 const storage = {
@@ -65,12 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authService.register(email, password);
   };
 
-  const loginWithGoogle = async (code: string, redirectUri: string, codeVerifier?: string) => {
-    const result = await authService.socialCallback(code, redirectUri, codeVerifier);
-    await storage.set(TOKEN_KEY, result.access_token);
-    setAuthToken(result.access_token);
-    setToken(result.access_token);
-  };
+  const loginWithGoogle = async () => {};
 
   return (
     <AuthContext.Provider value={{ token, isLoading, isAuthenticated: !!token, login, logout, register, loginWithGoogle }}>
