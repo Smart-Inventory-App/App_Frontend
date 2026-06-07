@@ -7,7 +7,9 @@ import ProductItem from '@/components/ProductItem';
 import { Figtree_400Regular, useFonts } from '@expo-google-fonts/figtree';
 import { Roboto_500Medium } from '@expo-google-fonts/roboto';
 import { useAuth } from '@/context/AuthContext';
+import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
+import { settingsService } from '@/services/settingsService';
 import { Product } from '@/types/product';
 
 function decodeName(token: string | null): string {
@@ -27,35 +29,42 @@ export default function HomeScreen() {
   const { token } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lowStockThreshold, setLowStockThreshold] = useState(5);
+  const [expiryDaysThreshold, setExpiryDaysThreshold] = useState(7);
 
   const displayName = useMemo(() => decodeName(token), [token]);
 
-  const fetchProducts = useCallback(() => {
+  const fetchData = useCallback(() => {
     if (!token) return;
     setLoading(true);
-    productService.getProducts()
-      .then(setProducts)
+    Promise.all([productService.getProducts(), settingsService.getAll()])
+      .then(([prods, s]) => {
+        setProducts(prods);
+        setLowStockThreshold(s.lowStock);
+        setExpiryDaysThreshold(s.expiryDays);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [token]);
 
-  useFocusEffect(fetchProducts);
+  useFocusEffect(fetchData);
 
   const today = new Date();
-  const in7Days = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const inNDays = new Date(today.getTime() + expiryDaysThreshold * 24 * 60 * 60 * 1000);
 
   const totalStock = products.reduce((acc, p) => acc + p.stock, 0);
-  const lowStock = products.filter(p => p.stock <= 5).length;
+  const lowStock = products.filter(p => p.stock <= lowStockThreshold).length;
   const expiringSoon = products.filter(p => {
     if (!p.vencimiento) return false;
     const d = new Date(p.vencimiento);
-    return d >= today && d <= in7Days;
+    return d >= today && d <= inNDays;
   }).length;
   const recentProducts = products.slice(0, 3);
 
   return (
     <>
       <View style={styles.headerContainer}>
+        <Text style={styles.appName}>{t('common.appName')}</Text>
         <Text style={styles.header}>{displayName || t('home.welcome')}</Text>
       </View>
       <ScrollView style={styles.container}>
@@ -65,10 +74,10 @@ export default function HomeScreen() {
           <>
             <View style={styles.statsRow}>
               <StatCard title={t('home.totalStock')} value={String(totalStock)} label={t('home.totalStockLabel')} labelColor="green" />
-              <StatCard title={t('home.lowStock')} value={String(lowStock)} label={t('home.lowStockLabel')} labelColor="red" />
+              <StatCard title={t('home.lowStock')} value={String(lowStock)} label={`≤ ${lowStockThreshold} ${t('home.lowStockUnit')}`} labelColor="red" />
             </View>
             <View style={styles.statsRow}>
-              <StatCard title={t('home.expiringSoon')} value={String(expiringSoon)} label={t('home.expiringSoonLabel')} labelColor="yellow" />
+              <StatCard title={t('home.expiringSoon')} value={String(expiringSoon)} label={t('home.expiringSoonLabel', { days: expiryDaysThreshold })} labelColor="yellow" />
               <StatCard title={t('home.products')} value={String(products.length)} label={t('home.productsLabel')} labelColor="green" />
             </View>
 
@@ -102,7 +111,8 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingTop: 48,
   },
-  header: { fontSize: 20, margin: 12, fontFamily: 'Roboto_500Medium' },
+  appName: { fontSize: 13, color: Colors.textSecondary, marginLeft: 12, marginTop: 4, fontFamily: 'Figtree_400Regular', letterSpacing: 0.5 },
+  header: { fontSize: 22, marginLeft: 12, marginBottom: 8, fontFamily: 'Roboto_500Medium' },
   statsRow: { flexDirection: 'row' },
   section: { fontSize: 14, fontWeight: 'bold', marginTop: 20, marginBottom: 10, fontFamily: 'Figtree_400Regular' },
   empty: { color: '#888', textAlign: 'center', marginTop: 16 },
