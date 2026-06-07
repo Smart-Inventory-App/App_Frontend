@@ -82,6 +82,7 @@ export default function HomeScreen() {
                   name={p.nombre}
                   expiry={p.vencimiento ?? '—'}
                   stock={`${p.stock} ud.`}
+                  imageUrl={p.imagen_url ?? undefined}
                 />
               ))
             )}

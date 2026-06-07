@@ -7,9 +7,10 @@ type Props = {
   stock: string;
   status?: string;
   statusColor?: string;
+  imageUrl?: string;
 };
 
-export default function ProductItem({ name, expiry, stock, status, statusColor }: Props) {
+export default function ProductItem({ name, expiry, stock, status, statusColor, imageUrl }: Props) {
   const [] = useFonts({Figtree_400Regular})
 
   const getLabelStyle = () => {
@@ -27,7 +28,10 @@ export default function ProductItem({ name, expiry, stock, status, statusColor }
 
   return (
     <View style={styles.item}>
-      <Image source={require("../../assets/icon.png")} style={styles.image}></Image>
+      <Image
+        source={imageUrl ? { uri: imageUrl } : require("../../assets/icon.png")}
+        style={styles.image}
+      />
       <View style={styles.info}>
         <Text style={styles.name}>{name}</Text>
         <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'}}>

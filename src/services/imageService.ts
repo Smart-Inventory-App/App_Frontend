@@ -3,23 +3,8 @@ import axios from 'axios';
 
 const IMAGE_STORAGE_URL = process.env.EXPO_PUBLIC_IMAGE_STORAGE_URL;
 
-export async function pickAndUploadProductImage(): Promise<string | null> {
-  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (status !== 'granted') {
-    throw new Error('Se necesita permiso para acceder a la galería.');
-  }
-
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    allowsEditing: true,
-    quality: 0.9,
-  });
-
-  if (result.canceled) return null;
-
-  const asset = result.assets[0];
+async function uploadAsset(asset: ImagePicker.ImagePickerAsset): Promise<string> {
   const formData = new FormData();
-
   formData.append('file', {
     uri: asset.uri,
     name: asset.fileName ?? 'product.jpg',
@@ -32,6 +17,32 @@ export async function pickAndUploadProductImage(): Promise<string | null> {
     formData,
     { headers: { 'Content-Type': 'multipart/form-data' } },
   );
-
   return data.url;
+}
+
+export async function pickFromGallery(): Promise<string | null> {
+  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (status !== 'granted') throw new Error('Se necesita permiso para acceder a la galería.');
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsEditing: true,
+    quality: 0.9,
+  });
+
+  if (result.canceled) return null;
+  return uploadAsset(result.assets[0]);
+}
+
+export async function pickFromCamera(): Promise<string | null> {
+  const { status } = await ImagePicker.requestCameraPermissionsAsync();
+  if (status !== 'granted') throw new Error('Se necesita permiso para usar la cámara.');
+
+  const result = await ImagePicker.launchCameraAsync({
+    allowsEditing: true,
+    quality: 0.9,
+  });
+
+  if (result.canceled) return null;
+  return uploadAsset(result.assets[0]);
 }

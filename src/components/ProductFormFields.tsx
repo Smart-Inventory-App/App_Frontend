@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView, Image, ActivityIndicator, Alert } from 'react-native';
+import {
+  StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView,
+  Image, ActivityIndicator, Alert, Modal, Pressable,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
 import { ProductCreate } from '@/types/product';
-import { pickAndUploadProductImage } from '@/services/imageService';
+import { pickFromGallery, pickFromCamera } from '@/services/imageService';
 
 interface Props {
   form: Partial<ProductCreate>;
@@ -18,11 +21,16 @@ export default function ProductFormFields({ form, onChange, ubicacionOptions = [
   const [showNewLoc, setShowNewLoc] = useState(false);
   const [newLoc, setNewLoc] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [showImagePicker, setShowImagePicker] = useState(false);
 
-  const handlePickImage = async () => {
+  const set = (key: keyof ProductCreate, value: string | number | undefined) =>
+    onChange({ ...form, [key]: value });
+
+  const doUpload = async (picker: () => Promise<string | null>) => {
+    setShowImagePicker(false);
     try {
       setUploadingImage(true);
-      const url = await pickAndUploadProductImage();
+      const url = await picker();
       if (url) set('imagen_url', url);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error al subir la imagen.';
@@ -32,19 +40,13 @@ export default function ProductFormFields({ form, onChange, ubicacionOptions = [
     }
   };
 
-  const set = (key: keyof ProductCreate, value: string | number | undefined) =>
-    onChange({ ...form, [key]: value });
-
   const handleSelectUbicacion = (loc: string) => {
     set('ubicacion', form.ubicacion === loc ? undefined : loc);
   };
 
   const handleConfirmNewLoc = () => {
     const trimmed = newLoc.trim();
-    if (!trimmed) {
-      setShowNewLoc(false);
-      return;
-    }
+    if (!trimmed) { setShowNewLoc(false); return; }
     set('ubicacion', trimmed);
     onAddUbicacion?.(trimmed);
     setNewLoc('');
@@ -78,7 +80,10 @@ export default function ProductFormFields({ form, onChange, ubicacionOptions = [
         placeholderTextColor={Colors.placeholder}
         keyboardType="numeric"
         value={form.stock !== undefined ? String(form.stock) : ''}
-        onChangeText={v => set('stock', v === '' ? undefined : parseInt(v, 10))}
+        onChangeText={v => {
+          const digits = v.replace(/[^0-9]/g, '');
+          set('stock', digits === '' ? undefined : parseInt(digits, 10));
+        }}
       />
 
       <Text style={styles.label}>{t('product.marca')}</Text>
@@ -165,7 +170,7 @@ export default function ProductFormFields({ form, onChange, ubicacionOptions = [
       {form.imagen_url ? (
         <View style={styles.imagePreviewContainer}>
           <Image source={{ uri: form.imagen_url }} style={styles.imagePreview} resizeMode="cover" />
-          <TouchableOpacity style={styles.imageChangeBtn} onPress={handlePickImage} disabled={uploadingImage}>
+          <TouchableOpacity style={styles.imageChangeBtn} onPress={() => setShowImagePicker(true)} disabled={uploadingImage}>
             {uploadingImage
               ? <ActivityIndicator size="small" color={Colors.primary} />
               : <><Ionicons name="pencil-outline" size={16} color={Colors.primary} /><Text style={styles.imageChangeBtnText}>{t('product.imagenCambiar')}</Text></>
@@ -173,13 +178,40 @@ export default function ProductFormFields({ form, onChange, ubicacionOptions = [
           </TouchableOpacity>
         </View>
       ) : (
-        <TouchableOpacity style={styles.imageBtn} onPress={handlePickImage} disabled={uploadingImage}>
+        <TouchableOpacity style={styles.imageBtn} onPress={() => setShowImagePicker(true)} disabled={uploadingImage}>
           {uploadingImage
             ? <ActivityIndicator size="small" color={Colors.primary} />
             : <><Ionicons name="image-outline" size={20} color={Colors.primary} /><Text style={styles.imageBtnTextActive}>{t('product.imagenSeleccionar')}</Text></>
           }
         </TouchableOpacity>
       )}
+
+      <Modal visible={showImagePicker} transparent animationType="slide" onRequestClose={() => setShowImagePicker(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowImagePicker(false)}>
+          <Pressable style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>{t('product.imagenSeleccionar')}</Text>
+
+            <TouchableOpacity style={styles.modalOption} onPress={() => doUpload(pickFromCamera)}>
+              <View style={styles.modalOptionIcon}>
+                <Ionicons name="camera-outline" size={22} color={Colors.primary} />
+              </View>
+              <Text style={styles.modalOptionText}>{t('product.imagenCamara')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalOption} onPress={() => doUpload(pickFromGallery)}>
+              <View style={styles.modalOptionIcon}>
+                <Ionicons name="images-outline" size={22} color={Colors.primary} />
+              </View>
+              <Text style={styles.modalOptionText}>{t('product.imagenGaleria')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowImagePicker(false)}>
+              <Text style={styles.modalCancelText}>Cancelar</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -265,4 +297,56 @@ const styles = StyleSheet.create({
     backgroundColor: '#fafafa',
   },
   imageChangeBtnText: { fontSize: 13, color: Colors.primary },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 36,
+    gap: 8,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#ddd',
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 8,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalOptionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f0f9f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalOptionText: { fontSize: 15, color: Colors.textPrimary, fontWeight: '500' },
+  modalCancel: {
+    marginTop: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: 10,
+    backgroundColor: '#f2f3f6',
+  },
+  modalCancelText: { fontSize: 15, color: Colors.textSecondary, fontWeight: '600' },
 });
