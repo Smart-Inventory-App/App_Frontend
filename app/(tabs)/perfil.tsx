@@ -16,6 +16,7 @@ import { Colors } from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
 import { changeLanguage, type Language } from '@/i18n';
 import { profileService, UserProfile } from '@/services/profileService';
+import { settingsService } from '@/services/settingsService';
 
 export default function PerfilScreen() {
   const { t, i18n } = useTranslation();
@@ -30,14 +31,19 @@ export default function PerfilScreen() {
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'error'; msg: string } | null>(null);
 
+  const [lowStockInput, setLowStockInput] = useState('5');
+  const [expiryDaysInput, setExpiryDaysInput] = useState('7');
+
   useFocusEffect(useCallback(() => {
     setLoading(true);
-    profileService.getProfile()
-      .then(p => {
+    Promise.all([profileService.getProfile(), settingsService.getAll()])
+      .then(([p, s]) => {
         setProfile(p);
         setFirstName(p.firstName ?? '');
         setLastName(p.lastName ?? '');
         setUsername(p.username ?? '');
+        setLowStockInput(String(s.lowStock));
+        setExpiryDaysInput(String(s.expiryDays));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -66,6 +72,13 @@ export default function PerfilScreen() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSaveSettings = async () => {
+    const ls = parseInt(lowStockInput, 10);
+    const ed = parseInt(expiryDaysInput, 10);
+    if (!isNaN(ls) && ls > 0) await settingsService.setLowStockThreshold(ls);
+    if (!isNaN(ed) && ed > 0) await settingsService.setExpiryDaysThreshold(ed);
   };
 
   const handleCancelEdit = () => {
@@ -170,6 +183,39 @@ export default function PerfilScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Settings */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>{t('profile.settings')}</Text>
+
+        <Text style={styles.fieldLabel}>{t('profile.lowStockThreshold')}</Text>
+        <View style={styles.settingRow}>
+          <TextInput
+            style={[styles.input, styles.settingInput]}
+            value={lowStockInput}
+            onChangeText={setLowStockInput}
+            keyboardType="numeric"
+            returnKeyType="done"
+            onEndEditing={handleSaveSettings}
+            onBlur={handleSaveSettings}
+          />
+          <Text style={styles.settingUnit}>{t('profile.units')}</Text>
+        </View>
+
+        <Text style={styles.fieldLabel}>{t('profile.expiryDaysThreshold')}</Text>
+        <View style={styles.settingRow}>
+          <TextInput
+            style={[styles.input, styles.settingInput]}
+            value={expiryDaysInput}
+            onChangeText={setExpiryDaysInput}
+            keyboardType="numeric"
+            returnKeyType="done"
+            onEndEditing={handleSaveSettings}
+            onBlur={handleSaveSettings}
+          />
+          <Text style={styles.settingUnit}>{t('profile.days')}</Text>
+        </View>
+      </View>
 
       {/* Language */}
       <TouchableOpacity style={styles.rowBtn} onPress={toggleLanguage}>
@@ -280,4 +326,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   logoutText: { fontSize: 15, color: Colors.error, fontWeight: '600' },
+  settingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  settingInput: { width: 80, marginTop: 0 },
+  settingUnit: { fontSize: 13, color: Colors.textSecondary },
 });

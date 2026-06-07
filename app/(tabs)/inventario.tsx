@@ -30,6 +30,8 @@ export default function InventarioScreen() {
   const [editForm, setEditForm] = useState<Partial<ProductCreate>>({});
   const [saving, setSaving] = useState(false);
   const [extraUbicaciones, setExtraUbicaciones] = useState<string[]>([]);
+  const [sortField, setSortField] = useState<'nombre' | 'stock' | 'vencimiento' | 'categoria' | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -69,10 +71,37 @@ export default function InventarioScreen() {
     if (selectedUbicacion) {
       list = list.filter(p => p.ubicacion === selectedUbicacion);
     }
+    if (sortField) {
+      list = [...list].sort((a, b) => {
+        let cmp = 0;
+        if (sortField === 'nombre') {
+          cmp = a.nombre.localeCompare(b.nombre);
+        } else if (sortField === 'categoria') {
+          cmp = a.categoria.localeCompare(b.categoria);
+        } else if (sortField === 'stock') {
+          cmp = a.stock - b.stock;
+        } else if (sortField === 'vencimiento') {
+          const da = a.vencimiento ? new Date(a.vencimiento).getTime() : Infinity;
+          const db = b.vencimiento ? new Date(b.vencimiento).getTime() : Infinity;
+          cmp = da - db;
+        }
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+    }
     return list;
-  }, [allProducts, search, selectedCategoria, selectedUbicacion]);
+  }, [allProducts, search, selectedCategoria, selectedUbicacion, sortField, sortDir]);
 
   const handleSearch = (text: string) => setSearch(text);
+
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      if (sortDir === 'asc') setSortDir('desc');
+      else { setSortField(null); setSortDir('asc'); }
+    } else {
+      setSortField(field);
+      setSortDir('asc');
+    }
+  };
 
   const handleDelete = (product: Product) => {
     Alert.alert(
@@ -194,6 +223,34 @@ export default function InventarioScreen() {
             <Ionicons name="close-circle" size={16} color={Colors.placeholder} />
           </TouchableOpacity>
         )}
+      </View>
+
+      <View style={styles.sortRow}>
+        <Ionicons name="swap-vertical-outline" size={14} color={Colors.textSecondary} />
+        <Text style={styles.sortLabel}>{t('inventory.sortBy')}</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.chipsScroll}
+          contentContainerStyle={[styles.chipsContent, { paddingLeft: 0 }]}
+        >
+          {(['nombre', 'stock', 'vencimiento', 'categoria'] as const).map(field => {
+            const active = sortField === field;
+            const arrow = active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+            return (
+              <TouchableOpacity
+                key={field}
+                style={[styles.chip, active && styles.chipActive]}
+                onPress={() => handleSort(field)}
+              >
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                  {t(`inventory.sort_${field}`)}
+                  {arrow}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {categories.length > 0 && (
@@ -326,6 +383,21 @@ const styles = StyleSheet.create({
   },
   searchIcon: { marginRight: 8 },
   searchInput: { flex: 1, fontSize: 14, color: Colors.textPrimary },
+  sortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    gap: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    marginBottom: 4,
+  },
+  sortLabel: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
   filterRow: { marginBottom: 4 },
   filterLabel: {
     fontSize: 11,
