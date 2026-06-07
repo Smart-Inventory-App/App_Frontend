@@ -130,6 +130,8 @@ export default {
     ubicacionPlaceholder: 'ej. Heladera, Alacena A, Freezer',
     imagen: 'Imagen',
     imagenProximamente: 'Cargar imagen (Próximamente)',
+    imagenSeleccionar: 'Seleccionar imagen',
+    imagenCambiar: 'Cambiar imagen',
     required: 'requerido',
     optional: 'opcional',
     saveProduct: 'Guardar producto',

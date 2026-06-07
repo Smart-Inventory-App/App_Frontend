@@ -130,6 +130,8 @@ export default {
     ubicacionPlaceholder: 'e.g. Fridge, Shelf A, Freezer',
     imagen: 'Image',
     imagenProximamente: 'Upload image (Coming soon)',
+    imagenSeleccionar: 'Select image',
+    imagenCambiar: 'Change image',
     required: 'required',
     optional: 'optional',
     saveProduct: 'Save product',

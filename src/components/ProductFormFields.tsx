@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView, Image, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
 import { ProductCreate } from '@/types/product';
+import { pickAndUploadProductImage } from '@/services/imageService';
 
 interface Props {
   form: Partial<ProductCreate>;
@@ -16,6 +17,20 @@ export default function ProductFormFields({ form, onChange, ubicacionOptions = [
   const { t } = useTranslation();
   const [showNewLoc, setShowNewLoc] = useState(false);
   const [newLoc, setNewLoc] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const handlePickImage = async () => {
+    try {
+      setUploadingImage(true);
+      const url = await pickAndUploadProductImage();
+      if (url) set('imagen_url', url);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al subir la imagen.';
+      Alert.alert('Error', message);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const set = (key: keyof ProductCreate, value: string | number | undefined) =>
     onChange({ ...form, [key]: value });
@@ -147,10 +162,24 @@ export default function ProductFormFields({ form, onChange, ubicacionOptions = [
       )}
 
       <Text style={styles.label}>{t('product.imagen')}</Text>
-      <TouchableOpacity style={styles.imageBtn} disabled>
-        <Ionicons name="image-outline" size={20} color={Colors.disabled} />
-        <Text style={styles.imageBtnText}>{t('product.imagenProximamente')}</Text>
-      </TouchableOpacity>
+      {form.imagen_url ? (
+        <View style={styles.imagePreviewContainer}>
+          <Image source={{ uri: form.imagen_url }} style={styles.imagePreview} resizeMode="cover" />
+          <TouchableOpacity style={styles.imageChangeBtn} onPress={handlePickImage} disabled={uploadingImage}>
+            {uploadingImage
+              ? <ActivityIndicator size="small" color={Colors.primary} />
+              : <><Ionicons name="pencil-outline" size={16} color={Colors.primary} /><Text style={styles.imageChangeBtnText}>{t('product.imagenCambiar')}</Text></>
+            }
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <TouchableOpacity style={styles.imageBtn} onPress={handlePickImage} disabled={uploadingImage}>
+          {uploadingImage
+            ? <ActivityIndicator size="small" color={Colors.primary} />
+            : <><Ionicons name="image-outline" size={20} color={Colors.primary} /><Text style={styles.imageBtnTextActive}>{t('product.imagenSeleccionar')}</Text></>
+          }
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -217,12 +246,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.inputBorder,
+    borderColor: Colors.primary,
     borderRadius: 8,
     padding: 10,
     marginTop: 4,
     gap: 8,
     backgroundColor: '#fafafa',
   },
-  imageBtnText: { fontSize: 14, color: Colors.disabled },
+  imageBtnTextActive: { fontSize: 14, color: Colors.primary, fontWeight: '500' },
+  imagePreviewContainer: { marginTop: 4, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: Colors.inputBorder },
+  imagePreview: { width: '100%', height: 180 },
+  imageChangeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: 8,
+    backgroundColor: '#fafafa',
+  },
+  imageChangeBtnText: { fontSize: 13, color: Colors.primary },
 });
