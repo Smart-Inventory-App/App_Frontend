@@ -132,6 +132,8 @@ export default {
     imagenProximamente: 'Cargar imagen (Próximamente)',
     imagenSeleccionar: 'Seleccionar imagen',
     imagenCambiar: 'Cambiar imagen',
+    imagenCamara: 'Tomar foto',
+    imagenGaleria: 'Elegir de la galería',
     required: 'requerido',
     optional: 'opcional',
     saveProduct: 'Guardar producto',
@@ -144,5 +146,6 @@ export default {
     validationNombre: 'El nombre es requerido',
     validationCategoria: 'La categoría es requerida',
     validationStock: 'El stock es requerido',
+    validationVencimiento: 'Fecha inválida, usá el formato AAAA-MM-DD',
   },
 } as const;

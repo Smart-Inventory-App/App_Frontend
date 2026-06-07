@@ -132,6 +132,8 @@ export default {
     imagenProximamente: 'Upload image (Coming soon)',
     imagenSeleccionar: 'Select image',
     imagenCambiar: 'Change image',
+    imagenCamara: 'Take photo',
+    imagenGaleria: 'Choose from gallery',
     required: 'required',
     optional: 'optional',
     saveProduct: 'Save product',
@@ -144,5 +146,6 @@ export default {
     validationNombre: 'Name is required',
     validationCategoria: 'Category is required',
     validationStock: 'Stock is required',
+    validationVencimiento: 'Invalid date, use format YYYY-MM-DD',
   },
 } as const;
