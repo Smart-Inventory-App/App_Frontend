@@ -30,7 +30,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: (code: string, redirectUri: string, codeVerifier?: string) => Promise<void>;
+  loginWithGoogle: (accessToken: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -65,7 +65,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authService.register(email, password);
   };
 
-  const loginWithGoogle = async () => {};
+  const loginWithGoogle = async (accessToken: string) => {
+    const result = await authService.googleLogin(accessToken);
+    await storage.set(TOKEN_KEY, result.access_token);
+    setAuthToken(result.access_token);
+    setToken(result.access_token);
+  };
 
   return (
     <AuthContext.Provider value={{ token, isLoading, isAuthenticated: !!token, login, logout, register, loginWithGoogle }}>

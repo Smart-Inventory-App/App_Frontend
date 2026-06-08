@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -12,21 +12,53 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 
+WebBrowser.maybeCompleteAuthSession();
+
 type Step = 'email' | 'password';
+
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
 
 export default function LoginScreen() {
   const { t } = useTranslation();
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const [, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+    webClientId: GOOGLE_WEB_CLIENT_ID,
+    scopes: ['openid', 'profile', 'email'],
+  });
+
+  useEffect(() => {
+    if (googleResponse?.type === 'success') {
+      const token = googleResponse.authentication?.accessToken;
+      if (token) {
+        setGoogleLoading(true);
+        loginWithGoogle(token)
+          .then(() => router.replace('/(app)/'))
+          .catch((err: any) => {
+            const detail = err?.response?.data?.detail;
+            setError(typeof detail === 'string' ? detail : 'Error al iniciar sesión con Google');
+          })
+          .finally(() => setGoogleLoading(false));
+      }
+    } else if (googleResponse?.type === 'error') {
+      setError('Error al conectar con Google');
+    }
+  }, [googleResponse]);
 
   const handleEmailContinue = () => {
     if (!email.trim()) return;
@@ -46,6 +78,11 @@ export default function LoginScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGooglePress = () => {
+    setError('');
+    promptGoogleAsync();
   };
 
   return (
@@ -77,6 +114,23 @@ export default function LoginScreen() {
               disabled={!email.trim()}
             >
               <Text style={styles.buttonText}>{t('common.continue')}</Text>
+            </TouchableOpacity>
+
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>o</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.googleButton, (googleLoading || !GOOGLE_WEB_CLIENT_ID) && styles.buttonDisabled]}
+              onPress={handleGooglePress}
+              disabled={googleLoading || !GOOGLE_WEB_CLIENT_ID}
+            >
+              <Ionicons name="logo-google" size={18} color={googleLoading ? Colors.textSecondary : '#DB4437'} style={styles.googleIcon} />
+              <Text style={styles.googleButtonText}>
+                {googleLoading ? 'Conectando...' : 'Continuar con Google'}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
@@ -164,6 +218,23 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { backgroundColor: Colors.disabled },
   buttonText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 16 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.inputBorder },
+  dividerText: { color: Colors.textSecondary, fontSize: 13, marginHorizontal: 12 },
+  googleButton: {
+    width: '100%',
+    height: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+    backgroundColor: Colors.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  googleIcon: { marginRight: 10 },
+  googleButtonText: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
   link: { color: Colors.primary, fontSize: 15, marginBottom: 24 },
   forgotLink: { color: Colors.textSecondary, fontSize: 14, marginTop: 4 },
   backRow: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', marginBottom: 20, gap: 6 },

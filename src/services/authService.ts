@@ -39,4 +39,9 @@ export const authService = {
   async resetPassword(reset_token: string, new_password: string): Promise<void> {
     await api.post('/auth/reset-password', { reset_token, new_password });
   },
+
+  async googleLogin(accessToken: string): Promise<LoginResponse> {
+    const { data } = await api.post<LoginResponse>('/auth/google', { access_token: accessToken });
+    return data;
+  },
 };
