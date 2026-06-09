@@ -5,6 +5,7 @@ const AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL;
 const api = axios.create({
   baseURL: AUTH_URL,
   headers: { 'Content-Type': 'application/json' },
+  timeout: 10000,
 });
 
 export interface LoginResponse {
