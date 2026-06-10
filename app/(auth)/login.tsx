@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Google from 'expo-auth-session/providers/google';
-import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
@@ -32,14 +31,8 @@ function GoogleButton({ onError }: { onError: (msg: string) => void }) {
   const { loginWithGoogle } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  const redirectUri = AuthSession.makeRedirectUri({
-    native: `com.googleusercontent.apps.${GOOGLE_ANDROID_CLIENT_ID!.replace('.apps.googleusercontent.com', '')}:/oauth2redirect`,
-  });
-
   const [, response, promptAsync] = Google.useAuthRequest({
     androidClientId: GOOGLE_ANDROID_CLIENT_ID!,
-    webClientId: GOOGLE_WEB_CLIENT_ID!,
-    redirectUri,
     scopes: ['openid', 'profile', 'email'],
   });
 
