@@ -59,7 +59,7 @@ function GoogleButton({ onError }: { onError: (msg: string) => void }) {
     } else if (response?.type === 'error') {
       onError('Error al conectar con Google');
     }
-  }, [response]);
+  }, [response, loginWithGoogle, onError]);
 
   return (
     <TouchableOpacity

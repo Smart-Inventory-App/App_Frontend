@@ -11,7 +11,7 @@ type Props = {
 };
 
 export default function ProductItem({ name, expiry, stock, status, statusColor, imageUrl }: Props) {
-  const [] = useFonts({Figtree_400Regular})
+  useFonts({Figtree_400Regular});
 
   const getLabelStyle = () => {
     switch(statusColor) {

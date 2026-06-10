@@ -22,7 +22,7 @@ function decodeName(token: string | null): string {
 }
 
 export default function HomeScreen() {
-  const [] = useFonts({ Figtree_400Regular, Roboto_500Medium });
+  useFonts({ Figtree_400Regular, Roboto_500Medium });
   const { t } = useTranslation();
   const { token } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
