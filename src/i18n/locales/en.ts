@@ -145,7 +145,7 @@ export default {
     saveError: 'Could not save the product',
     validationNombre: 'Name is required',
     validationCategoria: 'Category is required',
-    validationStock: 'Stock is required',
+    validationStock: 'Stock must be greater than 0',
     validationVencimiento: 'Invalid date, use format YYYY-MM-DD',
   },
 } as const;

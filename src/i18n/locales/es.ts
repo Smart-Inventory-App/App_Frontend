@@ -145,7 +145,7 @@ export default {
     saveError: 'No se pudo guardar el producto',
     validationNombre: 'El nombre es requerido',
     validationCategoria: 'La categoría es requerida',
-    validationStock: 'El stock es requerido',
+    validationStock: 'El stock debe ser mayor a 0',
     validationVencimiento: 'Fecha inválida, usá el formato AAAA-MM-DD',
   },
 } as const;

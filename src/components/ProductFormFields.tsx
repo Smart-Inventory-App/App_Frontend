@@ -62,6 +62,7 @@ export default function ProductFormFields({ form, onChange, ubicacionOptions = [
         placeholderTextColor={Colors.placeholder}
         value={form.nombre ?? ''}
         onChangeText={v => set('nombre', v)}
+        maxLength={20}
       />
 
       <Text style={styles.label}>{t('product.categoria')} *</Text>
@@ -71,6 +72,7 @@ export default function ProductFormFields({ form, onChange, ubicacionOptions = [
         placeholderTextColor={Colors.placeholder}
         value={form.categoria ?? ''}
         onChangeText={v => set('categoria', v)}
+        maxLength={20}
       />
 
       <Text style={styles.label}>{t('product.stock')} *</Text>
@@ -113,6 +115,7 @@ export default function ProductFormFields({ form, onChange, ubicacionOptions = [
         numberOfLines={3}
         value={form.descripcion ?? ''}
         onChangeText={v => set('descripcion', v || undefined)}
+        maxLength={400}
       />
 
       <Text style={styles.label}>{t('product.ubicacion')}</Text>

@@ -39,7 +39,7 @@ export default function CargarScreen() {
   const validate = (): string | null => {
     if (!form.nombre?.trim()) return t('product.validationNombre');
     if (!form.categoria?.trim()) return t('product.validationCategoria');
-    if (form.stock === undefined || isNaN(form.stock)) return t('product.validationStock');
+    if (form.stock === undefined || isNaN(form.stock) || form.stock <= 0) return t('product.validationStock');
     if (form.vencimiento) {
       const d = new Date(form.vencimiento);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(form.vencimiento) || isNaN(d.getTime())) {
