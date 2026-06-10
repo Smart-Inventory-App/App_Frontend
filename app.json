@@ -43,7 +43,8 @@
         {
           "photosPermission": "La app necesita acceso a tus fotos para subir imágenes de productos."
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "extra": {
       "router": {},
