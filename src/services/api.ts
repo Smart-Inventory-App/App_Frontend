@@ -1,4 +1,4 @@
-import axios, { AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -16,7 +16,7 @@ export function setAuthToken(token: string | null) {
   _token = token;
 }
 
-api.interceptors.request.use((config: AxiosRequestConfig) => {
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (_token) {
     config.headers = config.headers ?? {};
     config.headers['Authorization'] = `Bearer ${_token}`;
