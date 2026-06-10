@@ -24,41 +24,60 @@ type Step = 'email' | 'password';
 
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+const GOOGLE_ENABLED = !!(GOOGLE_ANDROID_CLIENT_ID && GOOGLE_WEB_CLIENT_ID);
+
+// Separated component so the hook only runs when client IDs are configured
+function GoogleButton({ onError }: { onError: (msg: string) => void }) {
+  const { loginWithGoogle } = useAuth();
+  const [loading, setLoading] = useState(false);
+
+  const [, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID!,
+    webClientId: GOOGLE_WEB_CLIENT_ID!,
+    scopes: ['openid', 'profile', 'email'],
+  });
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const token = response.authentication?.accessToken;
+      if (token) {
+        setLoading(true);
+        loginWithGoogle(token)
+          .then(() => router.replace('/(app)/'))
+          .catch((err: any) => {
+            const detail = err?.response?.data?.detail;
+            onError(typeof detail === 'string' ? detail : 'Error al iniciar sesión con Google');
+          })
+          .finally(() => setLoading(false));
+      }
+    } else if (response?.type === 'error') {
+      onError('Error al conectar con Google');
+    }
+  }, [response]);
+
+  return (
+    <TouchableOpacity
+      style={[styles.googleButton, loading && styles.buttonDisabled]}
+      onPress={() => promptAsync()}
+      disabled={loading}
+    >
+      <Ionicons name="logo-google" size={18} color={loading ? Colors.textSecondary : '#DB4437'} style={styles.googleIcon} />
+      <Text style={styles.googleButtonText}>
+        {loading ? 'Conectando...' : 'Continuar con Google'}
+      </Text>
+    </TouchableOpacity>
+  );
+}
 
 export default function LoginScreen() {
   const { t } = useTranslation();
-  const { login, loginWithGoogle } = useAuth();
+  const { login } = useAuth();
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-
-  const [, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
-    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
-    webClientId: GOOGLE_WEB_CLIENT_ID,
-    scopes: ['openid', 'profile', 'email'],
-  });
-
-  useEffect(() => {
-    if (googleResponse?.type === 'success') {
-      const token = googleResponse.authentication?.accessToken;
-      if (token) {
-        setGoogleLoading(true);
-        loginWithGoogle(token)
-          .then(() => router.replace('/(app)/'))
-          .catch((err: any) => {
-            const detail = err?.response?.data?.detail;
-            setError(typeof detail === 'string' ? detail : 'Error al iniciar sesión con Google');
-          })
-          .finally(() => setGoogleLoading(false));
-      }
-    } else if (googleResponse?.type === 'error') {
-      setError('Error al conectar con Google');
-    }
-  }, [googleResponse]);
 
   const handleEmailContinue = () => {
     if (!email.trim()) return;
@@ -78,11 +97,6 @@ export default function LoginScreen() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleGooglePress = () => {
-    setError('');
-    promptGoogleAsync();
   };
 
   return (
@@ -116,22 +130,16 @@ export default function LoginScreen() {
               <Text style={styles.buttonText}>{t('common.continue')}</Text>
             </TouchableOpacity>
 
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>o</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.googleButton, (googleLoading || !GOOGLE_WEB_CLIENT_ID) && styles.buttonDisabled]}
-              onPress={handleGooglePress}
-              disabled={googleLoading || !GOOGLE_WEB_CLIENT_ID}
-            >
-              <Ionicons name="logo-google" size={18} color={googleLoading ? Colors.textSecondary : '#DB4437'} style={styles.googleIcon} />
-              <Text style={styles.googleButtonText}>
-                {googleLoading ? 'Conectando...' : 'Continuar con Google'}
-              </Text>
-            </TouchableOpacity>
+            {GOOGLE_ENABLED && (
+              <>
+                <View style={styles.dividerRow}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>o</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+                <GoogleButton onError={setError} />
+              </>
+            )}
 
             <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
               <Text style={styles.link}>{t('login.createAccount')}</Text>
