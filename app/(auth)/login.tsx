@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -12,13 +12,10 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Google from 'expo-auth-session/providers/google';
-import * as WebBrowser from 'expo-web-browser';
+import { GoogleSignin, isErrorWithCode, statusCodes } from '@react-native-google-signin/google-signin';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-
-WebBrowser.maybeCompleteAuthSession();
 
 type Step = 'email' | 'password';
 
@@ -26,38 +23,36 @@ const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
 const GOOGLE_ENABLED = !!(GOOGLE_ANDROID_CLIENT_ID && GOOGLE_WEB_CLIENT_ID);
 
-// Separated component so the hook only runs when client IDs are configured
+GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID! });
+
 function GoogleButton({ onError }: { onError: (msg: string) => void }) {
   const { loginWithGoogle } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  const [, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: GOOGLE_ANDROID_CLIENT_ID!,
-    scopes: ['openid', 'profile', 'email'],
-  });
-
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const token = response.authentication?.accessToken;
-      if (token) {
-        setLoading(true);
-        loginWithGoogle(token)
-          .then(() => router.replace('/(app)/'))
-          .catch((err: any) => {
-            const detail = err?.response?.data?.detail;
-            onError(typeof detail === 'string' ? detail : 'Error al iniciar sesión con Google');
-          })
-          .finally(() => setLoading(false));
+  const handlePress = async () => {
+    setLoading(true);
+    try {
+      await GoogleSignin.hasPlayServices();
+      await GoogleSignin.signIn();
+      const { accessToken } = await GoogleSignin.getTokens();
+      if (!accessToken) throw new Error('No access token');
+      await loginWithGoogle(accessToken);
+      router.replace('/(app)/');
+    } catch (err: any) {
+      if (isErrorWithCode(err)) {
+        if (err.code === statusCodes.SIGN_IN_CANCELLED) return;
       }
-    } else if (response?.type === 'error') {
-      onError('Error al conectar con Google');
+      const detail = err?.response?.data?.detail;
+      onError(typeof detail === 'string' ? detail : 'Error al iniciar sesión con Google');
+    } finally {
+      setLoading(false);
     }
-  }, [response, loginWithGoogle, onError]);
+  };
 
   return (
     <TouchableOpacity
       style={[styles.googleButton, loading && styles.buttonDisabled]}
-      onPress={() => promptAsync()}
+      onPress={handlePress}
       disabled={loading}
     >
       <Ionicons name="logo-google" size={18} color={loading ? Colors.textSecondary : '#DB4437'} style={styles.googleIcon} />
