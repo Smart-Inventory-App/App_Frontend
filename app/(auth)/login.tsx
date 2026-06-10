@@ -1,6 +1,4 @@
-import * as AuthSession from 'expo-auth-session';
 import { router } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
 import {
   Image,
@@ -14,56 +12,78 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Google from 'expo-auth-session/providers/google';
+import * as AuthSession from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const KEYCLOAK_URL = process.env.EXPO_PUBLIC_KEYCLOAK_URL;
-const KEYCLOAK_REALM = process.env.EXPO_PUBLIC_KEYCLOAK_REALM;
-const KEYCLOAK_CLIENT_ID = process.env.EXPO_PUBLIC_KEYCLOAK_CLIENT_ID;
-
-const discovery: AuthSession.DiscoveryDocument = {
-  authorizationEndpoint: `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/auth`,
-};
-
 type Step = 'email' | 'password';
+
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+const GOOGLE_ENABLED = !!(GOOGLE_ANDROID_CLIENT_ID && GOOGLE_WEB_CLIENT_ID);
+
+// Separated component so the hook only runs when client IDs are configured
+function GoogleButton({ onError }: { onError: (msg: string) => void }) {
+  const { loginWithGoogle } = useAuth();
+  const [loading, setLoading] = useState(false);
+
+  const redirectUri = AuthSession.makeRedirectUri({
+    native: `com.googleusercontent.apps.${GOOGLE_ANDROID_CLIENT_ID!.replace('.apps.googleusercontent.com', '')}:/oauth2redirect`,
+  });
+
+  const [, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID!,
+    webClientId: GOOGLE_WEB_CLIENT_ID!,
+    redirectUri,
+    scopes: ['openid', 'profile', 'email'],
+  });
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const token = response.authentication?.accessToken;
+      if (token) {
+        setLoading(true);
+        loginWithGoogle(token)
+          .then(() => router.replace('/(app)/'))
+          .catch((err: any) => {
+            const detail = err?.response?.data?.detail;
+            onError(typeof detail === 'string' ? detail : 'Error al iniciar sesión con Google');
+          })
+          .finally(() => setLoading(false));
+      }
+    } else if (response?.type === 'error') {
+      onError('Error al conectar con Google');
+    }
+  }, [response, loginWithGoogle, onError]);
+
+  return (
+    <TouchableOpacity
+      style={[styles.googleButton, loading && styles.buttonDisabled]}
+      onPress={() => promptAsync()}
+      disabled={loading}
+    >
+      <Ionicons name="logo-google" size={18} color={loading ? Colors.textSecondary : '#DB4437'} style={styles.googleIcon} />
+      <Text style={styles.googleButtonText}>
+        {loading ? 'Conectando...' : 'Continuar con Google'}
+      </Text>
+    </TouchableOpacity>
+  );
+}
 
 export default function LoginScreen() {
   const { t } = useTranslation();
-  const { login, loginWithGoogle } = useAuth();
+  const { login } = useAuth();
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
-  const redirectUri = AuthSession.makeRedirectUri({ scheme: 'app-frontend' });
-
-  const [request, response, promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: KEYCLOAK_CLIENT_ID!,
-      scopes: ['openid', 'profile', 'email'],
-      redirectUri,
-      extraParams: { kc_idp_hint: 'google' },
-    },
-    discovery,
-  );
-
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { code } = response.params;
-      setLoading(true);
-      loginWithGoogle(code, redirectUri, request?.codeVerifier)
-        .then(() => router.replace('/(app)/'))
-        .catch(() => setError(t('login.googleError')))
-        .finally(() => setLoading(false));
-    } else if (response?.type === 'error') {
-      setError(t('login.googleError'));
-    }
-  }, [response]);
 
   const handleEmailContinue = () => {
     if (!email.trim()) return;
@@ -77,8 +97,9 @@ export default function LoginScreen() {
     try {
       await login(email.trim(), password);
       router.replace('/(app)/');
-    } catch {
-      setError(t('login.invalidCredentials'));
+    } catch (err: unknown) {
+      const detail = (err as any)?.response?.data?.detail;
+      setError(typeof detail === 'string' ? detail : t('login.invalidCredentials'));
     } finally {
       setLoading(false);
     }
@@ -115,32 +136,22 @@ export default function LoginScreen() {
               <Text style={styles.buttonText}>{t('common.continue')}</Text>
             </TouchableOpacity>
 
+            {GOOGLE_ENABLED && (
+              <>
+                <View style={styles.dividerRow}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>o</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+                <GoogleButton onError={setError} />
+              </>
+            )}
+
             <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
               <Text style={styles.link}>{t('login.createAccount')}</Text>
             </TouchableOpacity>
 
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>{t('login.or')}</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.socialButton, (!request || loading) && styles.buttonDisabled]}
-              onPress={() => { setError(''); promptAsync(); }}
-              disabled={!request || loading}
-            >
-              <Text style={styles.socialText}>{t('login.continueWithGoogle')}</Text>
-            </TouchableOpacity>
-
             {!!error && <Text style={styles.errorText}>{error}</Text>}
-
-            <Text style={styles.terms}>
-              {t('login.terms', {
-                terms: t('login.termsLink'),
-                privacy: t('login.privacyLink'),
-              })}
-            </Text>
           </>
         ) : (
           <>
@@ -221,25 +232,25 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { backgroundColor: Colors.disabled },
   buttonText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
-  link: { color: Colors.primary, fontSize: 15, marginBottom: 24 },
-  forgotLink: { color: Colors.textSecondary, fontSize: 14, marginTop: 4 },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 20 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.divider },
-  dividerText: { marginHorizontal: 12, color: Colors.textSecondary, fontSize: 13 },
-  socialButton: {
+  dividerRow: { flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 16 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.inputBorder },
+  dividerText: { color: Colors.textSecondary, fontSize: 13, marginHorizontal: 12 },
+  googleButton: {
     width: '100%',
     height: 48,
-    borderWidth: 1,
-    borderColor: Colors.socialBorder,
     borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
     backgroundColor: Colors.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
-  socialText: { fontSize: 15, color: Colors.textPrimary, fontWeight: '500' },
-  terms: { fontSize: 11, color: Colors.textSecondary, textAlign: 'center', marginTop: 16, lineHeight: 16 },
-  termsLink: { color: Colors.primary },
+  googleIcon: { marginRight: 10 },
+  googleButtonText: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
+  link: { color: Colors.primary, fontSize: 15, marginBottom: 24 },
+  forgotLink: { color: Colors.textSecondary, fontSize: 14, marginTop: 4 },
   backRow: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', marginBottom: 20, gap: 6 },
   backText: { color: Colors.primary, fontSize: 14 },
   inputWrapper: { width: '100%', position: 'relative', marginBottom: 12 },

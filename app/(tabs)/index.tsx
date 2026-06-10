@@ -24,7 +24,7 @@ function decodeName(token: string | null): string {
 }
 
 export default function HomeScreen() {
-  const [] = useFonts({ Figtree_400Regular, Roboto_500Medium });
+  useFonts({ Figtree_400Regular, Roboto_500Medium });
   const { t } = useTranslation();
   const { token } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
@@ -91,6 +91,7 @@ export default function HomeScreen() {
                   name={p.nombre}
                   expiry={p.vencimiento ?? '—'}
                   stock={`${p.stock} ud.`}
+                  imageUrl={p.imagen_url ?? undefined}
                 />
               ))
             )}

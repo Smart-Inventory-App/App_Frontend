@@ -38,6 +38,7 @@ export default function RegisterScreen() {
   const [emailTaken, setEmailTaken] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const rules = [
     { key: 'minLength', test: (pw: string) => pw.length >= 8 },
@@ -63,12 +64,19 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     if (!allValid) return;
     setLoading(true);
+    setError(null);
     try {
       await register(email.trim(), password);
       router.replace('/(auth)/login');
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
-      if (detail === 'EMAIL_TAKEN') setEmailTaken(true);
+      if (typeof detail === 'string' && detail.includes('registrado')) {
+        setEmailTaken(true);
+      } else if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
+        setError('Sin conexión con el servidor de autenticación');
+      } else {
+        setError(typeof detail === 'string' ? detail : 'Error al crear la cuenta');
+      }
     } finally {
       setLoading(false);
     }
@@ -131,6 +139,8 @@ export default function RegisterScreen() {
           </View>
         )}
 
+        {!!error && <Text style={styles.errorText}>{error}</Text>}
+
         <TouchableOpacity
           style={[styles.button, (!allValid || loading) && styles.buttonDisabled]}
           onPress={handleRegister}
@@ -180,4 +190,5 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { backgroundColor: Colors.disabled },
   buttonText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
+  errorText: { color: Colors.error, fontSize: 13, alignSelf: 'flex-start', marginBottom: 8 },
 });

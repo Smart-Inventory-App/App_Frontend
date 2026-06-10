@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "App_Frontend",
+    "name": "Smart Inventory",
     "slug": "App_Frontend",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -21,7 +21,11 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.smartinventory.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -33,7 +37,19 @@
       "expo-font",
       "expo-web-browser",
       "expo-secure-store",
-      "expo-localization"
-    ]
+      "expo-localization",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "La app necesita acceso a tus fotos para subir imágenes de productos."
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e254ee7f-1908-4fc1-978e-946be62e6c24"
+      }
+    }
   }
 }

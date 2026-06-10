@@ -39,7 +39,13 @@ export default function CargarScreen() {
   const validate = (): string | null => {
     if (!form.nombre?.trim()) return t('product.validationNombre');
     if (!form.categoria?.trim()) return t('product.validationCategoria');
-    if (form.stock === undefined || isNaN(form.stock)) return t('product.validationStock');
+    if (form.stock === undefined || isNaN(form.stock) || form.stock <= 0) return t('product.validationStock');
+    if (form.vencimiento) {
+      const d = new Date(form.vencimiento);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(form.vencimiento) || isNaN(d.getTime())) {
+        return t('product.validationVencimiento');
+      }
+    }
     return null;
   };
 
@@ -54,8 +60,16 @@ export default function CargarScreen() {
     try {
       await productService.createProduct(form as ProductCreate);
       setSuccess(true);
-    } catch {
-      setError(t('product.saveError'));
+    } catch (err: unknown) {
+      const detail = (err as any)?.response?.data?.detail;
+      if (typeof detail === 'string') {
+        setError(detail);
+      } else if (Array.isArray(detail)) {
+        setError(detail.map((e: any) => e.msg ?? JSON.stringify(e)).join('\n'));
+      } else {
+        const msg = (err as any)?.message;
+        setError(msg ?? t('product.saveError'));
+      }
     } finally {
       setSaving(false);
     }

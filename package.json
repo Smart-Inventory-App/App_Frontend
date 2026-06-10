@@ -26,6 +26,7 @@
     "expo": "^55.0.0",
     "expo-auth-session": "~55.0.16",
     "expo-font": "~55.0.8",
+    "expo-image-picker": "~55.0.20",
     "expo-linking": "~55.0.15",
     "expo-localization": "~55.0.15",
     "expo-router": "~55.0.16",
@@ -62,6 +63,7 @@
   },
   "jest": {
     "preset": "jest-expo",
+    "setupFiles": ["./jest.setup.js"],
     "transformIgnorePatterns": [
       "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg)"
     ]

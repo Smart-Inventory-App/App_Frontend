@@ -1,15 +1,15 @@
 import axios from 'axios';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+const AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL;
 
 const api = axios.create({
-  baseURL: BASE_URL,
+  baseURL: AUTH_URL,
   headers: { 'Content-Type': 'application/json' },
+  timeout: 10000,
 });
 
 export interface LoginResponse {
   access_token: string;
-  refresh_token?: string;
   token_type: string;
 }
 
@@ -41,12 +41,8 @@ export const authService = {
     await api.post('/auth/reset-password', { reset_token, new_password });
   },
 
-  async socialCallback(code: string, redirectUri: string, codeVerifier?: string): Promise<LoginResponse> {
-    const { data } = await api.post<LoginResponse>('/auth/social-callback', {
-      code,
-      redirect_uri: redirectUri,
-      code_verifier: codeVerifier,
-    });
+  async googleLogin(accessToken: string): Promise<LoginResponse> {
+    const { data } = await api.post<LoginResponse>('/auth/google', { access_token: accessToken });
     return data;
   },
 };

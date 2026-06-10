@@ -10,7 +10,7 @@ type Props = {
 };
 
 export default function StatCard({ title, value, label, labelColor }: Props) {
-  const [] = useFonts({Figtree_400Regular, RobotoFlex_400Regular })
+  useFonts({Figtree_400Regular, RobotoFlex_400Regular });
   const getLabelStyle = () => {
     switch(labelColor) {
       case 'green':

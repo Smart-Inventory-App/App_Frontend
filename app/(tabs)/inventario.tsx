@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -135,6 +136,7 @@ export default function InventarioScreen() {
       vencimiento: product.vencimiento,
       descripcion: product.descripcion,
       ubicacion: product.ubicacion,
+      imagen_url: product.imagen_url,
     });
   };
 
@@ -172,6 +174,10 @@ export default function InventarioScreen() {
     ];
     return (
       <View style={styles.item}>
+        <Image
+          source={item.imagen_url ? { uri: item.imagen_url } : require('../../assets/icon.png')}
+          style={styles.itemImage}
+        />
         <View style={styles.itemInfo}>
           <Text style={styles.itemName}>{item.nombre}</Text>
           {item.marca ? <Text style={styles.itemSub}>{item.marca}</Text> : null}
@@ -431,6 +437,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     elevation: 1,
   },
+  itemImage: { width: 44, height: 44, borderRadius: 8, marginRight: 12 },
   itemInfo: { flex: 1 },
   itemName: { fontSize: 15, fontWeight: 'bold', color: Colors.textPrimary },
   itemSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
