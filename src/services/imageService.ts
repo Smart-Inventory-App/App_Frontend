@@ -1,5 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
+import { getAuthToken } from './api';
 
 const IMAGE_STORAGE_URL = process.env.EXPO_PUBLIC_IMAGE_STORAGE_URL;
 
@@ -12,10 +13,16 @@ async function uploadAsset(asset: ImagePicker.ImagePickerAsset): Promise<string>
   } as unknown as Blob);
   formData.append('folder', 'bazaar/products');
 
+  const token = getAuthToken();
   const { data } = await axios.post<{ url: string }>(
     `${IMAGE_STORAGE_URL}/storage/upload`,
     formData,
-    { headers: { 'Content-Type': 'multipart/form-data' } },
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    },
   );
   return data.url;
 }

@@ -16,6 +16,10 @@ export function setAuthToken(token: string | null) {
   _token = token;
 }
 
+export function getAuthToken(): string | null {
+  return _token;
+}
+
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (_token) {
     config.headers = config.headers ?? {};
