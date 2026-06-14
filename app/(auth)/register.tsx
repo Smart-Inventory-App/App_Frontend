@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { authService } from '../../src/services/authService';
+import { getAuthError } from '../../src/utils/authError';
 
 function RuleRow({ valid, label }: { valid: boolean; label: string }) {
   return (
@@ -70,12 +71,12 @@ export default function RegisterScreen() {
       router.replace('/(auth)/login');
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
-      if (typeof detail === 'string' && detail.includes('registrado')) {
+      if (detail === 'auth.email_already_registered') {
         setEmailTaken(true);
       } else if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
-        setError('Sin conexión con el servidor de autenticación');
+        setError(t('errors.network'));
       } else {
-        setError(typeof detail === 'string' ? detail : 'Error al crear la cuenta');
+        setError(getAuthError(detail, t));
       }
     } finally {
       setLoading(false);

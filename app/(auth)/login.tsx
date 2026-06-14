@@ -16,6 +16,7 @@ import { GoogleSignin, isErrorWithCode, statusCodes } from '@react-native-google
 import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { getAuthError } from '../../src/utils/authError';
 
 type Step = 'email' | 'password';
 
@@ -27,6 +28,7 @@ GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID! });
 
 function GoogleButton({ onError }: { onError: (msg: string) => void }) {
   const { loginWithGoogle } = useAuth();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
 
   const handlePress = async () => {
@@ -43,7 +45,7 @@ function GoogleButton({ onError }: { onError: (msg: string) => void }) {
         if (err.code === statusCodes.SIGN_IN_CANCELLED) return;
       }
       const detail = err?.response?.data?.detail;
-      onError(typeof detail === 'string' ? detail : 'Error al iniciar sesión con Google');
+      onError(getAuthError(detail, t, t('login.googleError')));
     } finally {
       setLoading(false);
     }
@@ -87,7 +89,7 @@ export default function LoginScreen() {
       router.replace('/(app)/');
     } catch (err: unknown) {
       const detail = (err as any)?.response?.data?.detail;
-      setError(typeof detail === 'string' ? detail : t('login.invalidCredentials'));
+      setError(getAuthError(detail, t));
     } finally {
       setLoading(false);
     }
