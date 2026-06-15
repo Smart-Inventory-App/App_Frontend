@@ -1,4 +1,4 @@
-import axios, { AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -7,10 +7,24 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 10000,
 });
 
-api.interceptors.request.use((config: AxiosRequestConfig) => {
-  // Add auth token here if needed
+let _token: string | null = null;
+
+export function setAuthToken(token: string | null) {
+  _token = token;
+}
+
+export function getAuthToken(): string | null {
+  return _token;
+}
+
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  if (_token) {
+    config.headers = config.headers ?? {};
+    config.headers['Authorization'] = `Bearer ${_token}`;
+  }
   return config;
 });
 

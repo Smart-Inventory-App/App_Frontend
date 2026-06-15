@@ -11,22 +11,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { authService } from '../../src/services/authService';
-
-interface Rule {
-  label: string;
-  test: (pw: string, repeat: string, emailTaken: boolean) => boolean;
-}
-
-const PASSWORD_RULES: Rule[] = [
-  { label: 'Mínimo de 8 caracteres', test: (pw) => pw.length >= 8 },
-  { label: 'Contiene mayúsculas', test: (pw) => /[A-Z]/.test(pw) },
-  { label: 'Contiene minúsculas', test: (pw) => /[a-z]/.test(pw) },
-  { label: 'Contiene número y/o carácter especial', test: (pw) => /[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pw) },
-  { label: 'Correo no registrado', test: (_pw, _r, emailTaken) => !emailTaken },
-];
 
 function RuleRow({ valid, label }: { valid: boolean; label: string }) {
   return (
@@ -42,6 +30,7 @@ function RuleRow({ valid, label }: { valid: boolean; label: string }) {
 }
 
 export default function RegisterScreen() {
+  const { t } = useTranslation();
   const { register } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,8 +38,16 @@ export default function RegisterScreen() {
   const [emailTaken, setEmailTaken] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Debounced email check
+  const rules = [
+    { key: 'minLength', test: (pw: string) => pw.length >= 8 },
+    { key: 'uppercase', test: (pw: string) => /[A-Z]/.test(pw) },
+    { key: 'lowercase', test: (pw: string) => /[a-z]/.test(pw) },
+    { key: 'numberOrSpecial', test: (pw: string) => /[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pw) },
+    { key: 'emailAvailable', test: (_pw: string) => !emailTaken },
+  ];
+
   useEffect(() => {
     if (!email || !email.includes('@')) { setEmailTaken(false); return; }
     const timer = setTimeout(async () => {
@@ -62,18 +59,24 @@ export default function RegisterScreen() {
     return () => clearTimeout(timer);
   }, [email]);
 
-  const allValid = PASSWORD_RULES.every((r) => r.test(password, repeat, emailTaken))
-    && password === repeat;
+  const allValid = rules.every((r) => r.test(password)) && password === repeat;
 
   const handleRegister = async () => {
     if (!allValid) return;
     setLoading(true);
+    setError(null);
     try {
       await register(email.trim(), password);
       router.replace('/(auth)/login');
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
-      if (detail === 'EMAIL_TAKEN') setEmailTaken(true);
+      if (typeof detail === 'string' && detail.includes('registrado')) {
+        setEmailTaken(true);
+      } else if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
+        setError('Sin conexión con el servidor de autenticación');
+      } else {
+        setError(typeof detail === 'string' ? detail : 'Error al crear la cuenta');
+      }
     } finally {
       setLoading(false);
     }
@@ -89,10 +92,9 @@ export default function RegisterScreen() {
         <Text style={styles.titleSmart}>Smart</Text>
         <Text style={styles.titleInventory}>Inventory</Text>
 
-        {/* Email */}
         <View style={styles.fieldWrapper}>
-          <Text style={styles.label}>Email</Text>
-          {emailTaken && <Text style={styles.takenBadge}>Mail en uso</Text>}
+          <Text style={styles.label}>{t('register.emailLabel')}</Text>
+          {emailTaken && <Text style={styles.takenBadge}>{t('register.emailTaken')}</Text>}
         </View>
         <TextInput
           style={[styles.input, emailTaken && styles.inputError]}
@@ -105,8 +107,7 @@ export default function RegisterScreen() {
           autoCorrect={false}
         />
 
-        {/* Password */}
-        <Text style={styles.label}>Contraseña</Text>
+        <Text style={styles.label}>{t('register.passwordLabel')}</Text>
         <TextInput
           style={styles.input}
           placeholder="••••••••"
@@ -116,8 +117,7 @@ export default function RegisterScreen() {
           secureTextEntry
         />
 
-        {/* Repeat */}
-        <Text style={styles.label}>Repetir Contraseña</Text>
+        <Text style={styles.label}>{t('register.repeatPasswordLabel')}</Text>
         <TextInput
           style={styles.input}
           placeholder="••••••••"
@@ -127,25 +127,26 @@ export default function RegisterScreen() {
           secureTextEntry
         />
 
-        {/* Validation rules */}
         {(showRules || password.length > 0) && (
           <View style={styles.rulesContainer}>
-            {PASSWORD_RULES.map((rule) => (
+            {rules.map((rule) => (
               <RuleRow
-                key={rule.label}
-                valid={rule.test(password, repeat, emailTaken)}
-                label={rule.label}
+                key={rule.key}
+                valid={rule.test(password)}
+                label={t(`register.rules.${rule.key}` as any)}
               />
             ))}
           </View>
         )}
+
+        {!!error && <Text style={styles.errorText}>{error}</Text>}
 
         <TouchableOpacity
           style={[styles.button, (!allValid || loading) && styles.buttonDisabled]}
           onPress={handleRegister}
           disabled={!allValid || loading}
         >
-          <Text style={styles.buttonText}>{loading ? 'Creando cuenta...' : 'Crear Cuenta'}</Text>
+          <Text style={styles.buttonText}>{loading ? t('register.creating') : t('register.createAccount')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -189,4 +190,5 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { backgroundColor: Colors.disabled },
   buttonText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
+  errorText: { color: Colors.error, fontSize: 13, alignSelf: 'flex-start', marginBottom: 8 },
 });

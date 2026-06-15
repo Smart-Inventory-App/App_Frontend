@@ -3,8 +3,9 @@ import * as SecureStore from 'expo-secure-store';
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { authService } from '../services/authService';
+import { setAuthToken } from '../services/api';
 
-const TOKEN_KEY = 'kc_access_token';
+const TOKEN_KEY = 'auth_access_token';
 
 // expo-secure-store doesn't work on web — fall back to AsyncStorage
 const storage = {
@@ -29,6 +30,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (accessToken: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -39,18 +41,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     storage.get(TOKEN_KEY)
-      .then((stored) => setToken(stored ?? null))
+      .then((stored) => {
+        setAuthToken(stored ?? null);
+        setToken(stored ?? null);
+      })
       .finally(() => setIsLoading(false));
   }, []);
 
   const login = async (email: string, password: string) => {
     const result = await authService.login(email, password);
     await storage.set(TOKEN_KEY, result.access_token);
+    setAuthToken(result.access_token);
     setToken(result.access_token);
   };
 
   const logout = async () => {
     await storage.delete(TOKEN_KEY);
+    setAuthToken(null);
     setToken(null);
   };
 
@@ -58,8 +65,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authService.register(email, password);
   };
 
+  const loginWithGoogle = async (accessToken: string) => {
+    const result = await authService.googleLogin(accessToken);
+    await storage.set(TOKEN_KEY, result.access_token);
+    setAuthToken(result.access_token);
+    setToken(result.access_token);
+  };
+
   return (
-    <AuthContext.Provider value={{ token, isLoading, isAuthenticated: !!token, login, logout, register }}>
+    <AuthContext.Provider value={{ token, isLoading, isAuthenticated: !!token, login, logout, register, loginWithGoogle }}>
       {children}
     </AuthContext.Provider>
   );

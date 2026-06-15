@@ -1,29 +1,332 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useAuth } from '../../src/context/AuthContext';
+import { useCallback, useState } from 'react';
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { router } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
+import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
+import { useAuth } from '@/context/AuthContext';
+import { changeLanguage, type Language } from '@/i18n';
+import { profileService, UserProfile } from '@/services/profileService';
+import { settingsService } from '@/services/settingsService';
 
 export default function PerfilScreen() {
-    const { logout } = useAuth();
+  const { t, i18n } = useTranslation();
+  const { logout } = useAuth();
 
-    const handleLogout = async () => {
-        await logout();
-        router.replace('/(auth)/login');
-    };
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [username, setUsername] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'ok' | 'error'; msg: string } | null>(null);
+
+  const [lowStockInput, setLowStockInput] = useState('5');
+  const [expiryDaysInput, setExpiryDaysInput] = useState('7');
+
+  useFocusEffect(useCallback(() => {
+    setLoading(true);
+    Promise.all([profileService.getProfile(), settingsService.getAll()])
+      .then(([p, s]) => {
+        setProfile(p);
+        setFirstName(p.firstName ?? '');
+        setLastName(p.lastName ?? '');
+        setUsername(p.username ?? '');
+        setLowStockInput(String(s.lowStock));
+        setExpiryDaysInput(String(s.expiryDays));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []));
+
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/(auth)/login');
+  };
+
+  const toggleLanguage = async () => {
+    const next: Language = i18n.language === 'es' ? 'en' : 'es';
+    await changeLanguage(next);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const updated = await profileService.updateProfile(firstName.trim(), lastName.trim(), username.trim() || undefined);
+      setProfile(updated);
+      setEditing(false);
+      setFeedback({ type: 'ok', msg: t('profile.saveSuccess') });
+    } catch {
+      setFeedback({ type: 'error', msg: t('profile.saveError') });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    const ls = parseInt(lowStockInput, 10);
+    const ed = parseInt(expiryDaysInput, 10);
+    if (!isNaN(ls) && ls > 0) await settingsService.setLowStockThreshold(ls);
+    if (!isNaN(ed) && ed > 0) await settingsService.setExpiryDaysThreshold(ed);
+  };
+
+  const handleCancelEdit = () => {
+    setFirstName(profile?.firstName ?? '');
+    setLastName(profile?.lastName ?? '');
+    setUsername(profile?.username ?? '');
+    setEditing(false);
+    setFeedback(null);
+  };
+
+  const initials = `${(profile?.firstName ?? '')[0] ?? ''}${(profile?.lastName ?? '')[0] ?? ''}`.toUpperCase() || '?';
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator color={Colors.primary} />
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Bienvenido a Smart Inventory</Text>
-      <TouchableOpacity style={styles.button} onPress={handleLogout}>
-        <Text style={styles.buttonText}>Cerrar sesión</Text>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* Avatar */}
+      <View style={styles.avatarContainer}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{initials}</Text>
+        </View>
+        {!editing && (
+          <TouchableOpacity style={styles.editIconBtn} onPress={() => { setEditing(true); setFeedback(null); }}>
+            <Ionicons name="pencil" size={16} color={Colors.primary} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Feedback */}
+      {feedback && (
+        <Text style={[styles.feedback, feedback.type === 'ok' ? styles.feedbackOk : styles.feedbackError]}>
+          {feedback.msg}
+        </Text>
+      )}
+
+      {/* Info card */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>{t('profile.editProfile')}</Text>
+
+        <Text style={styles.fieldLabel}>{t('profile.firstName')}</Text>
+        {editing ? (
+          <TextInput
+            style={styles.input}
+            value={firstName}
+            onChangeText={setFirstName}
+            placeholder={t('profile.firstNamePlaceholder')}
+            placeholderTextColor={Colors.placeholder}
+          />
+        ) : (
+          <Text style={styles.fieldValue}>{profile?.firstName || '—'}</Text>
+        )}
+
+        <Text style={styles.fieldLabel}>{t('profile.lastName')}</Text>
+        {editing ? (
+          <TextInput
+            style={styles.input}
+            value={lastName}
+            onChangeText={setLastName}
+            placeholder={t('profile.lastNamePlaceholder')}
+            placeholderTextColor={Colors.placeholder}
+          />
+        ) : (
+          <Text style={styles.fieldValue}>{profile?.lastName || '—'}</Text>
+        )}
+
+        <Text style={styles.fieldLabel}>{t('profile.email')}</Text>
+        <Text style={[styles.fieldValue, styles.fieldReadOnly]}>{profile?.email || '—'}</Text>
+
+        <Text style={styles.fieldLabel}>{t('profile.username')}</Text>
+        {editing ? (
+          <TextInput
+            style={styles.input}
+            value={username}
+            onChangeText={setUsername}
+            placeholder={t('profile.username')}
+            placeholderTextColor={Colors.placeholder}
+            autoCapitalize="none"
+          />
+        ) : (
+          <Text style={styles.fieldValue}>{profile?.username || '—'}</Text>
+        )}
+      </View>
+
+      {/* Edit actions */}
+      {editing && (
+        <View style={styles.editActions}>
+          <TouchableOpacity
+            style={[styles.saveBtn, saving && { opacity: 0.6 }]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            <Text style={styles.saveBtnText}>{saving ? t('profile.saving') : t('profile.save')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelEdit} disabled={saving}>
+            <Text style={styles.cancelBtnText}>{t('profile.cancel')}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Settings */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>{t('profile.settings')}</Text>
+
+        <Text style={styles.fieldLabel}>{t('profile.lowStockThreshold')}</Text>
+        <View style={styles.settingRow}>
+          <TextInput
+            style={[styles.input, styles.settingInput]}
+            value={lowStockInput}
+            onChangeText={setLowStockInput}
+            keyboardType="numeric"
+            returnKeyType="done"
+            onEndEditing={handleSaveSettings}
+            onBlur={handleSaveSettings}
+          />
+          <Text style={styles.settingUnit}>{t('profile.units')}</Text>
+        </View>
+
+        <Text style={styles.fieldLabel}>{t('profile.expiryDaysThreshold')}</Text>
+        <View style={styles.settingRow}>
+          <TextInput
+            style={[styles.input, styles.settingInput]}
+            value={expiryDaysInput}
+            onChangeText={setExpiryDaysInput}
+            keyboardType="numeric"
+            returnKeyType="done"
+            onEndEditing={handleSaveSettings}
+            onBlur={handleSaveSettings}
+          />
+          <Text style={styles.settingUnit}>{t('profile.days')}</Text>
+        </View>
+      </View>
+
+      {/* Language */}
+      <TouchableOpacity style={styles.rowBtn} onPress={toggleLanguage}>
+        <Ionicons name="language-outline" size={20} color={Colors.textSecondary} />
+        <Text style={styles.rowBtnText}>
+          {t('profile.language')}: {i18n.language === 'es' ? '🇦🇷 Español' : '🇺🇸 English'}
+        </Text>
+        <Ionicons name="chevron-forward" size={16} color={Colors.placeholder} />
       </TouchableOpacity>
-    </View>
+
+      {/* Logout */}
+      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+        <Ionicons name="log-out-outline" size={20} color={Colors.error} />
+        <Text style={styles.logoutText}>{t('profile.logout')}</Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 24, backgroundColor: Colors.background },
-  title: { fontSize: 22, fontWeight: '700', color: Colors.primaryDark, textAlign: 'center', paddingHorizontal: 32 },
-  button: { backgroundColor: Colors.primary, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 8 },
-  buttonText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
+  container: { flex: 1, backgroundColor: '#f2f3f6' },
+  content: { padding: 20, paddingBottom: 40, alignItems: 'center' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  avatarContainer: { position: 'relative', marginTop: 32, marginBottom: 8 },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { color: '#fff', fontSize: 28, fontWeight: 'bold' },
+  editIconBtn: {
+    position: 'absolute',
+    bottom: 0,
+    right: -4,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder ?? '#ddd',
+  },
+  feedback: { fontSize: 13, marginBottom: 8, textAlign: 'center' },
+  feedbackOk: { color: '#2db7a3' },
+  feedbackError: { color: Colors.error },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    width: '100%',
+    marginTop: 12,
+    elevation: 1,
+  },
+  cardTitle: { fontSize: 14, fontWeight: '700', color: Colors.textSecondary, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
+  fieldLabel: { fontSize: 12, color: Colors.textSecondary, marginTop: 12, fontWeight: '600' },
+  fieldValue: { fontSize: 15, color: Colors.textPrimary, marginTop: 4 },
+  fieldReadOnly: { color: Colors.textSecondary },
+  input: {
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+    color: Colors.textPrimary,
+    backgroundColor: '#fafafa',
+    marginTop: 4,
+    width: '100%',
+  },
+  editActions: { width: '100%', gap: 10, marginTop: 16 },
+  saveBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+  },
+  saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  cancelBtn: {
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.inputBorder ?? '#ddd',
+    backgroundColor: '#fff',
+  },
+  cancelBtnText: { color: Colors.textSecondary, fontSize: 15 },
+  rowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 14,
+    width: '100%',
+    marginTop: 12,
+    gap: 12,
+    elevation: 1,
+  },
+  rowBtnText: { flex: 1, fontSize: 15, color: Colors.textPrimary },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 14,
+    width: '100%',
+    marginTop: 12,
+    gap: 12,
+    elevation: 1,
+  },
+  logoutText: { fontSize: 15, color: Colors.error, fontWeight: '600' },
+  settingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  settingInput: { width: 80, marginTop: 0 },
+  settingUnit: { fontSize: 13, color: Colors.textSecondary },
 });

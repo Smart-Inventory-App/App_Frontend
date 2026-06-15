@@ -10,10 +10,12 @@ import {
   TextInput,
   TouchableOpacity,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { authService } from '../../src/services/authService';
 
 export default function ForgotPasswordScreen() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -24,7 +26,6 @@ export default function ForgotPasswordScreen() {
       await authService.forgotPassword(email.trim());
       router.push({ pathname: '/(auth)/verify-code', params: { email: email.trim() } });
     } catch {
-      // Always navigate — backend never reveals if email exists
       router.push({ pathname: '/(auth)/verify-code', params: { email: email.trim() } });
     } finally {
       setLoading(false);
@@ -41,10 +42,7 @@ export default function ForgotPasswordScreen() {
         <Text style={styles.titleSmart}>Smart</Text>
         <Text style={styles.titleInventory}>Inventory</Text>
 
-        <Text style={styles.description}>
-          Si el email indicado corresponde a una cuenta registrada, recibirás un correo con un código de 6 dígitos.
-          El mismo tendrá una validez de 1 hora.
-        </Text>
+        <Text style={styles.description}>{t('forgotPassword.description')}</Text>
 
         <TextInput
           style={styles.input}
@@ -62,11 +60,11 @@ export default function ForgotPasswordScreen() {
           onPress={handleContinue}
           disabled={!email.trim() || loading}
         >
-          <Text style={styles.buttonText}>{loading ? 'Enviando...' : 'Continuar'}</Text>
+          <Text style={styles.buttonText}>{loading ? t('forgotPassword.sending') : t('common.continue')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backLink}>Volver al inicio de sesión</Text>
+          <Text style={styles.backLink}>{t('forgotPassword.backToLogin')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>

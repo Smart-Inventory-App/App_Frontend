@@ -7,10 +7,11 @@ type Props = {
   stock: string;
   status?: string;
   statusColor?: string;
+  imageUrl?: string;
 };
 
-export default function ProductItem({ name, expiry, stock, status, statusColor }: Props) {
-  const [] = useFonts({Figtree_400Regular})
+export default function ProductItem({ name, expiry, stock, status, statusColor, imageUrl }: Props) {
+  useFonts({Figtree_400Regular});
 
   const getLabelStyle = () => {
     switch(statusColor) {
@@ -27,7 +28,10 @@ export default function ProductItem({ name, expiry, stock, status, statusColor }
 
   return (
     <View style={styles.item}>
-      <Image source={require("../../assets/icon.png")} style={styles.image}></Image>
+      <Image
+        source={imageUrl ? { uri: imageUrl } : require("../../assets/icon.png")}
+        style={styles.image}
+      />
       <View style={styles.info}>
         <Text style={styles.name}>{name}</Text>
         <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'}}>
@@ -35,8 +39,8 @@ export default function ProductItem({ name, expiry, stock, status, statusColor }
             <Text style={styles.detail}>Vence: {expiry}</Text>
             <Text style={styles.detail}>Stock: {stock}</Text>
           </View>
-          {status && <View style={getLabelStyle()}>{status}</View>}
-          {!status && <View style={getLabelStyle()}>OK</View>}
+          {status && <Text style={getLabelStyle()}>{status}</Text>}
+          {!status && <Text style={getLabelStyle()}>OK</Text>}
         </View>
       </View>
     </View>
@@ -65,9 +69,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#2db7a352',
     width: 60,
     height: 17,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center'
+    lineHeight: 17,
+    textAlign: 'center',
   },
   labelYellow: {
     fontFamily: 'Figtree_400Regular',
@@ -77,20 +80,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#fbbc059d',
     width: 60,
     height: 17,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center'
+    lineHeight: 17,
+    textAlign: 'center',
   },
   labelRed: {
     fontFamily: 'Figtree_400Regular',
     fontSize: 10,
-    color: '#671a1c',    
+    color: '#671a1c',
     borderRadius: 10,
     backgroundColor: '#e5484d8f',
     width: 60,
     height: 17,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center'
+    lineHeight: 17,
+    textAlign: 'center',
   }
 });
