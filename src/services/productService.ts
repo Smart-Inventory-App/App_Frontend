@@ -1,9 +1,27 @@
 import api from './api';
 import { Product, ProductCreate } from '../types/product';
 
+export interface ProductFilters {
+  search?: string;
+  categoria?: string;
+  ubicacion?: string;
+  sort_by?: 'nombre' | 'stock' | 'vencimiento' | 'categoria';
+  sort_dir?: 'asc' | 'desc';
+}
+
+export interface ProductFilterOptions {
+  categorias: string[];
+  ubicaciones: string[];
+}
+
 export const productService = {
-  async getProducts(params?: { search?: string; categoria?: string }): Promise<Product[]> {
+  async getProducts(params?: ProductFilters): Promise<Product[]> {
     const { data } = await api.get<Product[]>('/products/', { params });
+    return data;
+  },
+
+  async getFilterOptions(): Promise<ProductFilterOptions> {
+    const { data } = await api.get<ProductFilterOptions>('/products/filters/options');
     return data;
   },
 
