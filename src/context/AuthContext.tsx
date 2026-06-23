@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { Platform } from 'react-native';
 import { authService } from '../services/authService';
 import { setAuthToken } from '../services/api';
+import { getFirebaseToken } from '../services/firebaseService';
 
 const TOKEN_KEY = 'auth_access_token';
 
@@ -49,6 +50,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
+    const firebase_token = getFirebaseToken();
+    console.log("firebase_token: ", firebase_token)
     const result = await authService.login(email, password);
     await storage.set(TOKEN_KEY, result.access_token);
     setAuthToken(result.access_token);

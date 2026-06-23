@@ -1,10 +1,15 @@
 import { Redirect } from 'expo-router';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Platform, View } from 'react-native';
 import { Colors } from '../src/constants/colors';
 import { useAuth } from '../src/context/AuthContext';
+import { useEffect } from 'react';
+import { initNotifications } from '@/services/firebaseService';
 
 export default function RootIndex() {
   const { isAuthenticated, isLoading } = useAuth();
+  useEffect(() => {
+    initNotifications();
+  }, []);
 
   if (isLoading) {
     return (
