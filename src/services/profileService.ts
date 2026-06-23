@@ -1,4 +1,4 @@
-import api from './api';
+import api from './authApi';
 
 export interface UserProfile {
   sub: string;
