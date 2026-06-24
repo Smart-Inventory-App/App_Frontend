@@ -1,16 +1,27 @@
 import * as ImagePicker from 'expo-image-picker';
+import { Platform } from 'react-native';
 import axios from 'axios';
 import { getAuthToken } from './api';
 
 const IMAGE_STORAGE_URL = process.env.EXPO_PUBLIC_IMAGE_STORAGE_URL;
 
 async function uploadAsset(asset: ImagePicker.ImagePickerAsset): Promise<string> {
+  const name = asset.fileName ?? 'product.jpg';
+  const type = asset.mimeType ?? 'image/jpeg';
+
   const formData = new FormData();
-  formData.append('file', {
-    uri: asset.uri,
-    name: asset.fileName ?? 'product.jpg',
-    type: asset.mimeType ?? 'image/jpeg',
-  } as unknown as Blob);
+
+  if (Platform.OS === 'web') {
+    // En web hay que adjuntar un Blob real; el objeto {uri,name,type} solo funciona en nativo.
+    const blob = await (await fetch(asset.uri)).blob();
+    formData.append('file', blob);
+  } else {
+    formData.append('file', {
+      uri: asset.uri,
+      name,
+      type,
+    } as unknown as Blob);
+  }
   formData.append('folder', 'bazaar/products');
 
   const token = getAuthToken();
@@ -19,7 +30,7 @@ async function uploadAsset(asset: ImagePicker.ImagePickerAsset): Promise<string>
     formData,
     {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        // No seteamos Content-Type: el cliente debe generar el boundary del multipart.
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     },
