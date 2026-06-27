@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -22,77 +22,68 @@ import ProductFormFields from '@/components/ProductFormFields';
 
 export default function InventarioScreen() {
   const { t } = useTranslation();
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
   const [selectedUbicacion, setSelectedUbicacion] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editForm, setEditForm] = useState<Partial<ProductCreate>>({});
   const [saving, setSaving] = useState(false);
+  const [filterOptions, setFilterOptions] = useState<{ categorias: string[]; ubicaciones: string[] }>({
+    categorias: [],
+    ubicaciones: [],
+  });
   const [extraUbicaciones, setExtraUbicaciones] = useState<string[]>([]);
+  const [extraCategorias, setExtraCategorias] = useState<string[]>([]);
   const [sortField, setSortField] = useState<'nombre' | 'stock' | 'vencimiento' | 'categoria' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  // Debounce search input before hitting the backend
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await productService.getProducts();
-      setAllProducts(data);
+      const data = await productService.getProducts({
+        search: search || undefined,
+        categoria: selectedCategoria ?? undefined,
+        ubicacion: selectedUbicacion ?? undefined,
+        sort_by: sortField ?? undefined,
+        sort_dir: sortDir,
+      });
+      setProducts(data);
     } catch {
       Alert.alert('Error', t('inventory.loadError'));
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [search, selectedCategoria, selectedUbicacion, sortField, sortDir, t]);
+
+  const loadFilterOptions = useCallback(async () => {
+    try {
+      setFilterOptions(await productService.getFilterOptions());
+    } catch {
+      // filter chips are non-critical, ignore failures
+    }
+  }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => { loadFilterOptions(); }, [loadFilterOptions]));
 
   const categories = useMemo(() => {
-    const cats = allProducts.map(p => p.categoria).filter(Boolean);
-    return [...new Set(cats)];
-  }, [allProducts]);
+    return [...new Set([...filterOptions.categorias, ...extraCategorias])];
+  }, [filterOptions.categorias, extraCategorias]);
 
   const ubicaciones = useMemo(() => {
-    const locs = allProducts.map(p => p.ubicacion).filter((u): u is string => Boolean(u));
-    return [...new Set([...locs, ...extraUbicaciones])];
-  }, [allProducts, extraUbicaciones]);
+    return [...new Set([...filterOptions.ubicaciones, ...extraUbicaciones])];
+  }, [filterOptions.ubicaciones, extraUbicaciones]);
 
-  const products = useMemo(() => {
-    let list = allProducts;
-    if (search.trim()) {
-      const term = search.toLowerCase();
-      list = list.filter(
-        p => p.nombre.toLowerCase().includes(term) || (p.marca ?? '').toLowerCase().includes(term)
-      );
-    }
-    if (selectedCategoria) {
-      list = list.filter(p => p.categoria === selectedCategoria);
-    }
-    if (selectedUbicacion) {
-      list = list.filter(p => p.ubicacion === selectedUbicacion);
-    }
-    if (sortField) {
-      list = [...list].sort((a, b) => {
-        let cmp = 0;
-        if (sortField === 'nombre') {
-          cmp = a.nombre.localeCompare(b.nombre);
-        } else if (sortField === 'categoria') {
-          cmp = a.categoria.localeCompare(b.categoria);
-        } else if (sortField === 'stock') {
-          cmp = a.stock - b.stock;
-        } else if (sortField === 'vencimiento') {
-          const da = a.vencimiento ? new Date(a.vencimiento).getTime() : Infinity;
-          const db = b.vencimiento ? new Date(b.vencimiento).getTime() : Infinity;
-          cmp = da - db;
-        }
-        return sortDir === 'asc' ? cmp : -cmp;
-      });
-    }
-    return list;
-  }, [allProducts, search, selectedCategoria, selectedUbicacion, sortField, sortDir]);
-
-  const handleSearch = (text: string) => setSearch(text);
+  const handleSearch = (text: string) => setSearchInput(text);
 
   const handleSort = (field: typeof sortField) => {
     if (sortField === field) {
@@ -116,7 +107,8 @@ export default function InventarioScreen() {
           onPress: async () => {
             try {
               await productService.deleteProduct(product.id);
-              setAllProducts(prev => prev.filter(p => p.id !== product.id));
+              setProducts(prev => prev.filter(p => p.id !== product.id));
+              loadFilterOptions();
             } catch {
               Alert.alert('Error', t('inventory.deleteError'));
             }
@@ -145,8 +137,9 @@ export default function InventarioScreen() {
     setSaving(true);
     try {
       const updated = await productService.updateProduct(editingProduct.id, editForm);
-      setAllProducts(prev => prev.map(p => (p.id === updated.id ? updated : p)));
+      setProducts(prev => prev.map(p => (p.id === updated.id ? updated : p)));
       setEditingProduct(null);
+      loadFilterOptions();
     } catch {
       Alert.alert('Error', t('inventory.saveError'));
     } finally {
@@ -207,7 +200,7 @@ export default function InventarioScreen() {
     );
   };
 
-  const hasActiveFilters = !!(search || selectedCategoria || selectedUbicacion);
+  const hasActiveFilters = !!(searchInput || selectedCategoria || selectedUbicacion);
 
   return (
     <View style={styles.container}>
@@ -221,10 +214,10 @@ export default function InventarioScreen() {
           style={styles.searchInput}
           placeholder={t('inventory.search')}
           placeholderTextColor={Colors.placeholder}
-          value={search}
+          value={searchInput}
           onChangeText={handleSearch}
         />
-        {search.length > 0 && (
+        {searchInput.length > 0 && (
           <TouchableOpacity onPress={() => handleSearch('')}>
             <Ionicons name="close-circle" size={16} color={Colors.placeholder} />
           </TouchableOpacity>
@@ -356,6 +349,8 @@ export default function InventarioScreen() {
                 onChange={setEditForm}
                 ubicacionOptions={ubicaciones}
                 onAddUbicacion={loc => setExtraUbicaciones(prev => [...new Set([...prev, loc])])}
+                categoriaOptions={categories}
+                onAddCategoria={cat => setExtraCategorias(prev => [...new Set([...prev, cat])])}
               />
             </ScrollView>
             <TouchableOpacity

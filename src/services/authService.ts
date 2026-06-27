@@ -4,7 +4,6 @@ import { messaging, getFirebaseToken } from './firebaseService';
 
 
 const AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL;
-// const FIREBASE_VAPID_KEY = process.env.FIREBASE_VAPID_KEY
 
 const api = axios.create({
   baseURL: AUTH_URL,

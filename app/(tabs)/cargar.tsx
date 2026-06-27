@@ -26,12 +26,13 @@ export default function CargarScreen() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ubicacionOptions, setUbicacionOptions] = useState<string[]>([]);
+  const [categoriaOptions, setCategoriaOptions] = useState<string[]>([]);
 
   useFocusEffect(useCallback(() => {
-    productService.getProducts()
-      .then(products => {
-        const locs = products.map(p => p.ubicacion).filter((u): u is string => Boolean(u));
-        setUbicacionOptions([...new Set(locs)]);
+    productService.getFilterOptions()
+      .then(({ categorias, ubicaciones }) => {
+        setCategoriaOptions(categorias);
+        setUbicacionOptions(ubicaciones);
       })
       .catch(() => {});
   }, []));
@@ -85,6 +86,10 @@ export default function CargarScreen() {
     setUbicacionOptions(prev => [...new Set([...prev, loc])]);
   };
 
+  const handleAddCategoria = (cat: string) => {
+    setCategoriaOptions(prev => [...new Set([...prev, cat])]);
+  };
+
   if (success) {
     return (
       <View style={styles.successContainer}>
@@ -118,6 +123,8 @@ export default function CargarScreen() {
           onChange={setForm}
           ubicacionOptions={ubicacionOptions}
           onAddUbicacion={handleAddUbicacion}
+          categoriaOptions={categoriaOptions}
+          onAddCategoria={handleAddCategoria}
         />
 
         {error && <Text style={styles.errorText}>{error}</Text>}

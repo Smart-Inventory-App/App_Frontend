@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -9,39 +9,29 @@ import { Roboto_500Medium } from '@expo-google-fonts/roboto';
 import { useAuth } from '@/context/AuthContext';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
+import { profileService } from '@/services/profileService';
 import { settingsService } from '@/services/settingsService';
 import { Product } from '@/types/product';
-
-function decodeName(token: string | null): string {
-  if (!token) return '';
-  try {
-    const p = JSON.parse(atob(token.split('.')[1]));
-    const full = [p.given_name, p.family_name].filter(Boolean).join(' ');
-    return full || p.preferred_username || p.email || '';
-  } catch {
-    return '';
-  }
-}
 
 export default function HomeScreen() {
   useFonts({ Figtree_400Regular, Roboto_500Medium });
   const { t } = useTranslation();
   const { token } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
+  const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(true);
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
   const [expiryDaysThreshold, setExpiryDaysThreshold] = useState(7);
 
-  const displayName = useMemo(() => decodeName(token), [token]);
-
   const fetchData = useCallback(() => {
     if (!token) return;
     setLoading(true);
-    Promise.all([productService.getProducts(), settingsService.getAll()])
-      .then(([prods, s]) => {
+    Promise.all([productService.getProducts(), settingsService.getAll(), profileService.getProfile()])
+      .then(([prods, s, profile]) => {
         setProducts(prods);
         setLowStockThreshold(s.lowStock);
         setExpiryDaysThreshold(s.expiryDays);
+        setDisplayName(profile.username || profile.firstName || '');
       })
       .catch(() => {})
       .finally(() => setLoading(false));

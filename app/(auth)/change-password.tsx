@@ -14,6 +14,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { authService } from '../../src/services/authService';
+import { getAuthError } from '../../src/utils/authError';
 
 function RuleRow({ valid, label }: { valid: boolean; label: string }) {
   return (
@@ -55,11 +56,7 @@ export default function ChangePasswordScreen() {
       router.replace('/(auth)/login');
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
-      if (detail === 'PASSWORD_POLICY_VIOLATION') {
-        setError(t('changePassword.policyError'));
-      } else {
-        setError(t('changePassword.genericError'));
-      }
+      setError(getAuthError(detail, t, t('changePassword.genericError')));
     } finally {
       setLoading(false);
     }

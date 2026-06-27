@@ -14,12 +14,28 @@ interface Props {
   onChange: (form: Partial<ProductCreate>) => void;
   ubicacionOptions?: string[];
   onAddUbicacion?: (loc: string) => void;
+  categoriaOptions?: string[];
+  onAddCategoria?: (cat: string) => void;
 }
 
-export default function ProductFormFields({ form, onChange, ubicacionOptions = [], onAddUbicacion }: Props) {
+const normalizeToExisting = (value: string, options: string[]): string => {
+  const match = options.find(o => o.toLowerCase() === value.toLowerCase());
+  return match ?? value;
+};
+
+export default function ProductFormFields({
+  form,
+  onChange,
+  ubicacionOptions = [],
+  onAddUbicacion,
+  categoriaOptions = [],
+  onAddCategoria,
+}: Props) {
   const { t } = useTranslation();
   const [showNewLoc, setShowNewLoc] = useState(false);
   const [newLoc, setNewLoc] = useState('');
+  const [showNewCat, setShowNewCat] = useState(false);
+  const [newCat, setNewCat] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
 
@@ -47,10 +63,25 @@ export default function ProductFormFields({ form, onChange, ubicacionOptions = [
   const handleConfirmNewLoc = () => {
     const trimmed = newLoc.trim();
     if (!trimmed) { setShowNewLoc(false); return; }
-    set('ubicacion', trimmed);
-    onAddUbicacion?.(trimmed);
+    const value = normalizeToExisting(trimmed, ubicacionOptions);
+    set('ubicacion', value);
+    onAddUbicacion?.(value);
     setNewLoc('');
     setShowNewLoc(false);
+  };
+
+  const handleSelectCategoria = (cat: string) => {
+    set('categoria', form.categoria === cat ? undefined : cat);
+  };
+
+  const handleConfirmNewCat = () => {
+    const trimmed = newCat.trim();
+    if (!trimmed) { setShowNewCat(false); return; }
+    const value = normalizeToExisting(trimmed, categoriaOptions);
+    set('categoria', value);
+    onAddCategoria?.(value);
+    setNewCat('');
+    setShowNewCat(false);
   };
 
   return (
@@ -66,14 +97,54 @@ export default function ProductFormFields({ form, onChange, ubicacionOptions = [
       />
 
       <Text style={styles.label}>{t('product.categoria')} *</Text>
-      <TextInput
-        style={styles.input}
-        placeholder={t('product.categoriaPlaceholder')}
-        placeholderTextColor={Colors.placeholder}
-        value={form.categoria ?? ''}
-        onChangeText={v => set('categoria', v)}
-        maxLength={20}
-      />
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipsScroll}
+        contentContainerStyle={styles.chipsContent}
+      >
+        {categoriaOptions.map(cat => (
+          <TouchableOpacity
+            key={cat}
+            style={[styles.chip, form.categoria === cat && styles.chipActive]}
+            onPress={() => handleSelectCategoria(cat)}
+          >
+            <Text style={[styles.chipText, form.categoria === cat && styles.chipTextActive]}>
+              {cat}
+            </Text>
+          </TouchableOpacity>
+        ))}
+        {!showNewCat && (
+          <TouchableOpacity style={styles.chipAdd} onPress={() => setShowNewCat(true)}>
+            <Ionicons name="add" size={16} color={Colors.primary} />
+          </TouchableOpacity>
+        )}
+      </ScrollView>
+
+      {showNewCat && (
+        <View style={styles.newLocRow}>
+          <TextInput
+            style={[styles.input, styles.newLocInput]}
+            placeholder={t('product.categoriaPlaceholder')}
+            placeholderTextColor={Colors.placeholder}
+            value={newCat}
+            onChangeText={setNewCat}
+            autoFocus
+            maxLength={20}
+            onSubmitEditing={handleConfirmNewCat}
+          />
+          <TouchableOpacity style={styles.newLocConfirm} onPress={handleConfirmNewCat}>
+            <Ionicons name="checkmark" size={20} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.newLocCancel} onPress={() => { setShowNewCat(false); setNewCat(''); }}>
+            <Ionicons name="close" size={20} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {form.categoria && !categoriaOptions.includes(form.categoria) && !showNewCat && (
+        <Text style={styles.selectedLoc}>{form.categoria}</Text>
+      )}
 
       <Text style={styles.label}>{t('product.stock')} *</Text>
       <TextInput
