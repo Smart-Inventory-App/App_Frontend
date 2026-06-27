@@ -1,3 +1,5 @@
+/* global importScripts, firebase, self */
+
 // Import the functions you need from the SDKs you need
 importScripts("https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js");
