@@ -1,4 +1,7 @@
 import axios from 'axios';
+import { getToken } from "firebase/messaging";
+import { messaging, getFirebaseToken } from './firebaseService';
+
 
 const AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL;
 
@@ -15,7 +18,9 @@ export interface LoginResponse {
 
 export const authService = {
   async login(email: string, password: string): Promise<LoginResponse> {
-    const { data } = await api.post<LoginResponse>('/auth/login', { email, password });
+    const firebase_token = await getFirebaseToken();
+    console.log("firebase token: ", firebase_token)
+    const { data } = await api.post<LoginResponse>('/auth/login', { email, password, firebase_token });
     return data;
   },
 
