@@ -20,10 +20,23 @@ const FIREBASE_VAPID_KEY = process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const messaging = getMessaging(app)
-export async function getFirebaseToken() {
-  const token = await getToken(messaging, { vapidKey: FIREBASE_VAPID_KEY })
-  console.log("obteniendo token")
-  return token
+export async function getFirebaseToken(): Promise<string | null> {
+  // Las notificaciones push son opcionales: si el navegador no soporta service
+  // workers o el registro falla, devolvemos null y dejamos que el login continúe.
+  try {
+    if (Platform.OS !== "web" || typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+      return null;
+    }
+    const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+    const token = await getToken(messaging, {
+      vapidKey: FIREBASE_VAPID_KEY,
+      serviceWorkerRegistration: registration,
+    });
+    return token ?? null;
+  } catch (err) {
+    console.warn("No se pudo obtener el firebase token; push notifications deshabilitadas:", err);
+    return null;
+  }
 }
 
 export async function initNotifications() {
