@@ -20,10 +20,13 @@ const FIREBASE_VAPID_KEY = process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const messaging = getMessaging(app)
-export async function getFirebaseToken() {
-  const token = await getToken(messaging, { vapidKey: FIREBASE_VAPID_KEY })
-  console.log("obteniendo token")
-  return token
+export async function getFirebaseToken(): Promise<string | null> {
+  try {
+    const token = await getToken(messaging, { vapidKey: FIREBASE_VAPID_KEY });
+    return token;
+  } catch {
+    return null;
+  }
 }
 
 export async function initNotifications() {
