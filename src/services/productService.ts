@@ -12,6 +12,7 @@ export interface ProductFilters {
 export interface ProductFilterOptions {
   categorias: string[];
   ubicaciones: string[];
+  marcas: string[];
 }
 
 export const productService = {

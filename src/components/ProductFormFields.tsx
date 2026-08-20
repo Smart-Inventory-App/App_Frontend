@@ -16,6 +16,8 @@ interface Props {
   onAddUbicacion?: (loc: string) => void;
   categoriaOptions?: string[];
   onAddCategoria?: (cat: string) => void;
+  marcaOptions?: string[];
+  onAddMarca?: (marca: string) => void;
   suggestNombre?: (q: string) => Promise<ProductSuggestion[]>;
 }
 
@@ -31,6 +33,8 @@ export default function ProductFormFields({
   onAddUbicacion,
   categoriaOptions = [],
   onAddCategoria,
+  marcaOptions = [],
+  onAddMarca,
   suggestNombre,
 }: Props) {
   const { t } = useTranslation();
@@ -38,6 +42,8 @@ export default function ProductFormFields({
   const [newLoc, setNewLoc] = useState('');
   const [showNewCat, setShowNewCat] = useState(false);
   const [newCat, setNewCat] = useState('');
+  const [showNewMarca, setShowNewMarca] = useState(false);
+  const [newMarca, setNewMarca] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [nombreSuggestions, setNombreSuggestions] = useState<ProductSuggestion[]>([]);
@@ -111,6 +117,20 @@ export default function ProductFormFields({
     onAddCategoria?.(value);
     setNewCat('');
     setShowNewCat(false);
+  };
+
+  const handleSelectMarca = (marca: string) => {
+    set('marca', form.marca === marca ? undefined : marca);
+  };
+
+  const handleConfirmNewMarca = () => {
+    const trimmed = newMarca.trim();
+    if (!trimmed) { setShowNewMarca(false); return; }
+    const value = normalizeToExisting(trimmed, marcaOptions);
+    set('marca', value);
+    onAddMarca?.(value);
+    setNewMarca('');
+    setShowNewMarca(false);
   };
 
   return (
@@ -205,13 +225,53 @@ export default function ProductFormFields({
       />
 
       <Text style={styles.label}>{t('product.marca')}</Text>
-      <TextInput
-        style={styles.input}
-        placeholder={t('product.optional')}
-        placeholderTextColor={Colors.placeholder}
-        value={form.marca ?? ''}
-        onChangeText={v => set('marca', v || undefined)}
-      />
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipsScroll}
+        contentContainerStyle={styles.chipsContent}
+      >
+        {marcaOptions.map(marca => (
+          <TouchableOpacity
+            key={marca}
+            style={[styles.chip, form.marca === marca && styles.chipActive]}
+            onPress={() => handleSelectMarca(marca)}
+          >
+            <Text style={[styles.chipText, form.marca === marca && styles.chipTextActive]}>
+              {marca}
+            </Text>
+          </TouchableOpacity>
+        ))}
+        {!showNewMarca && (
+          <TouchableOpacity style={styles.chipAdd} onPress={() => setShowNewMarca(true)}>
+            <Ionicons name="add" size={16} color={Colors.primary} />
+          </TouchableOpacity>
+        )}
+      </ScrollView>
+
+      {showNewMarca && (
+        <View style={styles.newLocRow}>
+          <TextInput
+            style={[styles.input, styles.newLocInput]}
+            placeholder={t('product.optional')}
+            placeholderTextColor={Colors.placeholder}
+            value={newMarca}
+            onChangeText={setNewMarca}
+            autoFocus
+            onSubmitEditing={handleConfirmNewMarca}
+          />
+          <TouchableOpacity style={styles.newLocConfirm} onPress={handleConfirmNewMarca}>
+            <Ionicons name="checkmark" size={20} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.newLocCancel} onPress={() => { setShowNewMarca(false); setNewMarca(''); }}>
+            <Ionicons name="close" size={20} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {form.marca && !marcaOptions.includes(form.marca) && !showNewMarca && (
+        <Text style={styles.selectedLoc}>{form.marca}</Text>
+      )}
 
       <Text style={styles.label}>{t('product.vencimiento')}</Text>
       <TextInput

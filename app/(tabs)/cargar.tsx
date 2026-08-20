@@ -27,6 +27,7 @@ export default function CargarScreen() {
   const [error, setError] = useState<string | null>(null);
   const [ubicacionOptions, setUbicacionOptions] = useState<string[]>([]);
   const [categoriaOptions, setCategoriaOptions] = useState<string[]>([]);
+  const [marcaOptions, setMarcaOptions] = useState<string[]>([]);
   const [merged, setMerged] = useState(false);
 
   const applyDefaults = useCallback(() => {
@@ -43,9 +44,10 @@ export default function CargarScreen() {
 
   useFocusEffect(useCallback(() => {
     productService.getFilterOptions()
-      .then(({ categorias, ubicaciones }) => {
+      .then(({ categorias, ubicaciones, marcas }) => {
         setCategoriaOptions(categorias);
         setUbicacionOptions(ubicaciones);
+        setMarcaOptions(marcas);
       })
       .catch(() => {});
     applyDefaults();
@@ -107,6 +109,10 @@ export default function CargarScreen() {
     setCategoriaOptions(prev => [...new Set([...prev, cat])]);
   };
 
+  const handleAddMarca = (marca: string) => {
+    setMarcaOptions(prev => [...new Set([...prev, marca])]);
+  };
+
   if (success) {
     return (
       <View style={styles.successContainer}>
@@ -144,6 +150,8 @@ export default function CargarScreen() {
           onAddUbicacion={handleAddUbicacion}
           categoriaOptions={categoriaOptions}
           onAddCategoria={handleAddCategoria}
+          marcaOptions={marcaOptions}
+          onAddMarca={handleAddMarca}
           suggestNombre={productService.suggestProducts}
         />
 

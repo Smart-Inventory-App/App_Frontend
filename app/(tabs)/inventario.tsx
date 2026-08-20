@@ -31,12 +31,14 @@ export default function InventarioScreen() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editForm, setEditForm] = useState<Partial<ProductCreate>>({});
   const [saving, setSaving] = useState(false);
-  const [filterOptions, setFilterOptions] = useState<{ categorias: string[]; ubicaciones: string[] }>({
+  const [filterOptions, setFilterOptions] = useState<{ categorias: string[]; ubicaciones: string[]; marcas: string[] }>({
     categorias: [],
     ubicaciones: [],
+    marcas: [],
   });
   const [extraUbicaciones, setExtraUbicaciones] = useState<string[]>([]);
   const [extraCategorias, setExtraCategorias] = useState<string[]>([]);
+  const [extraMarcas, setExtraMarcas] = useState<string[]>([]);
   const [sortField, setSortField] = useState<'nombre' | 'stock' | 'vencimiento' | 'categoria' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -82,6 +84,10 @@ export default function InventarioScreen() {
   const ubicaciones = useMemo(() => {
     return [...new Set([...filterOptions.ubicaciones, ...extraUbicaciones])];
   }, [filterOptions.ubicaciones, extraUbicaciones]);
+
+  const marcas = useMemo(() => {
+    return [...new Set([...filterOptions.marcas, ...extraMarcas])];
+  }, [filterOptions.marcas, extraMarcas]);
 
   const handleSearch = (text: string) => setSearchInput(text);
 
@@ -351,6 +357,8 @@ export default function InventarioScreen() {
                 onAddUbicacion={loc => setExtraUbicaciones(prev => [...new Set([...prev, loc])])}
                 categoriaOptions={categories}
                 onAddCategoria={cat => setExtraCategorias(prev => [...new Set([...prev, cat])])}
+                marcaOptions={marcas}
+                onAddMarca={marca => setExtraMarcas(prev => [...new Set([...prev, marca])])}
               />
             </ScrollView>
             <TouchableOpacity
