@@ -27,6 +27,19 @@ export default function CargarScreen() {
   const [error, setError] = useState<string | null>(null);
   const [ubicacionOptions, setUbicacionOptions] = useState<string[]>([]);
   const [categoriaOptions, setCategoriaOptions] = useState<string[]>([]);
+  const [merged, setMerged] = useState(false);
+
+  const applyDefaults = useCallback(() => {
+    productService.getDefaults()
+      .then(({ last_categoria, last_ubicacion }) => {
+        setForm(prev => ({
+          ...prev,
+          categoria: prev.categoria ?? last_categoria ?? undefined,
+          ubicacion: prev.ubicacion ?? last_ubicacion ?? undefined,
+        }));
+      })
+      .catch(() => {});
+  }, []);
 
   useFocusEffect(useCallback(() => {
     productService.getFilterOptions()
@@ -35,7 +48,8 @@ export default function CargarScreen() {
         setUbicacionOptions(ubicaciones);
       })
       .catch(() => {});
-  }, []));
+    applyDefaults();
+  }, [applyDefaults]));
 
   const validate = (): string | null => {
     if (!form.nombre?.trim()) return t('product.validationNombre');
@@ -59,7 +73,8 @@ export default function CargarScreen() {
     setError(null);
     setSaving(true);
     try {
-      await productService.createProduct(form as ProductCreate);
+      const created = await productService.createProduct(form as ProductCreate);
+      setMerged(Boolean(created.merged));
       setSuccess(true);
     } catch (err: unknown) {
       const detail = (err as any)?.response?.data?.detail;
@@ -79,7 +94,9 @@ export default function CargarScreen() {
   const handleLoadAnother = () => {
     setForm(EMPTY_FORM());
     setSuccess(false);
+    setMerged(false);
     setError(null);
+    applyDefaults();
   };
 
   const handleAddUbicacion = (loc: string) => {
@@ -95,7 +112,9 @@ export default function CargarScreen() {
       <View style={styles.successContainer}>
         <Ionicons name="checkmark-circle" size={72} color={Colors.primary} />
         <Text style={styles.successTitle}>{t('product.successTitle')}</Text>
-        <Text style={styles.successMsg}>{t('product.successMsg')}</Text>
+        <Text style={styles.successMsg}>
+          {merged ? t('product.successMsgMerged') : t('product.successMsg')}
+        </Text>
         <TouchableOpacity
           style={styles.submitBtn}
           onPress={() => router.replace('/(tabs)/inventario')}
@@ -125,6 +144,7 @@ export default function CargarScreen() {
           onAddUbicacion={handleAddUbicacion}
           categoriaOptions={categoriaOptions}
           onAddCategoria={handleAddCategoria}
+          suggestNombre={productService.suggestProducts}
         />
 
         {error && <Text style={styles.errorText}>{error}</Text>}

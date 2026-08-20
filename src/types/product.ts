@@ -11,6 +11,7 @@ export interface Product {
   ubicacion?: string;
   created_at?: string;
   updated_at?: string;
+  merged?: boolean;
 }
 
 export interface ProductCreate {
@@ -22,4 +23,16 @@ export interface ProductCreate {
   descripcion?: string;
   imagen_url?: string;
   ubicacion?: string;
+}
+
+export interface ProductSuggestion {
+  nombre: string;
+  marca?: string;
+  categoria: string;
+  ubicacion?: string;
+}
+
+export interface ProductDefaults {
+  last_categoria?: string;
+  last_ubicacion?: string;
 }

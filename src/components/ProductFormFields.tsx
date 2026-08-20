@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView,
   Image, ActivityIndicator, Alert, Modal, Pressable,
@@ -6,7 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
-import { ProductCreate } from '@/types/product';
+import { ProductCreate, ProductSuggestion } from '@/types/product';
 import { pickFromGallery, pickFromCamera } from '@/services/imageService';
 
 interface Props {
@@ -16,6 +16,7 @@ interface Props {
   onAddUbicacion?: (loc: string) => void;
   categoriaOptions?: string[];
   onAddCategoria?: (cat: string) => void;
+  suggestNombre?: (q: string) => Promise<ProductSuggestion[]>;
 }
 
 const normalizeToExisting = (value: string, options: string[]): string => {
@@ -30,6 +31,7 @@ export default function ProductFormFields({
   onAddUbicacion,
   categoriaOptions = [],
   onAddCategoria,
+  suggestNombre,
 }: Props) {
   const { t } = useTranslation();
   const [showNewLoc, setShowNewLoc] = useState(false);
@@ -38,9 +40,36 @@ export default function ProductFormFields({
   const [newCat, setNewCat] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
+  const [nombreSuggestions, setNombreSuggestions] = useState<ProductSuggestion[]>([]);
+  const [nombreFocused, setNombreFocused] = useState(false);
 
   const set = (key: keyof ProductCreate, value: string | number | undefined) =>
     onChange({ ...form, [key]: value });
+
+  useEffect(() => {
+    if (!suggestNombre) return;
+    const q = (form.nombre ?? '').trim();
+    if (q.length < 2) {
+      setNombreSuggestions([]);
+      return;
+    }
+    const handle = setTimeout(() => {
+      suggestNombre(q).then(setNombreSuggestions).catch(() => setNombreSuggestions([]));
+    }, 300);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.nombre, suggestNombre]);
+
+  const handleSelectSuggestion = (s: ProductSuggestion) => {
+    onChange({
+      ...form,
+      nombre: s.nombre,
+      marca: s.marca ?? form.marca,
+      categoria: s.categoria,
+      ubicacion: s.ubicacion ?? form.ubicacion,
+    });
+    setNombreSuggestions([]);
+  };
 
   const doUpload = async (picker: () => Promise<string | null>) => {
     setShowImagePicker(false);
@@ -93,8 +122,24 @@ export default function ProductFormFields({
         placeholderTextColor={Colors.placeholder}
         value={form.nombre ?? ''}
         onChangeText={v => set('nombre', v)}
+        onFocus={() => setNombreFocused(true)}
+        onBlur={() => setTimeout(() => setNombreFocused(false), 150)}
         maxLength={20}
       />
+      {nombreFocused && nombreSuggestions.length > 0 && (
+        <View style={styles.suggestionsBox}>
+          {nombreSuggestions.map(s => (
+            <TouchableOpacity
+              key={s.nombre}
+              style={styles.suggestionItem}
+              onPress={() => handleSelectSuggestion(s)}
+            >
+              <Ionicons name="time-outline" size={14} color={Colors.textSecondary} />
+              <Text style={styles.suggestionText}>{s.nombre}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       <Text style={styles.label}>{t('product.categoria')} *</Text>
       <ScrollView
@@ -304,6 +349,24 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   multiline: { textAlignVertical: 'top', height: 72 },
+  suggestionsBox: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder ?? '#ddd',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  suggestionText: { fontSize: 14, color: Colors.textPrimary },
   chipsScroll: { flexGrow: 0, marginTop: 6 },
   chipsContent: { gap: 8, flexDirection: 'row', alignItems: 'center' },
   chip: {

@@ -1,5 +1,5 @@
 import api from './api';
-import { Product, ProductCreate } from '../types/product';
+import { Product, ProductCreate, ProductDefaults, ProductSuggestion } from '../types/product';
 
 export interface ProductFilters {
   search?: string;
@@ -22,6 +22,16 @@ export const productService = {
 
   async getFilterOptions(): Promise<ProductFilterOptions> {
     const { data } = await api.get<ProductFilterOptions>('/products/filters/options');
+    return data;
+  },
+
+  async suggestProducts(q: string): Promise<ProductSuggestion[]> {
+    const { data } = await api.get<ProductSuggestion[]>('/products/suggest', { params: { q } });
+    return data;
+  },
+
+  async getDefaults(): Promise<ProductDefaults> {
+    const { data } = await api.get<ProductDefaults>('/products/defaults');
     return data;
   },
 

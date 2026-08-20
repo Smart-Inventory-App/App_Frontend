@@ -151,6 +151,7 @@ export default {
     loadTitle: 'Cargar producto',
     successTitle: '¡Listo!',
     successMsg: 'Producto cargado correctamente',
+    successMsgMerged: 'Se sumó el stock a un producto que ya tenías cargado',
     goToInventory: 'Ver inventario',
     loadAnother: 'Cargar otro',
     saveError: 'No se pudo guardar el producto',

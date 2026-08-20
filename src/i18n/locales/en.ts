@@ -151,6 +151,7 @@ export default {
     loadTitle: 'Load product',
     successTitle: 'Done!',
     successMsg: 'Product loaded successfully',
+    successMsgMerged: 'Stock was added to a product you already had',
     goToInventory: 'View inventory',
     loadAnother: 'Load another',
     saveError: 'Could not save the product',
