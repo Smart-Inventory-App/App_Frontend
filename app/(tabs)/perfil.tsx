@@ -16,7 +16,6 @@ import { Colors } from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
 import { changeLanguage, type Language } from '@/i18n';
 import { profileService, UserProfile } from '@/services/profileService';
-import { settingsService } from '@/services/settingsService';
 
 export default function PerfilScreen() {
   const { t, i18n } = useTranslation();
@@ -36,14 +35,14 @@ export default function PerfilScreen() {
 
   useFocusEffect(useCallback(() => {
     setLoading(true);
-    Promise.all([profileService.getProfile(), settingsService.getAll()])
-      .then(([p, s]) => {
+    profileService.getProfile()
+      .then((p) => {
         setProfile(p);
         setFirstName(p.firstName ?? '');
         setLastName(p.lastName ?? '');
         setUsername(p.username ?? '');
-        setLowStockInput(String(s.lowStock));
-        setExpiryDaysInput(String(s.expiryDays));
+        setLowStockInput(String(p.lowStockThreshold));
+        setExpiryDaysInput(String(p.expiryDaysThreshold));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -77,8 +76,19 @@ export default function PerfilScreen() {
   const handleSaveSettings = async () => {
     const ls = parseInt(lowStockInput, 10);
     const ed = parseInt(expiryDaysInput, 10);
-    if (!isNaN(ls) && ls > 0) await settingsService.setLowStockThreshold(ls);
-    if (!isNaN(ed) && ed > 0) await settingsService.setExpiryDaysThreshold(ed);
+    if (isNaN(ls) || ls <= 0 || isNaN(ed) || ed <= 0) return;
+    try {
+      const updated = await profileService.updateProfile(
+        profile?.firstName ?? '',
+        profile?.lastName ?? '',
+        profile?.username,
+        ls,
+        ed,
+      );
+      setProfile(updated);
+    } catch {
+      // los inputs numéricos ya se guardan solos en el próximo blur exitoso
+    }
   };
 
   const handleCancelEdit = () => {

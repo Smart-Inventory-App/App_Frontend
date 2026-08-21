@@ -10,7 +10,6 @@ import { useAuth } from '@/context/AuthContext';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { profileService } from '@/services/profileService';
-import { settingsService } from '@/services/settingsService';
 import { Product } from '@/types/product';
 
 export default function HomeScreen() {
@@ -26,11 +25,11 @@ export default function HomeScreen() {
   const fetchData = useCallback(() => {
     if (!token) return;
     setLoading(true);
-    Promise.all([productService.getProducts(), settingsService.getAll(), profileService.getProfile()])
-      .then(([prods, s, profile]) => {
+    Promise.all([productService.getProducts(), profileService.getProfile()])
+      .then(([prods, profile]) => {
         setProducts(prods);
-        setLowStockThreshold(s.lowStock);
-        setExpiryDaysThreshold(s.expiryDays);
+        setLowStockThreshold(profile.lowStockThreshold);
+        setExpiryDaysThreshold(profile.expiryDaysThreshold);
         setDisplayName(profile.username || profile.firstName || '');
       })
       .catch(() => {})

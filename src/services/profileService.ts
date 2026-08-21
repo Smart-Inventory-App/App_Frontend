@@ -7,6 +7,8 @@ export interface UserProfile {
   username?: string;
   firstName?: string;
   lastName?: string;
+  lowStockThreshold: number;
+  expiryDaysThreshold: number;
 }
 
 interface MeResponse {
@@ -18,6 +20,8 @@ interface ProfileFields {
   firstName?: string;
   lastName?: string;
   username?: string;
+  lowStockThreshold: number;
+  expiryDaysThreshold: number;
 }
 
 export const profileService = {
@@ -29,9 +33,21 @@ export const profileService = {
     return { sub: me.id, email: me.email, ...profile };
   },
 
-  async updateProfile(firstName: string, lastName: string, username?: string): Promise<UserProfile> {
+  async updateProfile(
+    firstName: string,
+    lastName: string,
+    username?: string,
+    lowStockThreshold?: number,
+    expiryDaysThreshold?: number,
+  ): Promise<UserProfile> {
     const [{ data: profile }, { data: me }] = await Promise.all([
-      api.put<ProfileFields>('/profile/', { firstName, lastName, username }),
+      api.put<ProfileFields>('/profile/', {
+        firstName,
+        lastName,
+        username,
+        lowStockThreshold,
+        expiryDaysThreshold,
+      }),
       authApi.get<MeResponse>('/auth/me'),
     ]);
     return { sub: me.id, email: me.email, ...profile };
