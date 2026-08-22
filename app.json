@@ -1,5 +1,6 @@
 {
   "expo": {
+    "owner": "grupo-200",
     "name": "Smart Inventory",
     "slug": "App_Frontend",
     "version": "1.0.0",
