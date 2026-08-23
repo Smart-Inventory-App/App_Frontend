@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const firebase_token = getFirebaseToken();
+    const firebase_token = await getFirebaseToken();
     console.log("firebase_token: ", firebase_token)
     const result = await authService.login(email, password);
     await storage.set(TOKEN_KEY, result.access_token);

@@ -1,11 +1,6 @@
-// Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { getMessaging, getToken, onMessage} from "firebase/messaging"
 import { Platform } from "react-native";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyD_WgEME_ZsYw3j77m6ubNGD86lLvn9yk0",
   authDomain: "smart-inventory-app-a378a.firebaseapp.com",
@@ -15,43 +10,45 @@ const firebaseConfig = {
   appId: "1:61725210163:web:e22fe542a732ce90859546"
 };
 
-const FIREBASE_VAPID_KEY = process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY
+const FIREBASE_VAPID_KEY = process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY;
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-export const messaging = getMessaging(app)
+
+// firebase/messaging uses browser APIs — only usable on web
+let _messaging: any = null;
+if (Platform.OS === "web") {
+  const { getMessaging } = require("firebase/messaging");
+  _messaging = getMessaging(app);
+}
+
+export const messaging = _messaging;
+
 export async function getFirebaseToken(): Promise<string | null> {
+  if (Platform.OS !== "web" || !_messaging) return null;
   try {
-    const token = await getToken(messaging, { vapidKey: FIREBASE_VAPID_KEY });
+    const { getToken } = require("firebase/messaging");
+    const token = await getToken(_messaging, { vapidKey: FIREBASE_VAPID_KEY });
     return token;
   } catch {
     return null;
   }
 }
 
-export async function initNotifications() {
-  const permission = await Notification.requestPermission();
-  console.log("funcionan las notis? ", permission)
-  if (permission === "granted") {
-    console.log("Permiso de notificación concedido");
-  } else {
-    console.warn("Permiso de notificación denegado");
-  }
-
-  if (Platform.OS === "web" && "serviceWorker" in navigator) {
-    navigator.serviceWorker
-      .register("/firebase-messaging-sw.js")
-      .then((registration) => {
-        console.log("Service Worker registrado:", registration);
-    })
-    .catch((err) => {
-      console.error("Error al registrar Service Worker:", err);
+export async function initNotifications(): Promise<void> {
+  if (Platform.OS !== "web") return;
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") return;
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/firebase-messaging-sw.js").catch(() => {});
+    }
+    const { onMessage } = require("firebase/messaging");
+    onMessage(_messaging, (payload: any) => {
+      const title = payload.notification?.title || "Notificación";
+      const body = payload.notification?.body || "";
+      alert(`${title} - ${body}`);
     });
+  } catch {
+    // notifications not available
   }
-  onMessage(messaging, (payload) => {
-    const title = payload.notification?.title || "Notificación";
-    const body = payload.notification?.body || "";
-    alert(`${title} - ${body}`);
-  });
-
 }
