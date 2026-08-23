@@ -54,7 +54,9 @@ export default function HomeScreen() {
     <>
       <View style={styles.headerContainer}>
         <Text style={styles.appName}>{t('common.appName')}</Text>
-        <Text style={styles.header}>{displayName || t('home.welcome')}</Text>
+        <Text style={styles.header} numberOfLines={1} ellipsizeMode="tail">
+          {displayName ? `${t('home.welcome')}, ${displayName}` : t('home.welcome')}
+        </Text>
       </View>
       <ScrollView style={styles.container}>
         {loading ? (
@@ -102,7 +104,7 @@ const styles = StyleSheet.create({
     paddingTop: 48,
   },
   appName: { fontSize: 13, color: Colors.textSecondary, marginLeft: 12, marginTop: 4, fontFamily: 'Figtree_400Regular', letterSpacing: 0.5 },
-  header: { fontSize: 22, marginLeft: 12, marginBottom: 8, fontFamily: 'Roboto_500Medium' },
+  header: { fontSize: 22, marginLeft: 12, marginBottom: 8, fontFamily: 'Roboto_500Medium', flexShrink: 1 },
   statsRow: { flexDirection: 'row' },
   section: { fontSize: 14, fontWeight: 'bold', marginTop: 20, marginBottom: 10, fontFamily: 'Figtree_400Regular' },
   empty: { color: '#888', textAlign: 'center', marginTop: 16 },
