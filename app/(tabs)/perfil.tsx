@@ -30,8 +30,9 @@ export default function PerfilScreen() {
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'error'; msg: string } | null>(null);
 
-  const [coverageDaysInput, setCoverageDaysInput] = useState('5');
+  const [coverageDaysInput, setCoverageDaysInput] = useState('7');
   const [expiryDaysInput, setExpiryDaysInput] = useState('7');
+  const [alertCheckHourInput, setAlertCheckHourInput] = useState('8');
 
   useFocusEffect(useCallback(() => {
     setLoading(true);
@@ -43,6 +44,7 @@ export default function PerfilScreen() {
         setUsername(p.username ?? '');
         setCoverageDaysInput(String(p.coverageDaysThreshold));
         setExpiryDaysInput(String(p.expiryDaysThreshold));
+        setAlertCheckHourInput(String(p.alertCheckHour));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -76,7 +78,8 @@ export default function PerfilScreen() {
   const handleSaveSettings = async () => {
     const ls = parseInt(coverageDaysInput, 10);
     const ed = parseInt(expiryDaysInput, 10);
-    if (isNaN(ls) || ls <= 0 || isNaN(ed) || ed <= 0) return;
+    const ah = parseInt(alertCheckHourInput, 10);
+    if (isNaN(ls) || ls <= 0 || isNaN(ed) || ed <= 0 || isNaN(ah) || ah < 0 || ah > 23) return;
     try {
       const updated = await profileService.updateProfile(
         profile?.firstName ?? '',
@@ -84,6 +87,7 @@ export default function PerfilScreen() {
         profile?.username,
         ls,
         ed,
+        ah,
       );
       setProfile(updated);
     } catch {
@@ -224,6 +228,20 @@ export default function PerfilScreen() {
             onBlur={handleSaveSettings}
           />
           <Text style={styles.settingUnit}>{t('profile.days')}</Text>
+        </View>
+
+        <Text style={styles.fieldLabel}>{t('profile.alertCheckHour')}</Text>
+        <View style={styles.settingRow}>
+          <TextInput
+            style={[styles.input, styles.settingInput]}
+            value={alertCheckHourInput}
+            onChangeText={setAlertCheckHourInput}
+            keyboardType="numeric"
+            returnKeyType="done"
+            onEndEditing={handleSaveSettings}
+            onBlur={handleSaveSettings}
+          />
+          <Text style={styles.settingUnit}>{t('profile.utc')}</Text>
         </View>
       </View>
 
