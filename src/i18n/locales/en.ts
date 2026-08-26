@@ -87,7 +87,7 @@ export default {
     settings: 'Settings',
     coverageDaysThreshold: 'Alert if stock runs out in less than',
     expiryDaysThreshold: 'Expiring within next',
-    alertCheckHour: 'Daily alert check hour (0-23)',
+    alertCheckHour: 'Daily alert check time',
     units: 'units',
     days: 'days',
     utc: 'hs UTC',

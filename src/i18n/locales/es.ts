@@ -87,7 +87,7 @@ export default {
     settings: 'Configuración',
     coverageDaysThreshold: 'Alertar si el stock se agota en menos de',
     expiryDaysThreshold: 'Por vencer en los próximos',
-    alertCheckHour: 'Hora de chequeo diario de alertas (0-23)',
+    alertCheckHour: 'Hora del chequeo diario de alertas',
     units: 'unidades',
     days: 'días',
     utc: 'hs UTC',

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -34,6 +34,14 @@ export default function PerfilScreen() {
   const [expiryDaysInput, setExpiryDaysInput] = useState('7');
   const [alertCheckHourInput, setAlertCheckHourInput] = useState('8');
 
+  // Offset en minutos: positivo para zonas oeste de UTC (ej. Buenos Aires = 180)
+  const tzOffsetMinutes = useMemo(() => new Date().getTimezoneOffset(), []);
+  const tzOffsetHours = -tzOffsetMinutes / 60;
+  const tzLabel = `UTC${tzOffsetHours >= 0 ? '+' : ''}${tzOffsetHours}`;
+
+  const utcToLocal = (utcHour: number) => (utcHour - tzOffsetMinutes / 60 + 24) % 24;
+  const localToUtc = (localHour: number) => (localHour + tzOffsetMinutes / 60 + 24) % 24;
+
   useFocusEffect(useCallback(() => {
     setLoading(true);
     profileService.getProfile()
@@ -44,7 +52,7 @@ export default function PerfilScreen() {
         setUsername(p.username ?? '');
         setCoverageDaysInput(String(p.coverageDaysThreshold));
         setExpiryDaysInput(String(p.expiryDaysThreshold));
-        setAlertCheckHourInput(String(p.alertCheckHour));
+        setAlertCheckHourInput(String(Math.round(utcToLocal(p.alertCheckHour))));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -87,7 +95,7 @@ export default function PerfilScreen() {
         profile?.username,
         ls,
         ed,
-        ah,
+        Math.round(localToUtc(ah)),
       );
       setProfile(updated);
     } catch {
@@ -241,7 +249,7 @@ export default function PerfilScreen() {
             onEndEditing={handleSaveSettings}
             onBlur={handleSaveSettings}
           />
-          <Text style={styles.settingUnit}>{t('profile.utc')}</Text>
+          <Text style={styles.settingUnit}>{tzLabel}</Text>
         </View>
       </View>
 
