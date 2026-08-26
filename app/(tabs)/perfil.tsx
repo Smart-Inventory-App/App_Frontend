@@ -30,7 +30,7 @@ export default function PerfilScreen() {
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'error'; msg: string } | null>(null);
 
-  const [lowStockInput, setLowStockInput] = useState('5');
+  const [coverageDaysInput, setCoverageDaysInput] = useState('5');
   const [expiryDaysInput, setExpiryDaysInput] = useState('7');
 
   useFocusEffect(useCallback(() => {
@@ -41,7 +41,7 @@ export default function PerfilScreen() {
         setFirstName(p.firstName ?? '');
         setLastName(p.lastName ?? '');
         setUsername(p.username ?? '');
-        setLowStockInput(String(p.lowStockThreshold));
+        setCoverageDaysInput(String(p.coverageDaysThreshold));
         setExpiryDaysInput(String(p.expiryDaysThreshold));
       })
       .catch(() => {})
@@ -74,7 +74,7 @@ export default function PerfilScreen() {
   };
 
   const handleSaveSettings = async () => {
-    const ls = parseInt(lowStockInput, 10);
+    const ls = parseInt(coverageDaysInput, 10);
     const ed = parseInt(expiryDaysInput, 10);
     if (isNaN(ls) || ls <= 0 || isNaN(ed) || ed <= 0) return;
     try {
@@ -198,18 +198,18 @@ export default function PerfilScreen() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t('profile.settings')}</Text>
 
-        <Text style={styles.fieldLabel}>{t('profile.lowStockThreshold')}</Text>
+        <Text style={styles.fieldLabel}>{t('profile.coverageDaysThreshold')}</Text>
         <View style={styles.settingRow}>
           <TextInput
             style={[styles.input, styles.settingInput]}
-            value={lowStockInput}
-            onChangeText={setLowStockInput}
+            value={coverageDaysInput}
+            onChangeText={setCoverageDaysInput}
             keyboardType="numeric"
             returnKeyType="done"
             onEndEditing={handleSaveSettings}
             onBlur={handleSaveSettings}
           />
-          <Text style={styles.settingUnit}>{t('profile.units')}</Text>
+          <Text style={styles.settingUnit}>{t('profile.days')}</Text>
         </View>
 
         <Text style={styles.fieldLabel}>{t('profile.expiryDaysThreshold')}</Text>

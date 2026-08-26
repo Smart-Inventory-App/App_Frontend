@@ -7,7 +7,7 @@ export interface UserProfile {
   username?: string;
   firstName?: string;
   lastName?: string;
-  lowStockThreshold: number;
+  coverageDaysThreshold: number;
   expiryDaysThreshold: number;
 }
 
@@ -20,7 +20,7 @@ interface ProfileFields {
   firstName?: string;
   lastName?: string;
   username?: string;
-  lowStockThreshold: number;
+  coverageDaysThreshold: number;
   expiryDaysThreshold: number;
 }
 
@@ -37,7 +37,7 @@ export const profileService = {
     firstName: string,
     lastName: string,
     username?: string,
-    lowStockThreshold?: number,
+    coverageDaysThreshold?: number,
     expiryDaysThreshold?: number,
   ): Promise<UserProfile> {
     const [{ data: profile }, { data: me }] = await Promise.all([
@@ -45,7 +45,7 @@ export const profileService = {
         firstName,
         lastName,
         username,
-        lowStockThreshold,
+        coverageDaysThreshold,
         expiryDaysThreshold,
       }),
       authApi.get<MeResponse>('/auth/me'),

@@ -85,7 +85,7 @@ export default {
     firstNamePlaceholder: 'Tu nombre',
     lastNamePlaceholder: 'Tu apellido',
     settings: 'Configuración',
-    lowStockThreshold: 'Stock bajo si hay ≤',
+    coverageDaysThreshold: 'Alertar si el stock se agota en menos de',
     expiryDaysThreshold: 'Por vencer en los próximos',
     units: 'unidades',
     days: 'días',

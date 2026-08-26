@@ -19,7 +19,7 @@ export default function HomeScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(true);
-  const [lowStockThreshold, setLowStockThreshold] = useState(5);
+  const [coverageDaysThreshold, setLowStockThreshold] = useState(5);
   const [expiryDaysThreshold, setExpiryDaysThreshold] = useState(7);
 
   const fetchData = useCallback(() => {
@@ -28,7 +28,7 @@ export default function HomeScreen() {
     Promise.all([productService.getProducts(), profileService.getProfile()])
       .then(([prods, profile]) => {
         setProducts(prods);
-        setLowStockThreshold(profile.lowStockThreshold);
+        setLowStockThreshold(profile.coverageDaysThreshold);
         setExpiryDaysThreshold(profile.expiryDaysThreshold);
         setDisplayName(profile.username || profile.firstName || '');
       })
@@ -42,7 +42,7 @@ export default function HomeScreen() {
   const inNDays = new Date(today.getTime() + expiryDaysThreshold * 24 * 60 * 60 * 1000);
 
   const totalStock = products.reduce((acc, p) => acc + p.stock, 0);
-  const lowStock = products.filter(p => p.stock <= lowStockThreshold).length;
+  const lowStock = products.filter(p => p.stock < coverageDaysThreshold).length;
   const expiringSoon = products.filter(p => {
     if (!p.vencimiento) return false;
     const d = new Date(p.vencimiento);
@@ -65,7 +65,7 @@ export default function HomeScreen() {
           <>
             <View style={styles.statsRow}>
               <StatCard title={t('home.totalStock')} value={String(totalStock)} label={t('home.totalStockLabel')} labelColor="green" />
-              <StatCard title={t('home.lowStock')} value={String(lowStock)} label={`≤ ${lowStockThreshold} ${t('home.lowStockUnit')}`} labelColor="red" />
+              <StatCard title={t('home.lowStock')} value={String(lowStock)} label={t('home.lowStockLabel', { days: coverageDaysThreshold })} labelColor="red" />
             </View>
             <View style={styles.statsRow}>
               <StatCard title={t('home.expiringSoon')} value={String(expiringSoon)} label={t('home.expiringSoonLabel', { days: expiryDaysThreshold })} labelColor="yellow" />
