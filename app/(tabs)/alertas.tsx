@@ -1,9 +1,74 @@
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { Figtree_400Regular, useFonts } from '@expo-google-fonts/figtree'
 import { Roboto_500Medium } from '@expo-google-fonts/roboto'
+import { useEffect, useState } from 'react';
+import DynamicList from '@/components/DynamicAlert';
+
+type Alert = {
+  image: string;
+  product: string;
+  type: 'stock' | 'expiry' | 'info';
+  stock: number;
+  expiry: Date;
+  level: 'critical' | 'warning' | 'info';
+};
 
 export default function AlertasScreen() {
   const [] = useFonts({Figtree_400Regular, Roboto_500Medium})
+  const summaryExammple = {critical: 2, warning: 3, info: 1};
+  const alertsExample= [
+    {
+      "product": "Leche entera 1L",
+      "type": "stock",
+      "stock": 2,
+      "expiry": "2026-08-30",
+      "level": "critical"
+    },
+    {
+      "product": "Arroz 1Kg",
+      "type": "stock",
+      "stock": 1,
+      "expiry": "2026-12-01",
+      "level": "critical"
+    },
+    {
+      "product": "Yogur Danonino x4",
+      "type": "expiry",
+      "stock": 10,
+      "expiry": "2026-09-05",
+      "level": "warning"
+    },
+    {
+      "product": "Queso Cremoso 500g",
+      "type": "expiry",
+      "stock": 4,
+      "expiry": "2026-08-28",
+      "level": "critical"
+    },
+    {
+      "product": "Pan Integral",
+      "type": "expiry",
+      "stock": 6,
+      "expiry": "2026-08-27",
+      "level": "critical"
+    }
+  ]
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [alertsSummary, setAlertsSummary] = useState({critical: 0, warning: 0, info: 0});
+  useEffect(() => {
+    // Fetch alerts summary from API and update state
+    // For now, we will use the example summary
+    setAlertsSummary(summaryExammple);
+    const parsedAlerts: Alert[] = alertsExample.map(alert => ({
+      image: '',
+      product: alert.product,
+      type: alert.type as Alert['type'],
+      stock: alert.stock,
+      expiry: new Date(alert.expiry),
+      level: alert.level as Alert['level']
+    }));
+    setAlerts(parsedAlerts);
+  }, []);
   return (
     <>
       <View style={styles.header}>
@@ -12,15 +77,15 @@ export default function AlertasScreen() {
       <ScrollView style={{margin: 16}}>
         <View style={styles.alertSummary}>
           <View style={styles.alertSummaryItem}>
-            <Text style={styles.alertSummaryItemValue}>2</Text>
+            <Text style={styles.alertSummaryItemValue}>{alertsSummary.critical}</Text>
             <Text style={styles.alertSummaryItemText}>Críticas</Text>
           </View>
           <View style={styles.alertSummaryItem}>
-            <Text style={styles.alertSummaryItemValue}>3</Text>
+            <Text style={styles.alertSummaryItemValue}>{alertsSummary.warning}</Text>
             <Text style={styles.alertSummaryItemText}>Advertencias</Text>
           </View>
           <View style={styles.alertSummaryItem}>
-            <Text style={styles.alertSummaryItemValue}>1</Text>
+            <Text style={styles.alertSummaryItemValue}>{alertsSummary.info}</Text>
             <Text style={styles.alertSummaryItemText}>Info</Text>
           </View>
         </View>
@@ -38,7 +103,7 @@ export default function AlertasScreen() {
             <Text style={styles.filterBarItemText}>Vencimientos</Text>
           </View>
         </View>
-        {/* <DynamicList /> */}
+        <DynamicList alertsData={alerts} />
       </ScrollView>
     </>
   );
