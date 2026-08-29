@@ -282,6 +282,38 @@ export default function ProductFormFields({
         onChangeText={v => set('vencimiento', v || undefined)}
       />
 
+      <Text style={styles.sectionLabel}>{t('product.alertasTitle')}</Text>
+      <View style={styles.alertRow}>
+        <View style={styles.alertField}>
+          <Text style={styles.label}>{t('product.stockMinimo')}</Text>
+          <TextInput
+            style={styles.input}
+            placeholder={t('product.optional')}
+            placeholderTextColor={Colors.placeholder}
+            keyboardType="numeric"
+            value={form.stock_minimo != null ? String(form.stock_minimo) : ''}
+            onChangeText={(v) => {
+              const n = parseInt(v, 10);
+              set('stock_minimo', v.trim() === '' ? undefined : (isNaN(n) ? form.stock_minimo : n));
+            }}
+          />
+        </View>
+        <View style={styles.alertField}>
+          <Text style={styles.label}>{t('product.diasAlertaVencimiento')}</Text>
+          <TextInput
+            style={styles.input}
+            placeholder={t('product.optional')}
+            placeholderTextColor={Colors.placeholder}
+            keyboardType="numeric"
+            value={form.dias_alerta_vencimiento != null ? String(form.dias_alerta_vencimiento) : ''}
+            onChangeText={(v) => {
+              const n = parseInt(v, 10);
+              set('dias_alerta_vencimiento', v.trim() === '' ? undefined : (isNaN(n) ? form.dias_alerta_vencimiento : n));
+            }}
+          />
+        </View>
+      </View>
+
       <Text style={styles.label}>{t('product.descripcion')}</Text>
       <TextInput
         style={[styles.input, styles.multiline]}
@@ -409,6 +441,16 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   multiline: { textAlignVertical: 'top', height: 72 },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    marginTop: 16,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  alertRow: { flexDirection: 'row', gap: 12 },
+  alertField: { flex: 1 },
   suggestionsBox: {
     marginTop: 4,
     borderWidth: 1,

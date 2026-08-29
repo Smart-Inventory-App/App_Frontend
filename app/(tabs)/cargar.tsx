@@ -1,10 +1,11 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -14,13 +15,16 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
-import { ProductCreate } from '@/types/product';
+import { ProductCreate, ProductSuggestion } from '@/types/product';
 import ProductFormFields from '@/components/ProductFormFields';
 
 const EMPTY_FORM = (): Partial<ProductCreate> => ({});
 
+type Direction = 'entrada' | 'salida';
+
 export default function CargarScreen() {
   const { t } = useTranslation();
+  const [direction, setDirection] = useState<Direction>('entrada');
   const [form, setForm] = useState<Partial<ProductCreate>>(EMPTY_FORM());
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -29,6 +33,12 @@ export default function CargarScreen() {
   const [categoriaOptions, setCategoriaOptions] = useState<string[]>([]);
   const [marcaOptions, setMarcaOptions] = useState<string[]>([]);
   const [merged, setMerged] = useState(false);
+
+  const [salidaQuery, setSalidaQuery] = useState('');
+  const [salidaSuggestions, setSalidaSuggestions] = useState<ProductSuggestion[]>([]);
+  const [salidaSelected, setSalidaSelected] = useState<ProductSuggestion | null>(null);
+  const [salidaCantidad, setSalidaCantidad] = useState('');
+  const [salidaMotivo, setSalidaMotivo] = useState<'consumed' | 'expired'>('consumed');
 
   const applyDefaults = useCallback(() => {
     productService.getDefaults()
@@ -52,6 +62,19 @@ export default function CargarScreen() {
       .catch(() => {});
     applyDefaults();
   }, [applyDefaults]));
+
+  useEffect(() => {
+    if (salidaSelected) return;
+    const q = salidaQuery.trim();
+    if (q.length < 2) {
+      setSalidaSuggestions([]);
+      return;
+    }
+    const handle = setTimeout(() => {
+      productService.suggestProducts(q).then(setSalidaSuggestions).catch(() => setSalidaSuggestions([]));
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [salidaQuery, salidaSelected]);
 
   const validate = (): string | null => {
     if (!form.nombre?.trim()) return t('product.validationNombre');
@@ -93,12 +116,55 @@ export default function CargarScreen() {
     }
   };
 
+  const validateSalida = (): string | null => {
+    if (!salidaSelected) return t('product.validationSalidaProducto');
+    const n = Number(salidaCantidad);
+    if (!salidaCantidad || isNaN(n) || n <= 0) return t('product.validationSalidaCantidad');
+    return null;
+  };
+
+  const handleSalidaSubmit = async () => {
+    const validationError = validateSalida();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError(null);
+    setSaving(true);
+    try {
+      await productService.registerEvent(salidaSelected!.id, Number(salidaCantidad), salidaMotivo);
+      setMerged(false);
+      setSuccess(true);
+    } catch (err: unknown) {
+      const detail = (err as any)?.response?.data?.detail;
+      if (typeof detail === 'string') {
+        setError(detail);
+      } else if (Array.isArray(detail)) {
+        setError(detail.map((e: any) => e.msg ?? JSON.stringify(e)).join('\n'));
+      } else {
+        const msg = (err as any)?.message;
+        setError(msg ?? t('product.saveError'));
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleLoadAnother = () => {
     setForm(EMPTY_FORM());
+    setSalidaQuery('');
+    setSalidaSelected(null);
+    setSalidaCantidad('');
+    setSalidaMotivo('consumed');
     setSuccess(false);
     setMerged(false);
     setError(null);
     applyDefaults();
+  };
+
+  const handleSelectDirection = (d: Direction) => {
+    setDirection(d);
+    setError(null);
   };
 
   const handleAddUbicacion = (loc: string) => {
@@ -113,13 +179,26 @@ export default function CargarScreen() {
     setMarcaOptions(prev => [...new Set([...prev, marca])]);
   };
 
+  const pickSalidaSuggestion = (s: ProductSuggestion) => {
+    setSalidaSelected(s);
+    setSalidaQuery(s.nombre + (s.marca ? ` · ${s.marca}` : ''));
+    setSalidaSuggestions([]);
+  };
+
+  const onSalidaQueryChange = (v: string) => {
+    setSalidaQuery(v);
+    setSalidaSelected(null);
+  };
+
   if (success) {
     return (
       <View style={styles.successContainer}>
         <Ionicons name="checkmark-circle" size={72} color={Colors.primary} />
         <Text style={styles.successTitle}>{t('product.successTitle')}</Text>
         <Text style={styles.successMsg}>
-          {merged ? t('product.successMsgMerged') : t('product.successMsg')}
+          {direction === 'salida'
+            ? t('product.successMsgSalida')
+            : merged ? t('product.successMsgMerged') : t('product.successMsg')}
         </Text>
         <TouchableOpacity
           style={styles.submitBtn}
@@ -128,7 +207,9 @@ export default function CargarScreen() {
           <Text style={styles.submitBtnText}>{t('product.goToInventory')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.secondaryBtn} onPress={handleLoadAnother}>
-          <Text style={styles.secondaryBtnText}>{t('product.loadAnother')}</Text>
+          <Text style={styles.secondaryBtnText}>
+            {direction === 'salida' ? t('product.registerAnother') : t('product.loadAnother')}
+          </Text>
         </TouchableOpacity>
       </View>
     );
@@ -141,29 +222,108 @@ export default function CargarScreen() {
     >
       <View style={styles.header}>
         <Text style={styles.title}>{t('product.loadTitle')}</Text>
+        <View style={styles.directionRow}>
+          <TouchableOpacity
+            style={[styles.directionBtn, direction === 'entrada' && styles.directionBtnActive]}
+            onPress={() => handleSelectDirection('entrada')}
+          >
+            <Text style={[styles.directionBtnText, direction === 'entrada' && styles.directionBtnTextActive]}>
+              {t('product.entrada')}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.directionBtn, direction === 'salida' && styles.directionBtnActiveSalida]}
+            onPress={() => handleSelectDirection('salida')}
+          >
+            <Text style={[styles.directionBtnText, direction === 'salida' && styles.directionBtnTextActive]}>
+              {t('product.salida')}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <ProductFormFields
-          form={form}
-          onChange={setForm}
-          ubicacionOptions={ubicacionOptions}
-          onAddUbicacion={handleAddUbicacion}
-          categoriaOptions={categoriaOptions}
-          onAddCategoria={handleAddCategoria}
-          marcaOptions={marcaOptions}
-          onAddMarca={handleAddMarca}
-          suggestNombre={productService.suggestProducts}
-        />
+        {direction === 'entrada' ? (
+          <ProductFormFields
+            form={form}
+            onChange={setForm}
+            ubicacionOptions={ubicacionOptions}
+            onAddUbicacion={handleAddUbicacion}
+            categoriaOptions={categoriaOptions}
+            onAddCategoria={handleAddCategoria}
+            marcaOptions={marcaOptions}
+            onAddMarca={handleAddMarca}
+            suggestNombre={productService.suggestProducts}
+          />
+        ) : (
+          <View style={styles.container}>
+            <Text style={styles.label}>{t('product.salidaProducto')} *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder={t('product.salidaProductoPlaceholder')}
+              placeholderTextColor={Colors.placeholder}
+              value={salidaQuery}
+              onChangeText={onSalidaQueryChange}
+            />
+            {!salidaSelected && salidaSuggestions.length > 0 && (
+              <View style={styles.suggestionsBox}>
+                {salidaSuggestions.map(s => (
+                  <TouchableOpacity
+                    key={s.id}
+                    style={styles.suggestionItem}
+                    onPress={() => pickSalidaSuggestion(s)}
+                  >
+                    <Ionicons name="cube-outline" size={14} color={Colors.textSecondary} />
+                    <Text style={styles.suggestionText}>
+                      {s.nombre}{s.marca ? ` · ${s.marca}` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            <Text style={styles.label}>{t('product.salidaCantidad')} *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="0"
+              placeholderTextColor={Colors.placeholder}
+              keyboardType="numeric"
+              value={salidaCantidad}
+              onChangeText={v => setSalidaCantidad(v.replace(/[^0-9]/g, ''))}
+            />
+
+            <Text style={styles.label}>{t('product.salidaMotivo')}</Text>
+            <View style={styles.chipsContent}>
+              <TouchableOpacity
+                style={[styles.chip, salidaMotivo === 'consumed' && styles.chipActive]}
+                onPress={() => setSalidaMotivo('consumed')}
+              >
+                <Text style={[styles.chipText, salidaMotivo === 'consumed' && styles.chipTextActive]}>
+                  {t('product.salidaMotivoConsumido')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.chip, salidaMotivo === 'expired' && styles.chipActive]}
+                onPress={() => setSalidaMotivo('expired')}
+              >
+                <Text style={[styles.chipText, salidaMotivo === 'expired' && styles.chipTextActive]}>
+                  {t('product.salidaMotivoVencido')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {error && <Text style={styles.errorText}>{error}</Text>}
 
         <TouchableOpacity
-          style={[styles.submitBtn, saving && { opacity: 0.6 }]}
-          onPress={handleSubmit}
+          style={[styles.submitBtn, direction === 'salida' && styles.submitBtnSalida, saving && { opacity: 0.6 }]}
+          onPress={direction === 'entrada' ? handleSubmit : handleSalidaSubmit}
           disabled={saving}
         >
           <Text style={styles.submitBtnText}>
-            {saving ? t('inventory.saving') : t('product.saveProduct')}
+            {saving
+              ? t('inventory.saving')
+              : direction === 'entrada' ? t('product.saveProduct') : t('product.salidaSubmit')}
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -174,8 +334,60 @@ export default function CargarScreen() {
 const styles = StyleSheet.create({
   header: { backgroundColor: '#fff', padding: 16, paddingTop: 48 },
   title: { fontSize: 22, fontWeight: 'bold', color: Colors.textPrimary },
+  directionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  directionBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f2f3f6',
+  },
+  directionBtnActive: { backgroundColor: Colors.primary },
+  directionBtnActiveSalida: { backgroundColor: Colors.error },
+  directionBtnText: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
+  directionBtnTextActive: { color: '#fff' },
   container: { flex: 1, backgroundColor: '#f2f3f6' },
   content: { padding: 16, paddingBottom: 40 },
+  label: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginTop: 12 },
+  input: {
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+    color: Colors.textPrimary,
+    backgroundColor: '#fafafa',
+    marginTop: 4,
+  },
+  suggestionsBox: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder ?? '#ddd',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  suggestionText: { fontSize: 14, color: Colors.textPrimary },
+  chipsContent: { flexDirection: 'row', gap: 8, marginTop: 6 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: Colors.inputBorder ?? '#ddd',
+  },
+  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  chipText: { fontSize: 13, color: Colors.textSecondary },
+  chipTextActive: { color: '#fff', fontWeight: '600' },
   errorText: { color: Colors.error, fontSize: 13, marginTop: 8 },
   submitBtn: {
     backgroundColor: Colors.primary,
@@ -184,6 +396,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 24,
   },
+  submitBtnSalida: { backgroundColor: Colors.error },
   submitBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   secondaryBtn: {
     borderRadius: 10,
