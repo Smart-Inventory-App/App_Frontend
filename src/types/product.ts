@@ -35,6 +35,9 @@ export interface ProductSuggestion {
   marca?: string;
   categoria: string;
   ubicacion?: string;
+  vencimiento?: string;
+  stock_minimo?: number;
+  dias_alerta_vencimiento?: number;
 }
 
 export interface ProductDefaults {

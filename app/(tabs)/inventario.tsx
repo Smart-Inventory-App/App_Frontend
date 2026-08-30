@@ -137,6 +137,8 @@ export default function InventarioScreen() {
       descripcion: product.descripcion,
       ubicacion: product.ubicacion,
       imagen_url: product.imagen_url,
+      stock_minimo: product.stock_minimo,
+      dias_alerta_vencimiento: product.dias_alerta_vencimiento,
     });
   };
 
