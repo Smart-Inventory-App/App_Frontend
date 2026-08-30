@@ -23,8 +23,10 @@ npm install --legacy-peer-deps
 
 ### 2. Crear `.env`
 
+Copiar `.env.example` y completar con las URLs de los servicios (backend local + Auth/image storage):
+
 ```bash
-echo "EXPO_PUBLIC_API_URL=http://localhost:8000" > .env
+cp .env.example .env
 ```
 
 ### 3. Levantar el frontend
@@ -43,13 +45,15 @@ En total se necesitan **3 terminales WSL** (además del frontend):
 
 | Terminal | Directorio | Comando |
 |----------|-----------|---------|
-| 1 | `App_backend` | `docker-compose up` — Postgres + Keycloak |
+| 1 | `App_backend` | `docker-compose up -d db` — Postgres |
 | 2 | `App_backend` | `source venv/bin/activate && python main.py` — Backend FastAPI |
 | 3 | `App_Frontend` | `npx expo start --web` — Frontend Expo |
 
 > Si hay migraciones nuevas, correr `alembic upgrade head` (con venv activado) antes de levantar el backend.
 
-> Si el backend devuelve 401, el token de Keycloak expiró (~5 min). Hacer logout/login en la app.
+> El login/registro pegan contra el servicio `Auth` (`EXPO_PUBLIC_AUTH_URL`). Para que el backend local valide esos tokens, su `JWT_SECRET` debe coincidir con el del servicio `Auth`.
+
+> Si el backend devuelve 401, el JWT expiró. Hacer logout/login en la app.
 
 ---
 
@@ -78,7 +82,7 @@ App_Frontend/
 │   ├── constants/
 │   │   └── colors.ts
 │   ├── context/
-│   │   └── AuthContext.tsx     # Token Keycloak — login/logout
+│   │   └── AuthContext.tsx     # Token JWT (servicio Auth) — login/logout
 │   ├── i18n/
 │   │   ├── index.ts            # Configuración i18next
 │   │   └── locales/

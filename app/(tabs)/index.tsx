@@ -39,14 +39,15 @@ export default function HomeScreen() {
   useFocusEffect(fetchData);
 
   const today = new Date();
-  const inNDays = new Date(today.getTime() + expiryDaysThreshold * 24 * 60 * 60 * 1000);
 
   const totalStock = products.reduce((acc, p) => acc + p.stock, 0);
-  const lowStock = products.filter(p => p.stock < coverageDaysThreshold).length;
+  const lowStock = products.filter(p => p.stock < (p.stock_minimo ?? coverageDaysThreshold)).length;
   const expiringSoon = products.filter(p => {
     if (!p.vencimiento) return false;
     const d = new Date(p.vencimiento);
-    return d >= today && d <= inNDays;
+    const days = p.dias_alerta_vencimiento ?? expiryDaysThreshold;
+    const limit = new Date(today.getTime() + days * 24 * 60 * 60 * 1000);
+    return d >= today && d <= limit;
   }).length;
   const recentProducts = products.slice(0, 3);
 
