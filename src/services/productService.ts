@@ -76,7 +76,7 @@ export const productService = {
     productId: number,
     eventId: number,
     quantity: number,
-    eventType: 'consumed' | 'expired'
+    eventType: 'consumed' | 'expired' | 'restocked'
   ): Promise<{ event_type: string; quantity: number; remaining_stock: number }> {
     const { data } = await api.put(`/products/${productId}/events/${eventId}`, {
       quantity,

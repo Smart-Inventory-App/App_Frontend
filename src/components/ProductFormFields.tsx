@@ -73,6 +73,9 @@ export default function ProductFormFields({
       marca: s.marca ?? form.marca,
       categoria: s.categoria,
       ubicacion: s.ubicacion ?? form.ubicacion,
+      vencimiento: s.vencimiento ?? form.vencimiento,
+      stock_minimo: s.stock_minimo ?? form.stock_minimo,
+      dias_alerta_vencimiento: s.dias_alerta_vencimiento ?? form.dias_alerta_vencimiento,
     });
     setNombreSuggestions([]);
   };
@@ -288,7 +291,7 @@ export default function ProductFormFields({
           <Text style={styles.label}>{t('product.stockMinimo')}</Text>
           <TextInput
             style={styles.input}
-            placeholder={t('product.optional')}
+            placeholder={t('product.usaReglaGeneral')}
             placeholderTextColor={Colors.placeholder}
             keyboardType="numeric"
             value={form.stock_minimo != null ? String(form.stock_minimo) : ''}
@@ -297,12 +300,15 @@ export default function ProductFormFields({
               set('stock_minimo', v.trim() === '' ? undefined : (isNaN(n) ? form.stock_minimo : n));
             }}
           />
+          <Text style={styles.ruleHint}>
+            {form.stock_minimo != null ? t('product.reglaPropia') : t('product.usandoReglaGeneral')}
+          </Text>
         </View>
         <View style={styles.alertField}>
           <Text style={styles.label}>{t('product.diasAlertaVencimiento')}</Text>
           <TextInput
             style={styles.input}
-            placeholder={t('product.optional')}
+            placeholder={t('product.usaReglaGeneral')}
             placeholderTextColor={Colors.placeholder}
             keyboardType="numeric"
             value={form.dias_alerta_vencimiento != null ? String(form.dias_alerta_vencimiento) : ''}
@@ -311,6 +317,9 @@ export default function ProductFormFields({
               set('dias_alerta_vencimiento', v.trim() === '' ? undefined : (isNaN(n) ? form.dias_alerta_vencimiento : n));
             }}
           />
+          <Text style={styles.ruleHint}>
+            {form.dias_alerta_vencimiento != null ? t('product.reglaPropia') : t('product.usandoReglaGeneral')}
+          </Text>
         </View>
       </View>
 
@@ -451,6 +460,7 @@ const styles = StyleSheet.create({
   },
   alertRow: { flexDirection: 'row', gap: 12 },
   alertField: { flex: 1 },
+  ruleHint: { fontSize: 11, color: Colors.textSecondary, marginTop: 3 },
   suggestionsBox: {
     marginTop: 4,
     borderWidth: 1,

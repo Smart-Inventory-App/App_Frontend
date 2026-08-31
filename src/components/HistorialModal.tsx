@@ -29,7 +29,7 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editQuantity, setEditQuantity] = useState('');
-  const [editMotivo, setEditMotivo] = useState<'consumed' | 'expired'>('consumed');
+  const [editMotivo, setEditMotivo] = useState<'consumed' | 'expired' | 'restocked'>('consumed');
   const [saving, setSaving] = useState(false);
 
   const load = () => {
@@ -58,7 +58,7 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
   const startEdit = (event: ConsumptionEvent) => {
     setEditingId(event.id);
     setEditQuantity(String(event.quantity));
-    setEditMotivo(event.event_type === 'expired' ? 'expired' : 'consumed');
+    setEditMotivo(event.event_type);
   };
 
   const cancelEdit = () => setEditingId(null);
@@ -125,7 +125,6 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
           ) : (
             <ScrollView style={{ maxHeight: 420 }}>
               {events.map(event => {
-                const correctable = event.event_type !== 'restocked';
                 const isEditing = editingId === event.id;
                 return (
                   <View key={event.id} style={styles.row}>
@@ -152,6 +151,14 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
                           >
                             <Text style={[styles.motivoChipText, editMotivo === 'expired' && styles.motivoChipTextActive]}>
                               {t('product.salidaMotivoVencido')}
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.motivoChip, editMotivo === 'restocked' && styles.motivoChipActive]}
+                            onPress={() => setEditMotivo('restocked')}
+                          >
+                            <Text style={[styles.motivoChipText, editMotivo === 'restocked' && styles.motivoChipTextActive]}>
+                              {t('product.historialEntrada')}
                             </Text>
                           </TouchableOpacity>
                         </View>
@@ -181,16 +188,14 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
                             </Text>
                           </View>
                         </View>
-                        {correctable && (
-                          <View style={styles.rowActions}>
-                            <TouchableOpacity onPress={() => startEdit(event)} style={styles.actionBtn}>
-                              <Ionicons name="pencil" size={16} color={Colors.primary} />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => deleteEvent(event)} style={styles.actionBtn}>
-                              <Ionicons name="trash" size={16} color={Colors.error} />
-                            </TouchableOpacity>
-                          </View>
-                        )}
+                        <View style={styles.rowActions}>
+                          <TouchableOpacity onPress={() => startEdit(event)} style={styles.actionBtn}>
+                            <Ionicons name="pencil" size={16} color={Colors.primary} />
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => deleteEvent(event)} style={styles.actionBtn}>
+                            <Ionicons name="trash" size={16} color={Colors.error} />
+                          </TouchableOpacity>
+                        </View>
                       </>
                     )}
                   </View>
