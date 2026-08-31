@@ -1,5 +1,6 @@
 import api from './api';
 import authApi from './authApi';
+import { getFirebaseToken } from './firebaseService';
 
 export interface UserProfile {
   sub: string;
@@ -9,6 +10,7 @@ export interface UserProfile {
   lastName?: string;
   lowStockThreshold: number;
   expiryDaysThreshold: number;
+  notificationToken?: string | null;
 }
 
 interface MeResponse {
@@ -52,4 +54,16 @@ export const profileService = {
     ]);
     return { sub: me.id, email: me.email, ...profile };
   },
+
+  async activateNotifications(): Promise<boolean> {
+    const notificationToken = await getFirebaseToken();
+    if (!notificationToken) {
+      throw new Error('Failed to get Firebase token');
+    }
+    const response = await api.post('/profile/register_notification_token', { "token": notificationToken });
+    if (response.status !== 200) {
+      throw new Error('Failed to activate notifications');
+    }
+    return true;
+  }
 };

@@ -89,6 +89,10 @@ export default {
     expiryDaysThreshold: 'Por vencer en los próximos',
     units: 'unidades',
     days: 'días',
+    notifications: 'Notificaciones',
+    enabled: 'Activadas',
+    disabled: 'Desactivadas',
+    notificationsError: 'No se pudieron activar las notificaciones',
   },
   home: {
     welcome: 'Bienvenido',

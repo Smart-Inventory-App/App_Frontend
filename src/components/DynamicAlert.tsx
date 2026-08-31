@@ -1,23 +1,16 @@
+import { Alert } from '@/services/alertService';
 import React from 'react';
 import { FlatList, View, Text, StyleSheet, Image } from 'react-native';
 
-type Alert = {
-  image?: string;
-  product: string;
-  type: 'stock' | 'expiry' | 'info';
-  stock: number;
-  expiry: Date;
-  level: 'critical' | 'warning' | 'info';
-};
-
 export default function DynamicAlert({ alertsData }: { alertsData: Alert[] }) {
+    console.log('DynamicAlert received alertsData:', alertsData);
     const getAlertType = (alert: Alert) : string[] =>  {
         switch (alert.type) {
             case 'stock':
                 return [`critical`,`Stock crítico`];
             case 'expiry':
                 const today = new Date();
-                const daysUntilExpiry = Math.ceil((alert.expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                const daysUntilExpiry = Math.ceil(((new Date(alert.product_expiry!).getTime() ?? 0) - today.getTime()) / (1000 * 60 * 60 * 24));
                 if (daysUntilExpiry > 1) {
                     return ['warning' ,`Vence en ${daysUntilExpiry} días`];
                 } else if (daysUntilExpiry == 1) {
@@ -29,8 +22,8 @@ export default function DynamicAlert({ alertsData }: { alertsData: Alert[] }) {
                 return ['info',`Información`];
             }
         }
-    const getExpiracyDate = (expiryDate: Date) => {
-        const format = expiryDate.toLocaleDateString("es-AR", {
+    const getExpiracyDate = (expiryDate?: string) => {
+        const format = new Date(expiryDate!).toLocaleDateString("es-AR", {
             day: 'numeric',
             month: 'long'
         })
@@ -39,7 +32,7 @@ export default function DynamicAlert({ alertsData }: { alertsData: Alert[] }) {
     return (
         <FlatList
             data={alertsData}
-            keyExtractor={(alert) => alert.product}
+            keyExtractor={(alert) => alert.id.toString()}
             renderItem={({ item: alert }) => {
                 const [alertLevel, alertDescription] = getAlertType(alert);
                 return (
@@ -51,22 +44,22 @@ export default function DynamicAlert({ alertsData }: { alertsData: Alert[] }) {
                     <View style={styles.container}>
                         <View>
                             <Image
-                                source={alert.image ? { uri: alert.image } : require('../../assets/icon.png')}
+                                source={alert.image_url ? { uri: alert.image_url } : require('../../assets/icon.png')}
                                 style={styles.alertImage}
                             />
                         </View>
                         <View>
                             <View>
-                                <Text style={styles.title}>{alert.product} - {alertDescription}</Text>
+                                <Text style={styles.title}>{alert.product_name} - {alertDescription}</Text>
                             </View>
                             {alert.type == 'expiry' && (
                                 <View>
-                                    <Text style={styles.description}>Stock Restante: {alert.stock} ud.</Text>
-                                    <Text style={styles.description}>Fecha Límite: {getExpiracyDate(alert.expiry)}</Text>
+                                    <Text style={styles.description}>Stock Restante: {alert.product_stock} ud.</Text>
+                                    <Text style={styles.description}>Fecha Límite: {getExpiracyDate(alert.product_expiry)}</Text>
                                 </View>
                             ) || alert.type == 'stock' && (
                                 <View>
-                                    <Text style={styles.description}>Stock Restante: {alert.stock} ud. Minimo Configurado: No se. Reponer Pronto</Text>
+                                    <Text style={styles.description}>Stock Restante: {alert.product_stock} ud. Minimo Configurado: 10. Reponer Pronto</Text>
                                 </View>
                             )}
                         </View>

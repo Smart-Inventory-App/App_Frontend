@@ -32,6 +32,8 @@ export default function PerfilScreen() {
 
   const [lowStockInput, setLowStockInput] = useState('5');
   const [expiryDaysInput, setExpiryDaysInput] = useState('7');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationsToken, setNotificationsToken] = useState<string | null>(null);
 
   useFocusEffect(useCallback(() => {
     setLoading(true);
@@ -43,6 +45,8 @@ export default function PerfilScreen() {
         setUsername(p.username ?? '');
         setLowStockInput(String(p.lowStockThreshold));
         setExpiryDaysInput(String(p.expiryDaysThreshold));
+        setNotificationsEnabled(!!p.notificationToken);
+        setNotificationsToken(p.notificationToken ?? null);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -97,6 +101,15 @@ export default function PerfilScreen() {
     setUsername(profile?.username ?? '');
     setEditing(false);
     setFeedback(null);
+  };
+
+  const handleActivateNotifications = async () => {
+    try {
+      const notificationsActivated = await profileService.activateNotifications();
+      setNotificationsEnabled(notificationsActivated);
+    } catch (error) {
+      console.error('Error activating notifications:', error);
+    }
   };
 
   const initials = `${(profile?.firstName ?? '')[0] ?? ''}${(profile?.lastName ?? '')[0] ?? ''}`.toUpperCase() || '?';
@@ -232,6 +245,15 @@ export default function PerfilScreen() {
         <Ionicons name="language-outline" size={20} color={Colors.textSecondary} />
         <Text style={styles.rowBtnText}>
           {t('profile.language')}: {i18n.language === 'es' ? '🇦🇷 Español' : '🇺🇸 English'}
+        </Text>
+        <Ionicons name="chevron-forward" size={16} color={Colors.placeholder} />
+      </TouchableOpacity>
+
+      {/* Notifications */}
+      <TouchableOpacity style={styles.rowBtn} onPress={handleActivateNotifications}>
+        <Ionicons name="notifications-outline" size={20} color={Colors.textSecondary} />
+        <Text style={styles.rowBtnText}>
+          {t('profile.notifications')}: {notificationsEnabled ? t('profile.enabled') : t('profile.disabled')}
         </Text>
         <Ionicons name="chevron-forward" size={16} color={Colors.placeholder} />
       </TouchableOpacity>

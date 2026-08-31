@@ -1,74 +1,59 @@
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { Figtree_400Regular, useFonts } from '@expo-google-fonts/figtree'
 import { Roboto_500Medium } from '@expo-google-fonts/roboto'
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import DynamicList from '@/components/DynamicAlert';
-
-type Alert = {
-  image: string;
-  product: string;
-  type: 'stock' | 'expiry' | 'info';
-  stock: number;
-  expiry: Date;
-  level: 'critical' | 'warning' | 'info';
-};
+import { Alert, alertService } from '@/services/alertService';
+import { useFocusEffect } from 'expo-router';
 
 export default function AlertasScreen() {
   const [] = useFonts({Figtree_400Regular, Roboto_500Medium})
-  const summaryExammple = {critical: 2, warning: 3, info: 1};
-  const alertsExample= [
-    {
-      "product": "Leche entera 1L",
-      "type": "stock",
-      "stock": 2,
-      "expiry": "2026-08-30",
-      "level": "critical"
-    },
-    {
-      "product": "Arroz 1Kg",
-      "type": "stock",
-      "stock": 1,
-      "expiry": "2026-12-01",
-      "level": "critical"
-    },
-    {
-      "product": "Yogur Danonino x4",
-      "type": "expiry",
-      "stock": 10,
-      "expiry": "2026-09-05",
-      "level": "warning"
-    },
-    {
-      "product": "Queso Cremoso 500g",
-      "type": "expiry",
-      "stock": 4,
-      "expiry": "2026-08-28",
-      "level": "critical"
-    },
-    {
-      "product": "Pan Integral",
-      "type": "expiry",
-      "stock": 6,
-      "expiry": "2026-08-27",
-      "level": "critical"
-    }
-  ]
+  const filters = ['Todas', 'Críticas', 'Stocks', 'Vencimientos']
+  const [selected, setSelected] = useState<String>('Todas')
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [alertsSummary, setAlertsSummary] = useState({critical: 0, warning: 0, info: 0});
-  useEffect(() => {
-    // Fetch alerts summary from API and update state
-    // For now, we will use the example summary
-    setAlertsSummary(summaryExammple);
-    const parsedAlerts: Alert[] = alertsExample.map(alert => ({
-      image: '',
-      product: alert.product,
-      type: alert.type as Alert['type'],
-      stock: alert.stock,
-      expiry: new Date(alert.expiry),
-      level: alert.level as Alert['level']
-    }));
-    setAlerts(parsedAlerts);
+  const [loading, setLoading] = useState(false);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await alertService.getAlerts();
+      const summaryData = await alertService.getSummaryAlerts();
+      setAlertsSummary(summaryData)
+      setAlerts(data);
+    } catch (error) {
+      console.error('Error fetching alerts:', error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  const handleAlertsFilter = async (filter: string) => {
+    setSelected(filter);
+    try {
+      switch(filter) {
+        case 'Críticas':
+          setAlerts(await alertService.getCriticalAlerts());
+          break
+        case 'Stocks':
+          setAlerts(await alertService.getStockAlerts());
+          break
+        case 'Vencimientos':
+          setAlerts(await alertService.getExpiryAlerts());
+          break
+        default:
+          setAlerts(await alertService.getAlerts());
+          break
+      }
+    } catch(error) {
+      console.error('Error fetching alerts:', error);
+    }
+  }
   return (
     <>
       <View style={styles.header}>
@@ -90,18 +75,21 @@ export default function AlertasScreen() {
           </View>
         </View>
         <View style={styles.filterBar}>
-          <View style={styles.filterBarItem}>
-            <Text style={styles.filterBarItemText}>Todas</Text>
-          </View>
-          <View style={styles.filterBarItem}>
-            <Text style={styles.filterBarItemText}>Críticas</Text>
-          </View>
-          <View style={styles.filterBarItem}>
-            <Text style={styles.filterBarItemText}>Stocks</Text>
-          </View>
-          <View style={styles.filterBarItem}>
-            <Text style={styles.filterBarItemText}>Vencimientos</Text>
-          </View>
+          {filters.map((filter) => (
+            <Pressable
+              key={filter}
+              onPress={() => handleAlertsFilter(filter)}
+              style={[
+                styles.filterBarItem,
+                selected == filter && styles.selectedFilterBarItem,
+              ]}
+            >
+              <Text style={[
+                styles.filterBarItemText,
+                selected == filter && styles.selectedFilterBarItemText
+              ]}>{filter}</Text>
+            </Pressable>
+          ))}
         </View>
         <DynamicList alertsData={alerts} />
       </ScrollView>
@@ -123,7 +111,9 @@ const styles = StyleSheet.create({
   alertSummaryItem: { alignItems: 'center' },
   alertSummaryItemValue: { color: '#14554b', fontSize: 24, fontFamily: 'Figtree_400Regular' },
   alertSummaryItemText: { color: '#14554b', fontSize: 16, fontFamily: 'Figtree_400Regular' },
-  filterBar: { flexDirection: 'row', justifyContent: 'space-around', margin: 16},
-  filterBarItem: { backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 8},
-  filterBarItemText: { fontFamily: 'Figtree_400Regular', color: '#828282' }
+  filterBar: { flexDirection: 'row', justifyContent: 'space-around', margin: 16 },
+  filterBarItem: { backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 8 },
+  filterBarItemText: { fontFamily: 'Figtree_400Regular', color: '#828282' },
+  selectedFilterBarItem: { backgroundColor: '#14554b', borderRadius: 10, paddingHorizontal: 8 },
+  selectedFilterBarItemText: { fontFamily: 'Figtree_400Regular', color: '#fff' }
 })
