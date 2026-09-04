@@ -36,6 +36,7 @@ export interface ProductSuggestion {
   categoria: string;
   ubicacion?: string;
   vencimiento?: string;
+  stock: number;
   stock_minimo?: number;
   dias_alerta_vencimiento?: number;
 }
@@ -50,4 +51,8 @@ export interface ConsumptionEvent {
   quantity: number;
   event_type: 'consumed' | 'expired' | 'restocked';
   consumed_at: string;
+  note?: string;
+  actor_email?: string;
+  reverses_event_id?: number;
+  reversed: boolean;
 }

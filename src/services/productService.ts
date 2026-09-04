@@ -58,11 +58,13 @@ export const productService = {
   async registerEvent(
     productId: number,
     quantity: number,
-    eventType: 'consumed' | 'expired'
+    eventType: 'consumed' | 'expired',
+    note?: string
   ): Promise<{ event_type: string; quantity: number; remaining_stock: number }> {
     const { data } = await api.post(`/products/${productId}/events`, {
       quantity,
       event_type: eventType,
+      note: note || undefined,
     });
     return data;
   },
@@ -76,11 +78,13 @@ export const productService = {
     productId: number,
     eventId: number,
     quantity: number,
-    eventType: 'consumed' | 'expired' | 'restocked'
+    eventType: 'consumed' | 'expired' | 'restocked',
+    note?: string
   ): Promise<{ event_type: string; quantity: number; remaining_stock: number }> {
     const { data } = await api.put(`/products/${productId}/events/${eventId}`, {
       quantity,
       event_type: eventType,
+      note: note || undefined,
     });
     return data;
   },
