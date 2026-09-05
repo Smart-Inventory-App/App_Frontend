@@ -153,12 +153,19 @@ export default function ProductFormFields({
         <View style={styles.suggestionsBox}>
           {nombreSuggestions.map(s => (
             <TouchableOpacity
-              key={s.nombre}
+              key={s.id}
               style={styles.suggestionItem}
               onPress={() => handleSelectSuggestion(s)}
             >
               <Ionicons name="time-outline" size={14} color={Colors.textSecondary} />
-              <Text style={styles.suggestionText}>{s.nombre}</Text>
+              <View>
+                <Text style={styles.suggestionText}>
+                  {s.nombre}{s.marca ? ` · ${s.marca}` : ''}
+                </Text>
+                <Text style={styles.suggestionSubtext}>
+                  {s.vencimiento ? `Vence ${s.vencimiento}` : 'Sin vencimiento'} · Stock: {s.stock}
+                </Text>
+              </View>
             </TouchableOpacity>
           ))}
         </View>
@@ -479,6 +486,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f0f0f0',
   },
   suggestionText: { fontSize: 14, color: Colors.textPrimary },
+  suggestionSubtext: { fontSize: 11, color: Colors.textSecondary, marginTop: 1 },
   chipsScroll: { flexGrow: 0, marginTop: 6 },
   chipsContent: { gap: 8, flexDirection: 'row', alignItems: 'center' },
   chip: {

@@ -194,6 +194,9 @@ export default {
     historialDeleteConfirm: '¿Borrar este registro de consumo? El stock se va a ajustar automáticamente.',
     historialUpdateError: 'No se pudo corregir el registro',
     historialDeleteError: 'No se pudo borrar el registro',
+    historialNotaPlaceholder: 'Motivo (opcional)',
+    historialCorregido: 'Corregido',
+    salidaNotaPlaceholder: 'Motivo (opcional, ej. vencido en heladera)',
   },
   errors: {
     generic: 'Ocurrió un error inesperado',

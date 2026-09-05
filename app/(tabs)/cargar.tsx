@@ -39,6 +39,7 @@ export default function CargarScreen() {
   const [salidaSelected, setSalidaSelected] = useState<ProductSuggestion | null>(null);
   const [salidaCantidad, setSalidaCantidad] = useState('');
   const [salidaMotivo, setSalidaMotivo] = useState<'consumed' | 'expired'>('consumed');
+  const [salidaNota, setSalidaNota] = useState('');
 
   const applyDefaults = useCallback(() => {
     productService.getDefaults()
@@ -132,7 +133,7 @@ export default function CargarScreen() {
     setError(null);
     setSaving(true);
     try {
-      await productService.registerEvent(salidaSelected!.id, Number(salidaCantidad), salidaMotivo);
+      await productService.registerEvent(salidaSelected!.id, Number(salidaCantidad), salidaMotivo, salidaNota);
       setMerged(false);
       setSuccess(true);
     } catch (err: unknown) {
@@ -156,6 +157,7 @@ export default function CargarScreen() {
     setSalidaSelected(null);
     setSalidaCantidad('');
     setSalidaMotivo('consumed');
+    setSalidaNota('');
     setSuccess(false);
     setMerged(false);
     setError(null);
@@ -273,9 +275,14 @@ export default function CargarScreen() {
                     onPress={() => pickSalidaSuggestion(s)}
                   >
                     <Ionicons name="cube-outline" size={14} color={Colors.textSecondary} />
-                    <Text style={styles.suggestionText}>
-                      {s.nombre}{s.marca ? ` · ${s.marca}` : ''}
-                    </Text>
+                    <View>
+                      <Text style={styles.suggestionText}>
+                        {s.nombre}{s.marca ? ` · ${s.marca}` : ''}
+                      </Text>
+                      <Text style={styles.suggestionSubtext}>
+                        {s.vencimiento ? `Vence ${s.vencimiento}` : 'Sin vencimiento'} · Stock: {s.stock}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -310,6 +317,15 @@ export default function CargarScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+
+            <Text style={styles.label}>{t('product.historialNotaPlaceholder')}</Text>
+            <TextInput
+              style={styles.input}
+              placeholder={t('product.salidaNotaPlaceholder')}
+              placeholderTextColor={Colors.placeholder}
+              value={salidaNota}
+              onChangeText={setSalidaNota}
+            />
           </View>
         )}
 
@@ -376,6 +392,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f0f0f0',
   },
   suggestionText: { fontSize: 14, color: Colors.textPrimary },
+  suggestionSubtext: { fontSize: 11, color: Colors.textSecondary, marginTop: 1 },
   chipsContent: { flexDirection: 'row', gap: 8, marginTop: 6 },
   chip: {
     paddingHorizontal: 14,
