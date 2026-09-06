@@ -23,15 +23,15 @@ async function getNativeDeviceToken(): Promise<string | null> {
   try {
     const Notifications = await import("expo-notifications");
 
-    const { status: existing } = await Notifications.getPermissionsAsync();
-    let finalStatus = existing;
+    const perms = (await Notifications.getPermissionsAsync()) as any;
+    let granted: boolean = perms.granted ?? perms.status === "granted";
 
-    if (existing !== "granted") {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
+    if (!granted) {
+      const result = (await Notifications.requestPermissionsAsync()) as any;
+      granted = result.granted ?? result.status === "granted";
     }
 
-    if (finalStatus !== "granted") return null;
+    if (!granted) return null;
 
     // getDevicePushTokenAsync devuelve el FCM token en Android
     const tokenData = await Notifications.getDevicePushTokenAsync();

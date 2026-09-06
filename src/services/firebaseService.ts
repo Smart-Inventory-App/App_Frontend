@@ -37,17 +37,18 @@ export async function getFirebaseToken(): Promise<string | null> {
 export async function initNotifications(): Promise<void> {
   if (Platform.OS !== "web") return;
   try {
-    const permission = await Notification.requestPermission();
+    const win = globalThis as any;
+    const permission = await win.Notification?.requestPermission();
     if (permission !== "granted") return;
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/firebase-messaging-sw.js").catch(() => {});
+    if ("serviceWorker" in win.navigator) {
+      win.navigator.serviceWorker.register("/firebase-messaging-sw.js").catch(() => {});
     }
     if (!_messaging) return;
     const { onMessage } = await import("firebase/messaging");
     onMessage(_messaging, (payload: any) => {
       const title = payload.notification?.title || "Notificación";
       const body = payload.notification?.body || "";
-      alert(`${title} - ${body}`);
+      win.alert(`${title} - ${body}`);
     });
   } catch {
     // notifications not available
