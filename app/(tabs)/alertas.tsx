@@ -3,7 +3,7 @@ import { Figtree_400Regular, useFonts } from '@expo-google-fonts/figtree'
 import { Roboto_500Medium } from '@expo-google-fonts/roboto'
 
 export default function AlertasScreen() {
-  const [] = useFonts({Figtree_400Regular, Roboto_500Medium})
+  useFonts({Figtree_400Regular, Roboto_500Medium})
   return (
     <>
       <View style={styles.header}>

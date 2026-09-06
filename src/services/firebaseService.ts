@@ -17,16 +17,16 @@ const app = initializeApp(firebaseConfig);
 // firebase/messaging uses browser APIs — only usable on web
 let _messaging: any = null;
 if (Platform.OS === "web") {
-  const { getMessaging } = require("firebase/messaging");
-  _messaging = getMessaging(app);
+  import("firebase/messaging").then(({ getMessaging }) => {
+    _messaging = getMessaging(app);
+  });
 }
 
-export const messaging = _messaging;
-
 export async function getFirebaseToken(): Promise<string | null> {
-  if (Platform.OS !== "web" || !_messaging) return null;
+  if (Platform.OS !== "web") return null;
+  if (!_messaging) return null;
   try {
-    const { getToken } = require("firebase/messaging");
+    const { getToken } = await import("firebase/messaging");
     const token = await getToken(_messaging, { vapidKey: FIREBASE_VAPID_KEY });
     return token;
   } catch {
@@ -42,7 +42,8 @@ export async function initNotifications(): Promise<void> {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/firebase-messaging-sw.js").catch(() => {});
     }
-    const { onMessage } = require("firebase/messaging");
+    if (!_messaging) return;
+    const { onMessage } = await import("firebase/messaging");
     onMessage(_messaging, (payload: any) => {
       const title = payload.notification?.title || "Notificación";
       const body = payload.notification?.body || "";

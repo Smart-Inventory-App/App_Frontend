@@ -39,8 +39,8 @@ export default function PerfilScreen() {
   const tzOffsetHours = -tzOffsetMinutes / 60;
   const tzLabel = `UTC${tzOffsetHours >= 0 ? '+' : ''}${tzOffsetHours}`;
 
-  const utcToLocal = (utcHour: number) => (utcHour - tzOffsetMinutes / 60 + 24) % 24;
-  const localToUtc = (localHour: number) => (localHour + tzOffsetMinutes / 60 + 24) % 24;
+  const utcToLocal = useCallback((utcHour: number) => (utcHour - tzOffsetMinutes / 60 + 24) % 24, [tzOffsetMinutes]);
+  const localToUtc = useCallback((localHour: number) => (localHour + tzOffsetMinutes / 60 + 24) % 24, [tzOffsetMinutes]);
 
   useFocusEffect(useCallback(() => {
     setLoading(true);
@@ -56,7 +56,7 @@ export default function PerfilScreen() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []));
+  }, [utcToLocal]));
 
   const handleLogout = async () => {
     await logout();
