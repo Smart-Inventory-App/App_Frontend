@@ -25,7 +25,8 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.smartinventory.app",
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.POST_NOTIFICATIONS"
       ]
     },
     "web": {
@@ -42,10 +43,19 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "La app necesita acceso a tus fotos para subir imágenes de productos."
+          "photosPermission": "La app necesita acceso a tus fotos para subir im\u00e1genes de productos."
         }
       ],
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#00B5A5",
+          "sounds": [],
+          "mode": "production"
+        }
+      ]
     ],
     "extra": {
       "router": {},
