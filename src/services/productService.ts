@@ -1,5 +1,5 @@
 import api from './api';
-import { Product, ProductCreate, ProductDefaults, ProductSuggestion } from '../types/product';
+import { ConsumptionEvent, Product, ProductCreate, ProductDefaults, ProductSuggestion } from '../types/product';
 
 export interface ProductFilters {
   search?: string;
@@ -53,5 +53,44 @@ export const productService = {
 
   async deleteProduct(id: number): Promise<void> {
     await api.delete(`/products/${id}`);
+  },
+
+  async registerEvent(
+    productId: number,
+    quantity: number,
+    eventType: 'consumed' | 'expired',
+    note?: string
+  ): Promise<{ event_type: string; quantity: number; remaining_stock: number }> {
+    const { data } = await api.post(`/products/${productId}/events`, {
+      quantity,
+      event_type: eventType,
+      note: note || undefined,
+    });
+    return data;
+  },
+
+  async getConsumptionHistory(productId: number): Promise<ConsumptionEvent[]> {
+    const { data } = await api.get<ConsumptionEvent[]>(`/products/${productId}/consumption`);
+    return data;
+  },
+
+  async updateConsumptionEvent(
+    productId: number,
+    eventId: number,
+    quantity: number,
+    eventType: 'consumed' | 'expired' | 'restocked',
+    note?: string
+  ): Promise<{ event_type: string; quantity: number; remaining_stock: number }> {
+    const { data } = await api.put(`/products/${productId}/events/${eventId}`, {
+      quantity,
+      event_type: eventType,
+      note: note || undefined,
+    });
+    return data;
+  },
+
+  async deleteConsumptionEvent(productId: number, eventId: number): Promise<{ remaining_stock: number }> {
+    const { data } = await api.delete(`/products/${productId}/events/${eventId}`);
+    return data;
   },
 };

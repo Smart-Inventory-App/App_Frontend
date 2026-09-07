@@ -8,9 +8,10 @@ export interface UserProfile {
   username?: string;
   firstName?: string;
   lastName?: string;
-  lowStockThreshold: number;
+  coverageDaysThreshold: number;
   expiryDaysThreshold: number;
   notificationToken?: string | null;
+  alertCheckHour: number;
 }
 
 interface MeResponse {
@@ -22,8 +23,9 @@ interface ProfileFields {
   firstName?: string;
   lastName?: string;
   username?: string;
-  lowStockThreshold: number;
+  coverageDaysThreshold: number;
   expiryDaysThreshold: number;
+  alertCheckHour: number;
 }
 
 export const profileService = {
@@ -39,16 +41,18 @@ export const profileService = {
     firstName: string,
     lastName: string,
     username?: string,
-    lowStockThreshold?: number,
+    coverageDaysThreshold?: number,
     expiryDaysThreshold?: number,
+    alertCheckHour?: number,
   ): Promise<UserProfile> {
     const [{ data: profile }, { data: me }] = await Promise.all([
       api.put<ProfileFields>('/profile/', {
         firstName,
         lastName,
         username,
-        lowStockThreshold,
+        coverageDaysThreshold,
         expiryDaysThreshold,
+        alertCheckHour,
       }),
       authApi.get<MeResponse>('/auth/me'),
     ]);

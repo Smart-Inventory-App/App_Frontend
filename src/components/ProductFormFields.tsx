@@ -73,6 +73,9 @@ export default function ProductFormFields({
       marca: s.marca ?? form.marca,
       categoria: s.categoria,
       ubicacion: s.ubicacion ?? form.ubicacion,
+      vencimiento: s.vencimiento ?? form.vencimiento,
+      stock_minimo: s.stock_minimo ?? form.stock_minimo,
+      dias_alerta_vencimiento: s.dias_alerta_vencimiento ?? form.dias_alerta_vencimiento,
     });
     setNombreSuggestions([]);
   };
@@ -150,12 +153,19 @@ export default function ProductFormFields({
         <View style={styles.suggestionsBox}>
           {nombreSuggestions.map(s => (
             <TouchableOpacity
-              key={s.nombre}
+              key={s.id}
               style={styles.suggestionItem}
               onPress={() => handleSelectSuggestion(s)}
             >
               <Ionicons name="time-outline" size={14} color={Colors.textSecondary} />
-              <Text style={styles.suggestionText}>{s.nombre}</Text>
+              <View>
+                <Text style={styles.suggestionText}>
+                  {s.nombre}{s.marca ? ` · ${s.marca}` : ''}
+                </Text>
+                <Text style={styles.suggestionSubtext}>
+                  {s.vencimiento ? `Vence ${s.vencimiento}` : 'Sin vencimiento'} · Stock: {s.stock}
+                </Text>
+              </View>
             </TouchableOpacity>
           ))}
         </View>
@@ -281,6 +291,44 @@ export default function ProductFormFields({
         value={form.vencimiento ?? ''}
         onChangeText={v => set('vencimiento', v || undefined)}
       />
+
+      <Text style={styles.sectionLabel}>{t('product.alertasTitle')}</Text>
+      <View style={styles.alertRow}>
+        <View style={styles.alertField}>
+          <Text style={styles.label}>{t('product.stockMinimo')}</Text>
+          <TextInput
+            style={styles.input}
+            placeholder={t('product.usaReglaGeneral')}
+            placeholderTextColor={Colors.placeholder}
+            keyboardType="numeric"
+            value={form.stock_minimo != null ? String(form.stock_minimo) : ''}
+            onChangeText={(v) => {
+              const n = parseInt(v, 10);
+              set('stock_minimo', v.trim() === '' ? undefined : (isNaN(n) ? form.stock_minimo : n));
+            }}
+          />
+          <Text style={styles.ruleHint}>
+            {form.stock_minimo != null ? t('product.reglaPropia') : t('product.usandoReglaGeneral')}
+          </Text>
+        </View>
+        <View style={styles.alertField}>
+          <Text style={styles.label}>{t('product.diasAlertaVencimiento')}</Text>
+          <TextInput
+            style={styles.input}
+            placeholder={t('product.usaReglaGeneral')}
+            placeholderTextColor={Colors.placeholder}
+            keyboardType="numeric"
+            value={form.dias_alerta_vencimiento != null ? String(form.dias_alerta_vencimiento) : ''}
+            onChangeText={(v) => {
+              const n = parseInt(v, 10);
+              set('dias_alerta_vencimiento', v.trim() === '' ? undefined : (isNaN(n) ? form.dias_alerta_vencimiento : n));
+            }}
+          />
+          <Text style={styles.ruleHint}>
+            {form.dias_alerta_vencimiento != null ? t('product.reglaPropia') : t('product.usandoReglaGeneral')}
+          </Text>
+        </View>
+      </View>
 
       <Text style={styles.label}>{t('product.descripcion')}</Text>
       <TextInput
@@ -409,6 +457,17 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   multiline: { textAlignVertical: 'top', height: 72 },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    marginTop: 16,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  alertRow: { flexDirection: 'row', gap: 12 },
+  alertField: { flex: 1 },
+  ruleHint: { fontSize: 11, color: Colors.textSecondary, marginTop: 3 },
   suggestionsBox: {
     marginTop: 4,
     borderWidth: 1,
@@ -427,6 +486,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f0f0f0',
   },
   suggestionText: { fontSize: 14, color: Colors.textPrimary },
+  suggestionSubtext: { fontSize: 11, color: Colors.textSecondary, marginTop: 1 },
   chipsScroll: { flexGrow: 0, marginTop: 6 },
   chipsContent: { gap: 8, flexDirection: 'row', alignItems: 'center' },
   chip: {

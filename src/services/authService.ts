@@ -1,6 +1,5 @@
 import axios from 'axios';
-import { getToken } from "firebase/messaging";
-import { messaging, getFirebaseToken } from './firebaseService';
+import { getFirebaseToken } from './firebaseService';
 
 
 const AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL;

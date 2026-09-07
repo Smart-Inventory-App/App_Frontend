@@ -19,6 +19,7 @@ import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { Product, ProductCreate } from '@/types/product';
 import ProductFormFields from '@/components/ProductFormFields';
+import HistorialModal from '@/components/HistorialModal';
 
 export default function InventarioScreen() {
   const { t } = useTranslation();
@@ -29,6 +30,7 @@ export default function InventarioScreen() {
   const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
   const [selectedUbicacion, setSelectedUbicacion] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [historialProduct, setHistorialProduct] = useState<Product | null>(null);
   const [editForm, setEditForm] = useState<Partial<ProductCreate>>({});
   const [saving, setSaving] = useState(false);
   const [filterOptions, setFilterOptions] = useState<{ categorias: string[]; ubicaciones: string[]; marcas: string[] }>({
@@ -135,6 +137,8 @@ export default function InventarioScreen() {
       descripcion: product.descripcion,
       ubicacion: product.ubicacion,
       imagen_url: product.imagen_url,
+      stock_minimo: product.stock_minimo,
+      dias_alerta_vencimiento: product.dias_alerta_vencimiento,
     });
   };
 
@@ -197,6 +201,9 @@ export default function InventarioScreen() {
         <View style={styles.itemActions}>
           <TouchableOpacity onPress={() => openEdit(item)} style={styles.actionBtn}>
             <Ionicons name="pencil" size={18} color={Colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setHistorialProduct(item)} style={styles.actionBtn}>
+            <Ionicons name="time-outline" size={18} color={Colors.textSecondary} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => handleDelete(item)} style={styles.actionBtn}>
             <Ionicons name="trash" size={18} color={Colors.error} />
@@ -371,6 +378,13 @@ export default function InventarioScreen() {
           </View>
         </View>
       </Modal>
+
+      <HistorialModal
+        product={historialProduct}
+        visible={!!historialProduct}
+        onClose={() => setHistorialProduct(null)}
+        onChanged={load}
+      />
     </View>
   );
 }

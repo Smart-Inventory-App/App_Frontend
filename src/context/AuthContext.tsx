@@ -1,10 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { authService } from '../services/authService';
 import { setAuthToken } from '../services/api';
-import { getFirebaseToken } from '../services/firebaseService';
+import {
+  getFirebaseToken,
+  registerTokenWithBackend,
+  setupForegroundHandler,
+  subscribeToTokenRefresh,
+} from '../services/notificationService';
 
 const TOKEN_KEY = 'auth_access_token';
 
@@ -39,26 +44,42 @@ const AuthContext = createContext<AuthState | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const unsubscribeTokenRefresh = useRef<(() => void) | null>(null);
 
   useEffect(() => {
+    setupForegroundHandler();
     storage.get(TOKEN_KEY)
       .then((stored) => {
         setAuthToken(stored ?? null);
         setToken(stored ?? null);
+        if (stored) {
+          // Renovar token FCM al arrancar si ya hay sesión
+          unsubscribeTokenRefresh.current = subscribeToTokenRefresh();
+          getFirebaseToken().then((fcm) => { if (fcm) registerTokenWithBackend(fcm); });
+        }
       })
       .finally(() => setIsLoading(false));
+    return () => unsubscribeTokenRefresh.current?.();
   }, []);
 
+  const _afterLogin = async (accessToken: string) => {
+    await storage.set(TOKEN_KEY, accessToken);
+    setAuthToken(accessToken);
+    setToken(accessToken);
+    // Registrar token FCM después del login (no bloquea)
+    unsubscribeTokenRefresh.current?.();
+    unsubscribeTokenRefresh.current = subscribeToTokenRefresh();
+    getFirebaseToken().then((fcm) => { if (fcm) registerTokenWithBackend(fcm); });
+  };
+
   const login = async (email: string, password: string) => {
-    const firebase_token = getFirebaseToken();
-    console.log("firebase_token: ", firebase_token)
     const result = await authService.login(email, password);
-    await storage.set(TOKEN_KEY, result.access_token);
-    setAuthToken(result.access_token);
-    setToken(result.access_token);
+    await _afterLogin(result.access_token);
   };
 
   const logout = async () => {
+    unsubscribeTokenRefresh.current?.();
+    unsubscribeTokenRefresh.current = null;
     await storage.delete(TOKEN_KEY);
     setAuthToken(null);
     setToken(null);
@@ -70,9 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithGoogle = async (accessToken: string) => {
     const result = await authService.googleLogin(accessToken);
-    await storage.set(TOKEN_KEY, result.access_token);
-    setAuthToken(result.access_token);
-    setToken(result.access_token);
+    await _afterLogin(result.access_token);
   };
 
   return (
