@@ -13,6 +13,16 @@ export default function AlertasScreen() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [alertsSummary, setAlertsSummary] = useState({critical: 0, warning: 0, info: 0});
   const [loading, setLoading] = useState(false);
+  const alertContainer = {
+    critical: styles.criticalContainer,
+    warning: styles.warningContainer,
+    info: styles.infoContainer
+  }
+  const alertTextColor = {
+    critical: '#671a1c',
+    warning: '#564209',
+    info: '#14554b'
+  };
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -61,18 +71,12 @@ export default function AlertasScreen() {
       </View>
       <ScrollView style={{margin: 16}}>
         <View style={styles.alertSummary}>
-          <View style={styles.alertSummaryItem}>
-            <Text style={styles.alertSummaryItemValue}>{alertsSummary.critical}</Text>
-            <Text style={styles.alertSummaryItemText}>Críticas</Text>
-          </View>
-          <View style={styles.alertSummaryItem}>
-            <Text style={styles.alertSummaryItemValue}>{alertsSummary.warning}</Text>
-            <Text style={styles.alertSummaryItemText}>Advertencias</Text>
-          </View>
-          <View style={styles.alertSummaryItem}>
-            <Text style={styles.alertSummaryItemValue}>{alertsSummary.info}</Text>
-            <Text style={styles.alertSummaryItemText}>Info</Text>
-          </View>
+          {Object.entries(alertsSummary).map(([key, value]) => (
+            <View key={key} style={[styles.alertSummaryItem, alertContainer[key as keyof typeof alertContainer]]}>
+              <Text style={[styles.alertSummaryItemValue, { color: alertTextColor[key as keyof typeof alertTextColor]}]}>{value}</Text>
+              <Text style={[styles.alertSummaryItemText, { color: alertTextColor[key as keyof typeof alertTextColor]}]}>{key === "critical" ? "Críticas" : key === "warning" ? "Advertencias" : "Info"}</Text>
+            </View>
+          ))}
         </View>
         <View style={styles.filterBar}>
           {filters.map((filter) => (
@@ -91,7 +95,13 @@ export default function AlertasScreen() {
             </Pressable>
           ))}
         </View>
-        <DynamicList alertsData={alerts} />
+        {alerts.length === 0 ? (
+          <View style={{alignItems: 'center', marginTop: 32}}>
+            <Text style={{fontFamily: 'Figtree_400Regular', color: '#828282'}}>No hay alertas para mostrar.</Text>
+          </View>
+        ) : (
+          <DynamicList alertsData={alerts} />
+        )}
       </ScrollView>
     </>
   );
@@ -103,14 +113,15 @@ const styles = StyleSheet.create({
   alertSummary: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: '#2db7a352',
-    borderRadius: 10,
     paddingHorizontal: 4,
     paddingVertical: 8,
   },
-  alertSummaryItem: { alignItems: 'center' },
-  alertSummaryItemValue: { color: '#14554b', fontSize: 24, fontFamily: 'Figtree_400Regular' },
-  alertSummaryItemText: { color: '#14554b', fontSize: 16, fontFamily: 'Figtree_400Regular' },
+  alertSummaryItem: { alignItems: 'center', flex: 1 },
+  alertSummaryItemValue: { fontSize: 24, fontFamily: 'Figtree_400Regular' },
+  alertSummaryItemText: { fontSize: 16, fontFamily: 'Figtree_400Regular' },
+  criticalContainer: { backgroundColor: '#e5484d8f', borderBottomLeftRadius: 10, borderTopLeftRadius: 10 },
+  warningContainer: { backgroundColor: '#fbbc059d', marginHorizontal: 4 },
+  infoContainer: { backgroundColor: '#2db7a352', borderBottomRightRadius: 10, borderTopRightRadius: 10 },
   filterBar: { flexDirection: 'row', justifyContent: 'space-around', margin: 16 },
   filterBarItem: { backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 8 },
   filterBarItemText: { fontFamily: 'Figtree_400Regular', color: '#828282' },
