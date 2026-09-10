@@ -69,5 +69,13 @@ export const profileService = {
       throw new Error('Failed to activate notifications');
     }
     return true;
+  },
+
+  async deactivateNotifications(): Promise<boolean> {
+    const response = await api.delete('/profile/unregister_notification_token');
+    if (response.status !== 200) {
+      throw new Error('Failed to deactivate notifications');
+    }
+    return true;
   }
 };
