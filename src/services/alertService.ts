@@ -4,8 +4,10 @@ export interface Alert {
     id: number;
     userId: string;
     productId: number;
-    type: 'stock' | 'expiry' | 'info';
+    type: 'stock_low_coverage' | 'expiry' | 'slow_pace' | 'info';
     level: 'critical' | 'warning' | 'info';
+    units_wasted?: number;
+    days_until_stockout?: number;
     image_url?: string;
     product_name?: string;
     product_stock?: number;

@@ -4,22 +4,22 @@ import { FlatList, View, Text, StyleSheet, Image } from 'react-native';
 
 export default function DynamicAlert({ alertsData }: { alertsData: Alert[] }) {
     console.log('DynamicAlert received alertsData:', alertsData);
-    const getAlertType = (alert: Alert) : string[] =>  {
+    const getAlertType = (alert: Alert) : string =>  {
         switch (alert.type) {
-            case 'stock':
-                return [`critical`,`Stock crítico`];
+            case 'stock_low_coverage':
+                return `Stock crítico`;
             case 'expiry':
                 const today = new Date();
                 const daysUntilExpiry = Math.ceil(((new Date(alert.product_expiry!).getTime() ?? 0) - today.getTime()) / (1000 * 60 * 60 * 24));
                 if (daysUntilExpiry > 1) {
-                    return ['warning' ,`Vence en ${daysUntilExpiry} días`];
+                    return `Vence en ${daysUntilExpiry} días`;
                 } else if (daysUntilExpiry == 1) {
-                    return ['critical',`Vence mañana`]
+                    return `Vence mañana`
                 } else {
-                    return ['critical',`Vencido`]
+                    return `Vencido`
                 }
             default:
-                return ['info',`Información`];
+                return `Información`;
             }
         }
     const getExpiracyDate = (expiryDate?: string) => {
@@ -34,11 +34,11 @@ export default function DynamicAlert({ alertsData }: { alertsData: Alert[] }) {
             data={alertsData}
             keyExtractor={(alert) => alert.id.toString()}
             renderItem={({ item: alert }) => {
-                const [alertLevel, alertDescription] = getAlertType(alert);
+                const alertDescription = getAlertType(alert);
                 return (
                 <View style={
-                    alertLevel == 'critical' ? styles.criticalContainer :
-                    alertLevel == 'warning' ? styles.warningContainer :
+                    alert.level == 'critical' ? styles.criticalContainer :
+                    alert.level == 'warning' ? styles.warningContainer :
                     styles.infoContainer 
                 }>
                     <View style={styles.container}>
@@ -57,9 +57,15 @@ export default function DynamicAlert({ alertsData }: { alertsData: Alert[] }) {
                                     <Text style={styles.description}>Stock Restante: {alert.product_stock} ud.</Text>
                                     <Text style={styles.description}>Fecha Límite: {getExpiracyDate(alert.product_expiry)}</Text>
                                 </View>
-                            ) || alert.type == 'stock' && (
+                            ) || alert.type == 'stock_low_coverage' && (
                                 <View>
-                                    <Text style={styles.description}>Stock Restante: {alert.product_stock} ud. Minimo Configurado: 10. Reponer Pronto</Text>
+                                    <Text style={styles.description}>Stock Restante: {alert.product_stock} ud.</Text>
+                                    <Text style={styles.description}>El stock actual alcanza para {alert.days_until_stockout} días</Text>
+                                </View>
+                            ) || alert.type == 'slow_pace' && (
+                                <View>
+                                    <Text style={styles.description}>Stock en conflicto: {alert.units_wasted} ud.</Text>
+                                    <Text style={styles.description}>Al ritmo actual, {alert.units_wasted} unidades se vencerán en {Math.ceil(((new Date(alert.product_expiry!).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))} días</Text>
                                 </View>
                             )}
                         </View>
