@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -16,6 +16,7 @@ import { Colors } from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
 import { changeLanguage, type Language } from '@/i18n';
 import { profileService, UserProfile } from '@/services/profileService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function PerfilScreen() {
   const { t, i18n } = useTranslation();
@@ -32,6 +33,7 @@ export default function PerfilScreen() {
 
   const [coverageDaysInput, setCoverageDaysInput] = useState('7');
   const [expiryDaysInput, setExpiryDaysInput] = useState('7');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [alertCheckHourInput, setAlertCheckHourInput] = useState('8');
 
   // Offset en minutos: positivo para zonas oeste de UTC (ej. Buenos Aires = 180)
@@ -109,6 +111,37 @@ export default function PerfilScreen() {
     setUsername(profile?.username ?? '');
     setEditing(false);
     setFeedback(null);
+  };
+
+  useEffect(() => {
+    const loadNotificationsStatus = async () => {
+      try {
+        const saved = await AsyncStorage.getItem('notificationsEnabled');
+        if (saved !== null) {
+          setNotificationsEnabled(JSON.parse(saved));
+        }
+      } catch (error) {
+        console.error('Error loading notifications status:', error);
+      }
+    };
+
+    loadNotificationsStatus();
+  }, []);
+
+  const handleActivateNotifications = async () => {
+    try {
+      if (notificationsEnabled) {
+        const _ = await profileService.deactivateNotifications();
+        setNotificationsEnabled(false);
+        await AsyncStorage.setItem('notificationsEnabled', JSON.stringify(false));
+      } else {
+        const notificationsActivated = await profileService.activateNotifications();
+        setNotificationsEnabled(notificationsActivated);
+        await AsyncStorage.setItem('notificationsEnabled', JSON.stringify(true));
+      }
+    } catch (error) {
+      console.error('Error activating notifications:', error);
+    }
   };
 
   const initials = `${(profile?.firstName ?? '')[0] ?? ''}${(profile?.lastName ?? '')[0] ?? ''}`.toUpperCase() || '?';
@@ -258,6 +291,15 @@ export default function PerfilScreen() {
         <Ionicons name="language-outline" size={20} color={Colors.textSecondary} />
         <Text style={styles.rowBtnText}>
           {t('profile.language')}: {i18n.language === 'es' ? '🇦🇷 Español' : '🇺🇸 English'}
+        </Text>
+        <Ionicons name="chevron-forward" size={16} color={Colors.placeholder} />
+      </TouchableOpacity>
+
+      {/* Notifications */}
+      <TouchableOpacity style={styles.rowBtn} onPress={handleActivateNotifications}>
+        <Ionicons name="notifications-outline" size={20} color={Colors.textSecondary} />
+        <Text style={styles.rowBtnText}>
+          {t('profile.notifications')}: {notificationsEnabled ? t('profile.enabled') : t('profile.disabled')}
         </Text>
         <Ionicons name="chevron-forward" size={16} color={Colors.placeholder} />
       </TouchableOpacity>

@@ -90,6 +90,10 @@ export default {
     alertCheckHour: 'Hora del chequeo diario de alertas',
     units: 'unidades',
     days: 'días',
+    notifications: 'Notificaciones',
+    enabled: 'Activadas',
+    disabled: 'Desactivadas',
+    notificationsError: 'No se pudieron activar las notificaciones',
     utc: 'hs UTC',
   },
   home: {
