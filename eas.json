@@ -11,6 +11,10 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_AUTH_URL": "https://auth-production-cef7.up.railway.app",
+        "EXPO_PUBLIC_API_URL": "https://appbackend-production-20f6.up.railway.app"
       }
     },
     "production": {
