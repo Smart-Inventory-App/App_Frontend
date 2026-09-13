@@ -17,7 +17,7 @@ export interface LoginResponse {
 
 export const authService = {
   async login(email: string, password: string): Promise<LoginResponse> {
-    const firebase_token = "dummy_token"; //await getFirebaseToken();
+    const firebase_token = await getFirebaseToken();
     console.log("firebase token: ", firebase_token)
     const { data } = await api.post<LoginResponse>('/auth/login', { email, password, firebase_token });
     return data;
