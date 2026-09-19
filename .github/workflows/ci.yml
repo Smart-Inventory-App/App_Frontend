@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, production, development]
+    branches: [main, production]
   pull_request:
-    branches: [main, production, development]
+    branches: [main, production]
 
 jobs:
   lint-and-test:
@@ -36,8 +36,12 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
-      - name: Test
-        run: npm test -- --ci --coverage --passWithNoTests
+      - name: Test with coverage
+        run: >-
+          npm test -- --ci --coverage --passWithNoTests
+          --collectCoverageFrom='src/**/*.{ts,tsx}'
+          --collectCoverageFrom='app/**/*.{ts,tsx}'
+          --coverageThreshold='{"global":{"lines":90,"statements":90}}'
 
   eas-build-preview:
     name: EAS Build (preview)
