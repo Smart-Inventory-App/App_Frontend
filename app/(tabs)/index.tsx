@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 import StatCard from '@/components/StatCard';
 import ProductItem from '@/components/ProductItem';
 import { Figtree_400Regular, useFonts } from '@expo-google-fonts/figtree';
@@ -73,6 +74,21 @@ export default function HomeScreen() {
               <StatCard title={t('home.products')} value={String(products.length)} label={t('home.productsLabel')} labelColor="green" />
             </View>
 
+            <View style={styles.actionsRow}>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/faltantes')}>
+                <Ionicons name="cart-outline" size={20} color={Colors.primary} />
+                <Text style={styles.actionText}>{t('home.actionFaltantes')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/reposicion')}>
+                <Ionicons name="trending-up-outline" size={20} color={Colors.primary} />
+                <Text style={styles.actionText}>{t('home.actionReposicion')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/tendencias')}>
+                <Ionicons name="stats-chart-outline" size={20} color={Colors.primary} />
+                <Text style={styles.actionText}>{t('home.actionTendencias')}</Text>
+              </TouchableOpacity>
+            </View>
+
             <Text style={styles.section}>{t('home.recentProducts')}</Text>
             {recentProducts.length === 0 ? (
               <Text style={styles.empty}>{t('home.noProducts')}</Text>
@@ -107,6 +123,16 @@ const styles = StyleSheet.create({
   appName: { fontSize: 13, color: Colors.textSecondary, marginLeft: 12, marginTop: 4, fontFamily: 'Figtree_400Regular', letterSpacing: 0.5 },
   header: { fontSize: 22, marginLeft: 12, marginBottom: 8, fontFamily: 'Roboto_500Medium', flexShrink: 1 },
   statsRow: { flexDirection: 'row' },
+  actionsRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  actionBtn: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  actionText: { fontSize: 11, color: Colors.textPrimary, fontFamily: 'Figtree_400Regular', textAlign: 'center' },
   section: { fontSize: 14, fontWeight: 'bold', marginTop: 20, marginBottom: 10, fontFamily: 'Figtree_400Regular' },
   empty: { color: '#888', textAlign: 'center', marginTop: 16 },
 });

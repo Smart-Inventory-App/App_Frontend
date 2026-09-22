@@ -1,5 +1,5 @@
 import api from './api';
-import { ConsumptionEvent, Product, ProductCreate, ProductDefaults, ProductSuggestion } from '../types/product';
+import { ConsumptionEvent, Product, ProductCreate, ProductDefaults, ProductSuggestion, ReposicionSuggestion, TrendsResponse } from '../types/product';
 
 export interface ProductFilters {
   search?: string;
@@ -91,6 +91,16 @@ export const productService = {
 
   async deleteConsumptionEvent(productId: number, eventId: number): Promise<{ remaining_stock: number }> {
     const { data } = await api.delete(`/products/${productId}/events/${eventId}`);
+    return data;
+  },
+
+  async getReposicionSugerida(): Promise<ReposicionSuggestion[]> {
+    const { data } = await api.get<ReposicionSuggestion[]>('/products/reposicion-sugerida');
+    return data;
+  },
+
+  async getTrends(periodDays: number = 30): Promise<TrendsResponse> {
+    const { data } = await api.get<TrendsResponse>('/trends/', { params: { period: periodDays } });
     return data;
   },
 };
