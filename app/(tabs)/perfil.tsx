@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
 import { changeLanguage, type Language } from '@/i18n';
-import { profileService, UserProfile } from '@/services/profileService';
+import { profileService, UserProfile, UserType } from '@/services/profileService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function PerfilScreen() {
@@ -35,6 +35,7 @@ export default function PerfilScreen() {
   const [expiryDaysInput, setExpiryDaysInput] = useState('7');
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [alertCheckHourInput, setAlertCheckHourInput] = useState('8');
+  const [userType, setUserType] = useState<UserType>('individuo');
 
   // Offset en minutos: positivo para zonas oeste de UTC (ej. Buenos Aires = 180)
   const tzOffsetMinutes = useMemo(() => new Date().getTimezoneOffset(), []);
@@ -55,6 +56,7 @@ export default function PerfilScreen() {
         setCoverageDaysInput(String(p.coverageDaysThreshold));
         setExpiryDaysInput(String(p.expiryDaysThreshold));
         setAlertCheckHourInput(String(Math.round(utcToLocal(p.alertCheckHour))));
+        setUserType(p.userType);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -102,6 +104,26 @@ export default function PerfilScreen() {
       setProfile(updated);
     } catch {
       // los inputs numéricos ya se guardan solos en el próximo blur exitoso
+    }
+  };
+
+  const handleChangeUserType = async (next: UserType) => {
+    if (next === userType) return;
+    const previous = userType;
+    setUserType(next);
+    try {
+      const updated = await profileService.updateProfile(
+        profile?.firstName ?? '',
+        profile?.lastName ?? '',
+        profile?.username,
+        undefined,
+        undefined,
+        undefined,
+        next,
+      );
+      setProfile(updated);
+    } catch {
+      setUserType(previous);
     }
   };
 
@@ -242,6 +264,22 @@ export default function PerfilScreen() {
       {/* Settings */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t('profile.settings')}</Text>
+
+        <Text style={styles.fieldLabel}>{t('profile.userType')}</Text>
+        <View style={styles.segmentRow}>
+          {(['individuo', 'comercio'] as UserType[]).map((opt) => (
+            <TouchableOpacity
+              key={opt}
+              style={[styles.segmentBtn, userType === opt && styles.segmentBtnActive]}
+              onPress={() => handleChangeUserType(opt)}
+            >
+              <Text style={[styles.segmentBtnText, userType === opt && styles.segmentBtnTextActive]}>
+                {opt === 'individuo' ? t('profile.userTypeIndividuo') : t('profile.userTypeComercio')}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={styles.segmentHint}>{t('profile.userTypeHint')}</Text>
 
         <Text style={styles.fieldLabel}>{t('profile.coverageDaysThreshold')}</Text>
         <View style={styles.settingRow}>
@@ -405,6 +443,19 @@ const styles = StyleSheet.create({
   },
   logoutText: { fontSize: 15, color: Colors.error, fontWeight: '600' },
   settingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  segmentRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  segmentBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+  },
+  segmentBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  segmentBtnText: { fontSize: 14, color: Colors.textSecondary },
+  segmentBtnTextActive: { color: '#fff', fontWeight: '600' },
+  segmentHint: { fontSize: 12, color: Colors.placeholder, marginTop: 6 },
   settingInput: { width: 80, marginTop: 0 },
   settingUnit: { fontSize: 13, color: Colors.textSecondary },
 });
