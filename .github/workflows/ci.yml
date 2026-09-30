@@ -43,6 +43,15 @@ jobs:
           --collectCoverageFrom='app/**/*.{ts,tsx}'
           --coverageThreshold='{"global":{"lines":90,"statements":90}}'
 
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          flags: app-frontend
+          fail_ci_if_error: false
+
   eas-build-preview:
     name: EAS Build (preview)
     runs-on: ubuntu-latest
