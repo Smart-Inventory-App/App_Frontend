@@ -11,7 +11,7 @@ async function uploadAsset(asset: ImagePicker.ImagePickerAsset): Promise<string>
     name: asset.fileName ?? 'product.jpg',
     type: asset.mimeType ?? 'image/jpeg',
   } as unknown as Blob);
-  formData.append('folder', 'bazaar/products');
+  formData.append('folder', 'tpp/products');
 
   const token = getAuthToken();
   const { data } = await axios.post<{ url: string }>(

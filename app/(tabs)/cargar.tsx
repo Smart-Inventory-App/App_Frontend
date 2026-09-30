@@ -17,6 +17,7 @@ import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
 import ProductFormFields from '@/components/ProductFormFields';
+import ScanModal, { ScanSuccessKind } from '@/components/ScanModal';
 
 const EMPTY_FORM = (): Partial<ProductCreate> => ({});
 
@@ -33,6 +34,8 @@ export default function CargarScreen() {
   const [categoriaOptions, setCategoriaOptions] = useState<string[]>([]);
   const [marcaOptions, setMarcaOptions] = useState<string[]>([]);
   const [merged, setMerged] = useState(false);
+  const [scanVisible, setScanVisible] = useState(false);
+  const [scanSuccessKind, setScanSuccessKind] = useState<ScanSuccessKind | null>(null);
 
   const [salidaQuery, setSalidaQuery] = useState('');
   const [salidaSuggestions, setSalidaSuggestions] = useState<ProductSuggestion[]>([]);
@@ -160,8 +163,24 @@ export default function CargarScreen() {
     setSalidaNota('');
     setSuccess(false);
     setMerged(false);
+    setScanSuccessKind(null);
     setError(null);
     applyDefaults();
+  };
+
+  const handleScanSuccess = (kind: ScanSuccessKind) => {
+    setScanSuccessKind(kind);
+    setMerged(kind === 'merged');
+    setSuccess(true);
+  };
+
+  const scanSuccessMessage = (): string => {
+    switch (scanSuccessKind) {
+      case 'merged': return t('product.successMsgMerged');
+      case 'updated': return t('scan.successUpdated');
+      case 'salida': return t('product.successMsgSalida');
+      default: return t('scan.successCreated');
+    }
   };
 
   const handleSelectDirection = (d: Direction) => {
@@ -198,9 +217,11 @@ export default function CargarScreen() {
         <Ionicons name="checkmark-circle" size={72} color={Colors.primary} />
         <Text style={styles.successTitle}>{t('product.successTitle')}</Text>
         <Text style={styles.successMsg}>
-          {direction === 'salida'
-            ? t('product.successMsgSalida')
-            : merged ? t('product.successMsgMerged') : t('product.successMsg')}
+          {scanSuccessKind
+            ? scanSuccessMessage()
+            : direction === 'salida'
+              ? t('product.successMsgSalida')
+              : merged ? t('product.successMsgMerged') : t('product.successMsg')}
         </Text>
         <TouchableOpacity
           style={styles.submitBtn}
@@ -245,6 +266,11 @@ export default function CargarScreen() {
       </View>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         {direction === 'entrada' ? (
+          <>
+          <TouchableOpacity style={styles.scanBtn} onPress={() => setScanVisible(true)} testID="open-scan-modal">
+            <Ionicons name="camera-outline" size={18} color={Colors.primary} />
+            <Text style={styles.scanBtnText}>{t('scan.openButton')}</Text>
+          </TouchableOpacity>
           <ProductFormFields
             form={form}
             onChange={setForm}
@@ -256,6 +282,7 @@ export default function CargarScreen() {
             onAddMarca={handleAddMarca}
             suggestNombre={productService.suggestProducts}
           />
+          </>
         ) : (
           <View style={styles.container}>
             <Text style={styles.label}>{t('product.salidaProducto')} *</Text>
@@ -343,6 +370,17 @@ export default function CargarScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+      <ScanModal
+        visible={scanVisible}
+        onClose={() => setScanVisible(false)}
+        onSuccess={handleScanSuccess}
+        categoriaOptions={categoriaOptions}
+        onAddCategoria={handleAddCategoria}
+        ubicacionOptions={ubicacionOptions}
+        onAddUbicacion={handleAddUbicacion}
+        marcaOptions={marcaOptions}
+        onAddMarca={handleAddMarca}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -362,6 +400,19 @@ const styles = StyleSheet.create({
   directionBtnText: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
   directionBtnTextActive: { color: '#fff' },
   container: { flex: 1, backgroundColor: '#f2f3f6' },
+  scanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 10,
+    padding: 12,
+    backgroundColor: '#fff',
+    marginBottom: 16,
+  },
+  scanBtnText: { color: Colors.primary, fontWeight: '600', fontSize: 14 },
   content: { padding: 16, paddingBottom: 40 },
   label: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginTop: 12 },
   input: {

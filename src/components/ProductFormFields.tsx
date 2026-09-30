@@ -190,7 +190,7 @@ export default function ProductFormFields({
           </TouchableOpacity>
         ))}
         {!showNewCat && (
-          <TouchableOpacity style={styles.chipAdd} onPress={() => setShowNewCat(true)}>
+          <TouchableOpacity testID="add-categoria" style={styles.chipAdd} onPress={() => setShowNewCat(true)}>
             <Ionicons name="add" size={16} color={Colors.primary} />
           </TouchableOpacity>
         )}
@@ -199,6 +199,7 @@ export default function ProductFormFields({
       {showNewCat && (
         <View style={styles.newLocRow}>
           <TextInput
+            testID="input-categoria"
             style={[styles.input, styles.newLocInput]}
             placeholder={t('product.categoriaPlaceholder')}
             placeholderTextColor={Colors.placeholder}
@@ -208,7 +209,7 @@ export default function ProductFormFields({
             maxLength={20}
             onSubmitEditing={handleConfirmNewCat}
           />
-          <TouchableOpacity style={styles.newLocConfirm} onPress={handleConfirmNewCat}>
+          <TouchableOpacity testID="confirm-categoria" style={styles.newLocConfirm} onPress={handleConfirmNewCat}>
             <Ionicons name="checkmark" size={20} color="#fff" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.newLocCancel} onPress={() => { setShowNewCat(false); setNewCat(''); }}>
@@ -253,7 +254,7 @@ export default function ProductFormFields({
           </TouchableOpacity>
         ))}
         {!showNewMarca && (
-          <TouchableOpacity style={styles.chipAdd} onPress={() => setShowNewMarca(true)}>
+          <TouchableOpacity testID="add-marca" style={styles.chipAdd} onPress={() => setShowNewMarca(true)}>
             <Ionicons name="add" size={16} color={Colors.primary} />
           </TouchableOpacity>
         )}
@@ -262,6 +263,7 @@ export default function ProductFormFields({
       {showNewMarca && (
         <View style={styles.newLocRow}>
           <TextInput
+            testID="input-marca"
             style={[styles.input, styles.newLocInput]}
             placeholder={t('product.optional')}
             placeholderTextColor={Colors.placeholder}
@@ -270,7 +272,7 @@ export default function ProductFormFields({
             autoFocus
             onSubmitEditing={handleConfirmNewMarca}
           />
-          <TouchableOpacity style={styles.newLocConfirm} onPress={handleConfirmNewMarca}>
+          <TouchableOpacity testID="confirm-marca" style={styles.newLocConfirm} onPress={handleConfirmNewMarca}>
             <Ionicons name="checkmark" size={20} color="#fff" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.newLocCancel} onPress={() => { setShowNewMarca(false); setNewMarca(''); }}>
@@ -361,7 +363,7 @@ export default function ProductFormFields({
           </TouchableOpacity>
         ))}
         {!showNewLoc && (
-          <TouchableOpacity style={styles.chipAdd} onPress={() => setShowNewLoc(true)}>
+          <TouchableOpacity testID="add-ubicacion" style={styles.chipAdd} onPress={() => setShowNewLoc(true)}>
             <Ionicons name="add" size={16} color={Colors.primary} />
           </TouchableOpacity>
         )}
@@ -370,6 +372,7 @@ export default function ProductFormFields({
       {showNewLoc && (
         <View style={styles.newLocRow}>
           <TextInput
+            testID="input-ubicacion"
             style={[styles.input, styles.newLocInput]}
             placeholder={t('product.ubicacionPlaceholder')}
             placeholderTextColor={Colors.placeholder}
@@ -378,7 +381,7 @@ export default function ProductFormFields({
             autoFocus
             onSubmitEditing={handleConfirmNewLoc}
           />
-          <TouchableOpacity style={styles.newLocConfirm} onPress={handleConfirmNewLoc}>
+          <TouchableOpacity testID="confirm-ubicacion" style={styles.newLocConfirm} onPress={handleConfirmNewLoc}>
             <Ionicons name="checkmark" size={20} color="#fff" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.newLocCancel} onPress={() => { setShowNewLoc(false); setNewLoc(''); }}>
