@@ -9,6 +9,7 @@ export interface Product {
   descripcion?: string;
   imagen_url?: string;
   ubicacion?: string;
+  codigo_barras?: string;
   stock_minimo?: number;
   dias_alerta_vencimiento?: number;
   created_at?: string;
@@ -25,6 +26,7 @@ export interface ProductCreate {
   descripcion?: string;
   imagen_url?: string;
   ubicacion?: string;
+  codigo_barras?: string;
   stock_minimo?: number;
   dias_alerta_vencimiento?: number;
 }
