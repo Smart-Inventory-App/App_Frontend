@@ -1,16 +1,18 @@
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import { getAuthToken } from './api';
+import { appendImage } from '../utils/formData';
 
 const IMAGE_STORAGE_URL = process.env.EXPO_PUBLIC_IMAGE_STORAGE_URL;
 
 async function uploadAsset(asset: ImagePicker.ImagePickerAsset): Promise<string> {
   const formData = new FormData();
-  formData.append('file', {
-    uri: asset.uri,
-    name: asset.fileName ?? 'product.jpg',
-    type: asset.mimeType ?? 'image/jpeg',
-  } as unknown as Blob);
+  await appendImage(
+    formData,
+    'file',
+    { uri: asset.uri, name: asset.fileName, type: asset.mimeType },
+    'product.jpg',
+  );
   formData.append('folder', 'tpp/products');
 
   const token = getAuthToken();

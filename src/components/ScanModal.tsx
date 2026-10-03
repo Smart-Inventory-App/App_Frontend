@@ -175,11 +175,13 @@ export default function ScanModal({
   const runScan = async (type: ScanDocType, asset: { uri: string; fileName?: string | null; mimeType?: string | null }) => {
     setStep('processing');
     setQueueInfo({});
+    let stage: 'upload' | 'poll' = 'upload';
     try {
       const initial = await ocrService.scan(
         { uri: asset.uri, name: asset.fileName, type: asset.mimeType },
         type,
       );
+      stage = 'poll';
       const finalState = initial.status === 'done' || initial.status === 'failed'
         ? initial
         : await ocrService.pollJob(initial.job_id as string, {
@@ -202,7 +204,7 @@ export default function ScanModal({
         ? t('scan.errorTimeout')
         : err instanceof Error && err.message === 'cancelado'
           ? null
-          : getScanErrorMessage(err, t('scan.errorPoll'));
+          : getScanErrorMessage(err, stage === 'upload' ? t('scan.errorUpload') : t('scan.errorPoll'));
       if (message) setError(message);
       setStep('doc-type');
     }

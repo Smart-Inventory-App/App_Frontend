@@ -1,5 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import api from './api';
+import { appendImage } from '../utils/formData';
 import { ScanDocType, ScanState, SalidaOCRItem, SalidaOCRRequest, SalidaOCRResult } from '../types/ocr';
 
 const SCAN_URL = '/products/scan';
@@ -34,11 +35,7 @@ async function pickImage(source: 'camera' | 'gallery'): Promise<ImagePicker.Imag
 
 async function scan(asset: ScanImageAsset, docType: ScanDocType): Promise<ScanState> {
   const formData = new FormData();
-  formData.append('file', {
-    uri: asset.uri,
-    name: asset.name ?? 'scan.jpg',
-    type: asset.type ?? 'image/jpeg',
-  } as unknown as Blob);
+  await appendImage(formData, 'file', asset, 'scan.jpg');
   formData.append('doc_type', docType);
 
   const { data } = await api.post<ScanState>(SCAN_URL, formData, {
@@ -115,7 +112,7 @@ async function submitSalida(items: SalidaOCRItem[], comercio?: string | null): P
 export function getScanErrorMessage(err: unknown, fallback: string): string {
   const response = (err as { response?: { status?: number; data?: { detail?: unknown }; headers?: Record<string, string> } })?.response;
 
-  if (response?.status === 503) {
+  if (response?.status === 503 || response?.status === 502) {
     return 'El servicio de escaneo no está disponible en este momento. Probá de nuevo en unos minutos.';
   }
 
