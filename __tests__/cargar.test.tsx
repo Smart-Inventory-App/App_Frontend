@@ -29,11 +29,18 @@ jest.mock('@/components/ProductFormFields', () => {
   const { TextInput: RNTextInput } = require('react-native');
   return function MockProductFormFields({ form, onChange }: any) {
     return (
-      <RNTextInput
-        testID="mock-form-nombre"
-        value={form.nombre ?? ''}
-        onChangeText={(v: string) => onChange({ ...form, nombre: v, categoria: 'Lacteos', stock: 1 })}
-      />
+      <>
+        <RNTextInput
+          testID="mock-form-nombre"
+          value={form.nombre ?? ''}
+          onChangeText={(v: string) => onChange({ ...form, nombre: v, categoria: 'Lacteos', stock: 1 })}
+        />
+        <RNTextInput
+          testID="mock-form-codigo-barras"
+          value={form.codigo_barras ?? ''}
+          onChangeText={(v: string) => onChange({ ...form, codigo_barras: v })}
+        />
+      </>
     );
   };
 });
@@ -409,5 +416,18 @@ describe('CargarScreen - big Entrada/Salida buttons', () => {
     expect(StyleSheet.flatten(screen.getByText('Flujo de producto').props.style).flexShrink).toBe(0);
     expect(StyleSheet.flatten(screen.getByTestId('direction-row').props.style).marginRight).toBeGreaterThan(0);
     expect(StyleSheet.flatten(screen.getByTestId('direction-row').props.style).gap).toBe(12);
+  });
+});
+
+describe('CargarScreen - código de barras', () => {
+  it('shows "El código de barras es inválido" when the barcode does not validate', async () => {
+    render(<CargarScreen />);
+    fireEvent.changeText(screen.getByTestId('mock-form-nombre'), 'Leche');
+    fireEvent.changeText(screen.getByTestId('mock-form-codigo-barras'), '123');
+    await act(async () => {
+      fireEvent.press(screen.getByText('Guardar producto'));
+    });
+    expect(screen.getByText('El código de barras es inválido')).toBeTruthy();
+    expect(mockedProducts.createProduct).not.toHaveBeenCalled();
   });
 });

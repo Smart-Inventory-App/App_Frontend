@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { Product, ProductCreate } from '@/types/product';
+import { isValidBarcode } from '@/utils/barcode';
 import { truncateLabel } from '@/utils/text';
 import ProductFormFields from '@/components/ProductFormFields';
 import BottomSheetModal from '@/components/BottomSheetModal';
@@ -140,6 +141,7 @@ export default function InventarioScreen() {
       vencimiento: product.vencimiento,
       descripcion: product.descripcion,
       ubicacion: product.ubicacion,
+      codigo_barras: product.codigo_barras,
       imagen_url: product.imagen_url,
       stock_minimo: product.stock_minimo,
       dias_alerta_vencimiento: product.dias_alerta_vencimiento,
@@ -148,6 +150,10 @@ export default function InventarioScreen() {
 
   const handleSaveEdit = async () => {
     if (!editingProduct) return;
+    if (editForm.codigo_barras && !isValidBarcode(editForm.codigo_barras)) {
+      Alert.alert('Error', t('product.validationCodigoBarras'));
+      return;
+    }
     setSaving(true);
     try {
       const updated = await productService.updateProduct(editingProduct.id, editForm);

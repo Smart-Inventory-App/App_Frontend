@@ -520,3 +520,38 @@ describe('ProductFormFields - stock limit', () => {
     expect(screen.getByDisplayValue('999999')).toBeTruthy();
   });
 });
+
+describe('ProductFormFields - código de barras', () => {
+  const input = () => screen.getByTestId('input-codigo-barras');
+
+  it('sits right below Vencimiento, titled "Código de barras", listing the accepted lengths inside', () => {
+    render(<Wrapper />);
+    expect(screen.getByText('Código de barras')).toBeTruthy();
+    expect(input().props.placeholder).toBe('Código numérico de 8, 12, 13 o 14 dígitos de largo');
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('Vencimiento')).toBeLessThan(tree.indexOf('Código de barras'));
+    expect(tree.indexOf('Código de barras')).toBeLessThan(tree.indexOf('input-descripcion'));
+  });
+
+  it('accepts only digits, up to 14, and shows no character counter', () => {
+    render(<Wrapper />);
+    expect(input().props.maxLength).toBe(14);
+    expect(input().props.keyboardType).toBe('number-pad');
+    fireEvent.changeText(input(), '779-12a3');
+    expect(input().props.value).toBe('779123');
+    expect(screen.queryByText(/\d+\/1[34]/)).toBeNull();
+  });
+
+  it('stores the barcode, and clears it when emptied', () => {
+    render(<Harness />);
+    fireEvent.changeText(input(), '7791234567898');
+    expect(latestForm.codigo_barras).toBe('7791234567898');
+    fireEvent.changeText(input(), '');
+    expect(latestForm.codigo_barras).toBeUndefined();
+  });
+
+  it('shows an existing barcode', () => {
+    render(<Wrapper form={{ codigo_barras: '7791234567898' }} />);
+    expect(input().props.value).toBe('7791234567898');
+  });
+});

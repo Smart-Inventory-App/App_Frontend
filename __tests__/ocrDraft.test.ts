@@ -194,3 +194,17 @@ describe('buildSalidaItems', () => {
     expect(buildSalidaItems([])).toEqual([]);
   });
 });
+
+describe('validateProductForm - código de barras', () => {
+  const base = { nombre: 'Leche', categoria: 'Lacteos', stock: 1 };
+
+  it('accepts a valid barcode or none at all', () => {
+    expect(validateProductForm({ ...base, codigo_barras: '7791234567898' })).toBeNull();
+    expect(validateProductForm({ ...base })).toBeNull();
+  });
+
+  it('rejects an invalid barcode', () => {
+    expect(validateProductForm({ ...base, codigo_barras: '123' })).toBe('codigoBarras');
+    expect(validateProductForm({ ...base, codigo_barras: '7791234567899' })).toBe('codigoBarras');
+  });
+});

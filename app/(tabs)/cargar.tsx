@@ -18,6 +18,7 @@ import { productService } from '@/services/productService';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
 import ProductFormFields from '@/components/ProductFormFields';
 import ScreenHeader from '@/components/ScreenHeader';
+import { isValidBarcode } from '@/utils/barcode';
 import ScanModal, { ScanSuccessKind } from '@/components/ScanModal';
 
 const SALIDA_NOTA_MAX = 50;
@@ -93,6 +94,7 @@ export default function CargarScreen() {
         return t('product.validationVencimiento');
       }
     }
+    if (form.codigo_barras && !isValidBarcode(form.codigo_barras)) return t('product.validationCodigoBarras');
     return null;
   };
 

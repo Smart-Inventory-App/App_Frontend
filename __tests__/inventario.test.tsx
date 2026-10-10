@@ -402,3 +402,17 @@ describe('InventarioScreen - header, sort row and filters', () => {
     );
   });
 });
+
+describe('InventarioScreen - invalid barcode when editing', () => {
+  it('does not save an edit with an invalid barcode and warns about it', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product({ codigo_barras: '123' })]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    fireEvent.press(screen.UNSAFE_getAllByType(Ionicons).find((n: any) => n.props.name === 'pencil'));
+    await act(async () => {
+      fireEvent.press(screen.getByText('Guardar cambios'));
+    });
+    expect(Alert.alert).toHaveBeenCalledWith('Error', 'El código de barras es inválido');
+    expect(mockedProducts.updateProduct).not.toHaveBeenCalled();
+  });
+});

@@ -1,4 +1,5 @@
 import { ProductCreate } from '../types/product';
+import { isValidBarcode } from './barcode';
 import { CONFIDENCE_THRESHOLD, ProductDraft, ProductMatch } from '../types/ocr';
 
 /**
@@ -71,13 +72,14 @@ export function buildSalidaItems(lines: ReceiptLineState[]): { product_id: numbe
     .map(line => ({ product_id: line.productId as number, quantity: line.quantity }));
 }
 
-export type ProductFormError = 'nombre' | 'categoria' | 'stock' | 'vencimiento' | null;
+export type ProductFormError = 'nombre' | 'categoria' | 'stock' | 'vencimiento' | 'codigoBarras' | null;
 
 export function validateProductForm(form: Partial<ProductCreate>): ProductFormError {
   if (!form.nombre?.trim()) return 'nombre';
   if (!form.categoria?.trim()) return 'categoria';
   if (form.stock === undefined || isNaN(form.stock) || form.stock <= 0) return 'stock';
   if (form.vencimiento && !isValidIsoDate(form.vencimiento)) return 'vencimiento';
+  if (form.codigo_barras && !isValidBarcode(form.codigo_barras)) return 'codigoBarras';
   return null;
 }
 

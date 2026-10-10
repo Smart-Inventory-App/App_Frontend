@@ -9,6 +9,7 @@ import { Colors } from '@/constants/colors';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
 import { pickFromGallery, pickFromCamera } from '@/services/imageService';
 import DatePickerModal from '@/components/DatePickerModal';
+import { BARCODE_MAX_DIGITS, describeBarcodeLengths, onlyDigits } from '@/utils/barcode';
 import { displayToIso, formatDateDigits, isoToDisplay } from '@/utils/dateInput';
 import { findSimilarOptions } from '@/utils/optionSearch';
 import { truncateLabel } from '@/utils/text';
@@ -330,6 +331,18 @@ export default function ProductFormFields({
         value={form.vencimiento}
         onSelect={handlePickDate}
         onClose={() => setShowCalendar(false)}
+      />
+
+      <Text style={styles.label}>{t('product.codigoBarras')}</Text>
+      <TextInput
+        testID="input-codigo-barras"
+        style={styles.input}
+        placeholder={t('product.codigoBarrasPlaceholder', { lengths: describeBarcodeLengths(t('product.codigoBarrasOr')) })}
+        placeholderTextColor={Colors.placeholder}
+        keyboardType="number-pad"
+        maxLength={BARCODE_MAX_DIGITS}
+        value={form.codigo_barras ?? ''}
+        onChangeText={v => set('codigo_barras', onlyDigits(v) || undefined)}
       />
 
       <Text style={styles.sectionLabel}>{t('product.alertasTitle')}</Text>

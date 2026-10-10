@@ -163,6 +163,9 @@ export default {
     vencimiento: 'Expiry date',
     vencimientoPlaceholder: 'DD/MM/YYYY',
     descripcionPlaceholder: 'Optional',
+    codigoBarras: 'Barcode',
+    codigoBarrasPlaceholder: 'Numeric code of {{lengths}} digits long',
+    codigoBarrasOr: 'or',
     defaultPlaceholder: 'Default',
     descripcion: 'Description',
     alertasTitle: 'Alerts for this product (optional)',
@@ -225,6 +228,7 @@ export default {
     validationCategoria: 'Category is required',
     validationStock: 'Stock must be greater than 0',
     validationVencimiento: 'Invalid date, use format DD/MM/YYYY',
+    validationCodigoBarras: 'The barcode is invalid',
   },
   scan: {
     openButton: 'Scan with camera',
