@@ -26,6 +26,7 @@ export default {
     createAccount: 'Crear Cuenta',
     creating: 'Creando cuenta...',
     accountCreated: 'La cuenta ha sido creada exitosamente',
+    backToLogin: 'Volver al inicio de sesión',
     rules: {
       minLength: 'Mínimo de 8 caracteres',
       uppercase: 'Contiene mayúsculas',
@@ -36,17 +37,18 @@ export default {
     },
   },
   forgotPassword: {
-    description: 'Si el email indicado corresponde a una cuenta registrada, recibirás un correo con un código de 6 dígitos. El mismo tendrá una validez de 1 hora.',
+    description: 'Por favor ingresa tu dirección de email nuevamente.\nSi el email indicado corresponde a una cuenta registrada, recibirás un correo con un código de 6 dígitos.',
     sending: 'Enviando...',
     backToLogin: 'Volver al inicio de sesión',
   },
   verifyCode: {
-    description: 'Si el email indicado corresponde a una cuenta registrada, recibirás un correo con un código de 6 dígitos. El mismo tendrá una validez de 1 hora.\nIngresá el código:',
+    description: 'Si el email indicado corresponde a una cuenta registrada, recibirás un correo con un código de 6 dígitos.\nEl mismo tendrá una validez de 1 hora. Ingresá el código:',
     invalidCode: 'Código inválido o expirado',
     verifying: 'Verificando...',
     recoverAccount: 'Recuperar Cuenta',
     resending: 'Reenviando...',
     resendCode: 'Reenviar Código',
+    backToLogin: 'Volver al inicio de sesión',
   },
   changePassword: {
     newPassword: 'Nueva contraseña',
@@ -55,12 +57,14 @@ export default {
     changePassword: 'Cambiar Contraseña',
     policyError: 'La contraseña no cumple con las políticas requeridas',
     genericError: 'No se pudo cambiar la contraseña. Intentá de nuevo.',
+    success: 'La contraseña se ha restablecido exitosamente',
     rules: {
       minLength: 'Mínimo de 8 caracteres',
       uppercase: 'Contiene mayúsculas',
       lowercase: 'Contiene minúsculas',
       numberOrSpecial: 'Contiene número y/o carácter especial',
-      differentFromPrevious: 'Distinta a las anteriores',
+      differentFromCurrent: 'Contraseña diferente a la actual',
+      passwordsMatch: 'Las contraseñas coinciden',
     },
   },
   tabs: {
@@ -285,6 +289,7 @@ export default {
       invalid_code: 'Código inválido',
       invalid_or_expired_code: 'Código inválido o expirado',
       invalid_or_expired_token: 'El enlace de recuperación es inválido o expiró',
+      password_same_as_current: 'La contraseña debe ser diferente a la actual',
       google_unreachable: 'No se pudo contactar a Google',
       google_invalid_token: 'Token de Google inválido',
       google_email_not_verified: 'El email de Google no está verificado',

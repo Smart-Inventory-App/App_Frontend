@@ -26,6 +26,7 @@ export default {
     createAccount: 'Create Account',
     creating: 'Creating account...',
     accountCreated: 'Account created successfully',
+    backToLogin: 'Back to login',
     rules: {
       minLength: 'Minimum 8 characters',
       uppercase: 'Contains uppercase letters',
@@ -36,17 +37,18 @@ export default {
     },
   },
   forgotPassword: {
-    description: 'If the given email corresponds to a registered account, you will receive an email with a 6-digit code. It will be valid for 1 hour.',
+    description: 'Please enter your email address again.\nIf the given email corresponds to a registered account, you will receive an email with a 6-digit code.',
     sending: 'Sending...',
     backToLogin: 'Back to login',
   },
   verifyCode: {
-    description: 'If the given email corresponds to a registered account, you will receive an email with a 6-digit code. It will be valid for 1 hour.\nEnter the code:',
+    description: 'If the given email corresponds to a registered account, you will receive an email with a 6-digit code.\nIt will be valid for 1 hour. Enter the code:',
     invalidCode: 'Invalid or expired code',
     verifying: 'Verifying...',
     recoverAccount: 'Recover Account',
     resending: 'Resending...',
     resendCode: 'Resend Code',
+    backToLogin: 'Back to login',
   },
   changePassword: {
     newPassword: 'New password',
@@ -55,12 +57,14 @@ export default {
     changePassword: 'Change Password',
     policyError: 'Password does not meet the required policies',
     genericError: 'Could not change password. Please try again.',
+    success: 'Password reset successfully',
     rules: {
       minLength: 'Minimum 8 characters',
       uppercase: 'Contains uppercase letters',
       lowercase: 'Contains lowercase letters',
       numberOrSpecial: 'Contains a number and/or special character',
-      differentFromPrevious: 'Different from previous passwords',
+      differentFromCurrent: 'Different from the current password',
+      passwordsMatch: 'Passwords match',
     },
   },
   tabs: {

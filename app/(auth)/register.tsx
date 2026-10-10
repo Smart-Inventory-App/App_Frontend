@@ -99,6 +99,12 @@ export default function RegisterScreen() {
     }
   };
 
+  // Vuelve al login inicial (paso del email): limpia el stack y recrea el login desde cero.
+  const handleBackToLogin = () => {
+    router.dismissAll();
+    router.replace('/(auth)/login');
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.flex}
@@ -167,6 +173,10 @@ export default function RegisterScreen() {
         >
           <Text style={styles.buttonText}>{loading ? t('register.creating') : t('register.createAccount')}</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity onPress={handleBackToLogin} style={styles.backToLogin}>
+          <Text style={styles.backToLoginText}>{t('register.backToLogin')}</Text>
+        </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -210,5 +220,8 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { backgroundColor: Colors.disabled },
   buttonText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
+  backToLogin: { marginTop: 16 },
+  // Mismo formato que el link "Olvidé mi contraseña" del login
+  backToLoginText: { color: Colors.textSecondary, fontSize: 14, marginTop: 4 },
   errorText: { color: Colors.error, fontSize: 13, alignSelf: 'flex-start', marginBottom: 8 },
 });

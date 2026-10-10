@@ -7,9 +7,13 @@ import { authService } from '@/services/authService';
 import { clearFlashMessage, peekFlashMessage } from '@/utils/flashMessage';
 
 const mockReplace = jest.fn();
+const mockDismissAll = jest.fn();
 
 jest.mock('expo-router', () => ({
-  router: { replace: (...args: any[]) => mockReplace(...args) },
+  router: {
+    replace: (...args: any[]) => mockReplace(...args),
+    dismissAll: (...args: any[]) => mockDismissAll(...args),
+  },
 }));
 
 jest.mock('../src/context/AuthContext', () => ({
@@ -78,6 +82,17 @@ describe('RegisterScreen', () => {
     fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b');
     expect(screen.getAllByText('○')).toHaveLength(6);
     jest.useRealTimers();
+  });
+
+  it('goes back to the initial login screen, clearing the stack first', () => {
+    const calls: string[] = [];
+    mockDismissAll.mockImplementation(() => calls.push('dismissAll'));
+    mockReplace.mockImplementation(() => calls.push('replace'));
+    render(<RegisterScreen />);
+    fireEvent.press(screen.getByText('Volver al inicio de sesión'));
+    expect(calls).toEqual(['dismissAll', 'replace']);
+    expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
+    expect(peekFlashMessage()).toBeNull();
   });
 
   it('shows the password rules from the start in a neutral state, then validates them', () => {

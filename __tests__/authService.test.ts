@@ -62,6 +62,12 @@ describe('authService', () => {
     expect(mockPost).toHaveBeenCalledWith('/auth/reset-password', { reset_token: 'rt', new_password: 'newpw' });
   });
 
+  it('checkNewPassword returns whether the new password differs from the current one', async () => {
+    mockPost.mockResolvedValue({ data: { different: false } });
+    await expect(authService.checkNewPassword('rt', 'pw')).resolves.toBe(false);
+    expect(mockPost).toHaveBeenCalledWith('/auth/check-new-password', { reset_token: 'rt', new_password: 'pw' });
+  });
+
   it('googleLogin exchanges the access token', async () => {
     mockPost.mockResolvedValue({ data: { access_token: 'g', token_type: 'bearer' } });
     await expect(authService.googleLogin('g-token')).resolves.toEqual({ access_token: 'g', token_type: 'bearer' });
