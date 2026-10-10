@@ -25,12 +25,14 @@ export default {
     repeatPasswordLabel: 'Repeat Password',
     createAccount: 'Create Account',
     creating: 'Creating account...',
+    accountCreated: 'Account created successfully',
     rules: {
       minLength: 'Minimum 8 characters',
       uppercase: 'Contains uppercase letters',
       lowercase: 'Contains lowercase letters',
       numberOrSpecial: 'Contains a number and/or special character',
       emailAvailable: 'Email not registered',
+      passwordsMatch: 'Passwords match',
     },
   },
   forgotPassword: {

@@ -1,8 +1,9 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Ionicons } from '@expo/vector-icons';
 import LoginScreen from '../app/(auth)/login';
 import { useAuth } from '@/context/AuthContext';
+import { clearFlashMessage, setFlashMessage } from '@/utils/flashMessage';
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
@@ -28,10 +29,34 @@ const mockLogin = jest.fn();
 
 beforeEach(() => {
   jest.clearAllMocks();
+  clearFlashMessage();
   (useAuth as jest.Mock).mockReturnValue({ login: mockLogin, loginWithGoogle: jest.fn() });
 });
 
 describe('LoginScreen', () => {
+  it('shows the account-created banner after registering and hides it when dismissed', async () => {
+    setFlashMessage('register.accountCreated');
+    render(<LoginScreen />);
+    expect(screen.getByText('La cuenta ha sido creada exitosamente')).toBeTruthy();
+    fireEvent.press(screen.getByText('La cuenta ha sido creada exitosamente'));
+    await waitFor(() => expect(screen.queryByText('La cuenta ha sido creada exitosamente')).toBeNull());
+  });
+
+  it('hides the account-created banner on its own after a few seconds', async () => {
+    jest.useFakeTimers();
+    setFlashMessage('register.accountCreated');
+    render(<LoginScreen />);
+    expect(screen.getByText('La cuenta ha sido creada exitosamente')).toBeTruthy();
+    await act(async () => { await jest.advanceTimersByTimeAsync(5500); });
+    expect(screen.queryByText('La cuenta ha sido creada exitosamente')).toBeNull();
+    jest.useRealTimers();
+  });
+
+  it('does not show the banner when there is no pending message', () => {
+    render(<LoginScreen />);
+    expect(screen.queryByText('La cuenta ha sido creada exitosamente')).toBeNull();
+  });
+
   it('does not advance to the password step with an empty email', () => {
     render(<LoginScreen />);
     fireEvent.press(screen.getByText('Continuar'));
