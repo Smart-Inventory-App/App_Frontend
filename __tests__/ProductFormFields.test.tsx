@@ -247,7 +247,8 @@ describe('ProductFormFields - image picker', () => {
     await act(async () => {
       fireEvent.press(screen.getByText('Tomar foto'));
     });
-    expect(screen.getByText('Seleccionar imagen')).toBeTruthy();
+    expect(screen.UNSAFE_queryAllByType(Image)).toHaveLength(0);
+    await waitFor(() => expect(screen.getAllByText('Seleccionar imagen')).toHaveLength(1), { timeout: 3000 });
   });
 
   it('shows an alert when the picker throws', async () => {
@@ -553,5 +554,85 @@ describe('ProductFormFields - código de barras', () => {
   it('shows an existing barcode', () => {
     render(<Wrapper form={{ codigo_barras: '7791234567898' }} />);
     expect(input().props.value).toBe('7791234567898');
+  });
+});
+
+describe('ProductFormFields - selecting an existing product by name', () => {
+  const existing: ProductSuggestion = {
+    id: 1, nombre: 'Yogur Ser', marca: 'Ser', categoria: 'Lacteos', ubicacion: 'Heladera', stock: 2,
+    vencimiento: '2027-01-01', stock_minimo: 3, dias_alerta_vencimiento: 4,
+    descripcion: 'Natural', imagen_url: 'https://cdn/y.jpg', codigo_barras: '7791234567898',
+  };
+
+  it('also loads its barcode, minimum stock, anticipation days, description and image', async () => {
+    jest.useFakeTimers();
+    const suggestNombre = jest.fn().mockResolvedValue([existing]);
+    render(<Harness suggestNombre={suggestNombre} />);
+    const input = screen.getByPlaceholderText('ej. Leche entera 1L');
+    fireEvent(input, 'focus');
+    fireEvent.changeText(input, 'yog');
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(300);
+    });
+    jest.useRealTimers();
+    await waitFor(() => expect(screen.getByText('Yogur Ser · Ser')).toBeTruthy());
+    fireEvent.press(screen.getByText('Yogur Ser · Ser'));
+
+    expect(latestForm).toMatchObject({
+      nombre: 'Yogur Ser', codigo_barras: '7791234567898', stock_minimo: 3, dias_alerta_vencimiento: 4,
+      descripcion: 'Natural', imagen_url: 'https://cdn/y.jpg',
+    });
+    expect(screen.getByTestId('input-codigo-barras').props.value).toBe('7791234567898');
+    expect(screen.getByTestId('input-descripcion').props.value).toBe('Natural');
+    expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/y.jpg' });
+  });
+});
+
+describe('ProductFormFields - image picker sheet', () => {
+  it('opens as a bottom sheet (fading backdrop, sliding sheet) titled like the other windows, smaller', () => {
+    render(<Wrapper />);
+    expect(screen.queryByTestId('image-picker-sheet')).toBeNull();
+    fireEvent.press(screen.getByText('Seleccionar imagen'));
+    expect(screen.getByTestId('image-picker-sheet')).toBeTruthy();
+    const title = StyleSheet.flatten(screen.getAllByText('Seleccionar imagen').pop()!.props.style);
+    expect(title.fontFamily).toBe('Roboto_500Medium');
+    expect(title.fontSize).toBe(20);
+  });
+
+  it('closes when tapping outside the sheet but not when tapping the sheet', async () => {
+    render(<Wrapper />);
+    fireEvent.press(screen.getByText('Seleccionar imagen'));
+    fireEvent.press(screen.getByTestId('image-picker-sheet'));
+    expect(screen.getByTestId('image-picker-sheet')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('image-picker-overlay'));
+    await waitFor(() => expect(screen.queryByTestId('image-picker-sheet')).toBeNull(), { timeout: 3000 });
+  });
+});
+
+describe('ProductFormFields - selecting a product replaces what was typed', () => {
+  it('empties the barcode field typed before when the chosen product has no barcode', async () => {
+    jest.useFakeTimers();
+    const noBarcode: ProductSuggestion = {
+      id: 1, nombre: 'Yogur Ser', marca: 'Ser', categoria: 'Lacteos', stock: 2, descripcion: 'Natural',
+    };
+    const suggestNombre = jest.fn().mockResolvedValue([noBarcode]);
+    render(<Harness suggestNombre={suggestNombre} initial={{ codigo_barras: '7791234567898', vencimiento: '2027-01-01', imagen_url: 'https://cdn/x.jpg' }} />);
+    expect(screen.getByTestId('input-codigo-barras').props.value).toBe('7791234567898');
+
+    const input = screen.getByPlaceholderText('ej. Leche entera 1L');
+    fireEvent(input, 'focus');
+    fireEvent.changeText(input, 'yog');
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(300);
+    });
+    jest.useRealTimers();
+    await waitFor(() => expect(screen.getByText('Yogur Ser · Ser')).toBeTruthy());
+    fireEvent.press(screen.getByText('Yogur Ser · Ser'));
+
+    expect(screen.getByTestId('input-codigo-barras').props.value).toBe('');
+    expect(screen.getByTestId('input-vencimiento').props.value).toBe('');
+    expect(screen.UNSAFE_queryAllByType(Image)).toHaveLength(0);
+    expect(screen.getByTestId('input-descripcion').props.value).toBe('Natural');
+    expect(latestForm.codigo_barras).toBeUndefined();
   });
 });

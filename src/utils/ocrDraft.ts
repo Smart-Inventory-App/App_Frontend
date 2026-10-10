@@ -1,4 +1,4 @@
-import { ProductCreate } from '../types/product';
+import { ProductCreate, ProductSuggestion } from '../types/product';
 import { isValidBarcode } from './barcode';
 import { CONFIDENCE_THRESHOLD, ProductDraft, ProductMatch } from '../types/ocr';
 
@@ -38,6 +38,33 @@ export function applyMatchToForm(
     categoria: match.categoria ?? form.categoria,
     ubicacion: match.ubicacion ?? form.ubicacion,
     codigo_barras: match.codigo_barras ?? form.codigo_barras,
+  };
+}
+
+/**
+ * Deja en el formulario los datos de un producto que ya existe (elegido por nombre o por código de barras):
+ * código de barras, stock mínimo, días de anticipación, descripción e imagen incluidos.
+ *
+ * El formulario pasa a ser ese producto: lo que el producto no tiene se borra, aunque el usuario lo
+ * hubiera completado antes (p. ej. un código de barras). La única excepción es el stock, que no es un
+ * dato del producto sino la cantidad de esta entrada y por eso nunca se copia ni se borra.
+ */
+export function applySuggestionToForm(
+  form: Partial<ProductCreate>,
+  s: ProductSuggestion,
+): Partial<ProductCreate> {
+  return {
+    nombre: s.nombre,
+    categoria: s.categoria,
+    stock: form.stock,
+    marca: s.marca ?? undefined,
+    ubicacion: s.ubicacion ?? undefined,
+    vencimiento: s.vencimiento ?? undefined,
+    stock_minimo: s.stock_minimo ?? undefined,
+    dias_alerta_vencimiento: s.dias_alerta_vencimiento ?? undefined,
+    descripcion: s.descripcion ?? undefined,
+    imagen_url: s.imagen_url ?? undefined,
+    codigo_barras: s.codigo_barras ?? undefined,
   };
 }
 

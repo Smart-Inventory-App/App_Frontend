@@ -7,6 +7,7 @@ import {
   isLowConfidence,
   isValidIsoDate,
   validateProductForm,
+  applySuggestionToForm,
 } from '../src/utils/ocrDraft';
 import { ProductDraft, ProductMatch } from '../src/types/ocr';
 
@@ -206,5 +207,53 @@ describe('validateProductForm - código de barras', () => {
   it('rejects an invalid barcode', () => {
     expect(validateProductForm({ ...base, codigo_barras: '123' })).toBe('codigoBarras');
     expect(validateProductForm({ ...base, codigo_barras: '7791234567899' })).toBe('codigoBarras');
+  });
+});
+
+describe('applySuggestionToForm', () => {
+  const full = {
+    id: 9, nombre: 'Yogur Ser', marca: 'Ser', categoria: 'Lacteos', ubicacion: 'Heladera', stock: 4,
+    vencimiento: '2027-03-01', stock_minimo: 2, dias_alerta_vencimiento: 5,
+    descripcion: 'Natural', imagen_url: 'https://cdn/y.jpg', codigo_barras: '7791234567898',
+  };
+
+  it('copies the barcode, minimum stock, anticipation days, description and image, among the rest', () => {
+    expect(applySuggestionToForm({}, full)).toEqual({
+      nombre: 'Yogur Ser', marca: 'Ser', categoria: 'Lacteos', ubicacion: 'Heladera', vencimiento: '2027-03-01',
+      stock_minimo: 2, dias_alerta_vencimiento: 5, descripcion: 'Natural', imagen_url: 'https://cdn/y.jpg',
+      codigo_barras: '7791234567898',
+    });
+  });
+
+  it('never copies the existing stock: in an entry, the typed stock is what gets added', () => {
+    expect(applySuggestionToForm({ stock: 12 }, full).stock).toBe(12);
+    expect(applySuggestionToForm({}, full).stock).toBeUndefined();
+  });
+
+  it('clears what the user had typed when the chosen product does not have that data', () => {
+    const sparse = { id: 1, nombre: 'Leche', categoria: 'Lacteos', stock: 1 };
+    const form = {
+      marca: 'X', ubicacion: 'Alacena', vencimiento: '2026-01-01', stock_minimo: 7, dias_alerta_vencimiento: 3,
+      descripcion: 'mía', imagen_url: 'https://cdn/mia.jpg', codigo_barras: '73513537',
+    };
+    const result = applySuggestionToForm(form, sparse);
+    expect(result.nombre).toBe('Leche');
+    expect(result.categoria).toBe('Lacteos');
+    for (const key of ['marca', 'ubicacion', 'vencimiento', 'stock_minimo', 'dias_alerta_vencimiento', 'descripcion', 'imagen_url', 'codigo_barras']) {
+      expect((result as any)[key]).toBeUndefined();
+    }
+  });
+
+  it('clears the barcode typed before when the product has none, as in the reported case', () => {
+    const noBarcode = { ...full, codigo_barras: undefined };
+    expect(applySuggestionToForm({ codigo_barras: '73513537', nombre: 'viejo' }, noBarcode).codigo_barras).toBeUndefined();
+  });
+
+  it('treats nulls from the backend as missing, clearing the typed value', () => {
+    const withNulls: any = { ...full, descripcion: null, imagen_url: null, codigo_barras: null, marca: null };
+    const result = applySuggestionToForm({ descripcion: 'mía', marca: 'Z', codigo_barras: '73513537' }, withNulls);
+    expect(result.descripcion).toBeUndefined();
+    expect(result.marca).toBeUndefined();
+    expect(result.codigo_barras).toBeUndefined();
   });
 });

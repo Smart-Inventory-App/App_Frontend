@@ -10,6 +10,7 @@ jest.mock('@/services/productService', () => ({
     createProduct: jest.fn(),
     updateProduct: jest.fn(),
     suggestProducts: jest.fn(),
+    getProductsByBarcode: jest.fn(),
   },
 }));
 
@@ -137,30 +138,7 @@ describe('ScanModal - doc type & source selection', () => {
   });
 });
 
-describe('ScanModal - product_label / barcode review flow', () => {
-  it('goes straight to review when the scan resolves done synchronously (barcode)', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    const result = baseResult({
-      doc_type: 'barcode',
-      draft: baseDraft({
-        codigo_barras: '7791234567890',
-        texto_leido: '7791234567890',
-        coincidencias: [{ id: 9, nombre: 'Yogur Ser', score: 1, por_codigo: true, stock: 2 }],
-      }),
-    });
-    mockedOcr.scan.mockResolvedValue({ status: 'done', doc_type: 'barcode', result } as ScanState);
-
-    setup();
-    fireEvent.press(screen.getByTestId('doc-type-barcode'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
-
-    expect(mockedOcr.pollJob).not.toHaveBeenCalled();
-    expect(screen.getByTestId('confirm-draft')).toBeTruthy();
-    expect(screen.getByTestId('match-9')).toBeTruthy();
-  });
-
+describe('ScanModal - product_label review flow', () => {
   it('polls the job when the scan is queued, showing queue info meanwhile', async () => {
     mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
     mockedOcr.scan.mockResolvedValue({ status: 'queued', doc_type: 'product_label', job_id: 'job-1' } as ScanState);
@@ -384,110 +362,6 @@ describe('ScanModal - product_label / barcode review flow', () => {
   });
 });
 
-describe('ScanModal - expiry_date review flow', () => {
-  it('requires a selected product before confirming', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    mockedOcr.scan.mockResolvedValue({
-      status: 'done',
-      doc_type: 'expiry_date',
-      result: baseResult({ doc_type: 'expiry_date', draft: baseDraft({ vencimiento: '2026-05-01' }) }),
-    } as ScanState);
-
-    setup();
-    fireEvent.press(screen.getByTestId('doc-type-expiry_date'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
-
-    expect(screen.getByText('Fecha de vencimiento leída: 2026-05-01')).toBeTruthy();
-    fireEvent.press(screen.getByTestId('confirm-expiry'));
-    expect(screen.getByText('Elegí un producto de la lista')).toBeTruthy();
-    expect(mockedProducts.updateProduct).not.toHaveBeenCalled();
-  });
-
-  it('shows a hint when no date could be read', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    mockedOcr.scan.mockResolvedValue({
-      status: 'done',
-      doc_type: 'expiry_date',
-      result: baseResult({ doc_type: 'expiry_date', draft: baseDraft() }),
-    } as ScanState);
-
-    setup();
-    fireEvent.press(screen.getByTestId('doc-type-expiry_date'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
-
-    expect(screen.getByText('No se pudo leer una fecha en la foto')).toBeTruthy();
-  });
-
-  it('searches, selects a product, and updates its vencimiento', async () => {
-    jest.useFakeTimers();
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    mockedOcr.scan.mockResolvedValue({
-      status: 'done',
-      doc_type: 'expiry_date',
-      result: baseResult({ doc_type: 'expiry_date', draft: baseDraft({ vencimiento: '2026-05-01' }) }),
-    } as ScanState);
-    mockedProducts.suggestProducts.mockResolvedValue([{ id: 7, nombre: 'Leche', categoria: 'Lacteos', stock: 1 } as any]);
-    mockedProducts.updateProduct.mockResolvedValue({ id: 7 } as any);
-
-    const { onSuccess, onClose } = setup();
-    fireEvent.press(screen.getByTestId('doc-type-expiry_date'));
-    await act(async () => {
-      jest.useRealTimers();
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
-    jest.useFakeTimers();
-
-    fireEvent.changeText(screen.getByTestId('expiry-search-input'), 'lech');
-    await act(async () => {
-      await jest.advanceTimersByTimeAsync(300);
-    });
-    jest.useRealTimers();
-
-    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
-    fireEvent.press(screen.getByText('Leche'));
-
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('confirm-expiry'));
-    });
-
-    expect(mockedProducts.updateProduct).toHaveBeenCalledWith(7, { vencimiento: '2026-05-01' });
-    expect(onSuccess).toHaveBeenCalledWith('updated');
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it('shows an error when updating the product fails', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    mockedOcr.scan.mockResolvedValue({
-      status: 'done',
-      doc_type: 'expiry_date',
-      result: baseResult({ doc_type: 'expiry_date', draft: baseDraft({ vencimiento: '2026-05-01' }) }),
-    } as ScanState);
-    mockedProducts.suggestProducts.mockResolvedValue([{ id: 7, nombre: 'Leche', categoria: 'Lacteos', stock: 1 } as any]);
-    mockedProducts.updateProduct.mockRejectedValue({ response: { data: { detail: 'no encontrado' } } });
-
-    setup();
-    fireEvent.press(screen.getByTestId('doc-type-expiry_date'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
-
-    fireEvent.changeText(screen.getByTestId('expiry-search-input'), 'lech');
-    await waitFor(() => expect(mockedProducts.suggestProducts).toHaveBeenCalled(), { timeout: 2000 });
-    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
-    fireEvent.press(screen.getByText('Leche'));
-
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('confirm-expiry'));
-    });
-
-    expect(screen.getByText('no encontrado')).toBeTruthy();
-  });
-});
-
 describe('ScanModal - receipt review flow', () => {
   const receiptResult = () => baseResult({
     doc_type: 'receipt',
@@ -670,5 +544,288 @@ describe('ScanModal - receipt review flow', () => {
     });
 
     expect(screen.getByText('No se pudo leer ningún renglón de esta foto')).toBeTruthy();
+  });
+});
+
+const scanBarcode = async (code: string | undefined, found: any[] = []) => {
+  mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
+  mockedOcr.scan.mockResolvedValue({
+    status: 'done',
+    doc_type: 'barcode',
+    result: baseResult({ doc_type: 'barcode', draft: baseDraft(code ? { codigo_barras: code } : {}) }),
+  } as ScanState);
+  mockedProducts.getProductsByBarcode.mockResolvedValue(found);
+  const onApplyToForm = jest.fn();
+  const handlers = setup({ onApplyToForm });
+  fireEvent.press(screen.getByTestId('doc-type-barcode'));
+  await act(async () => {
+    fireEvent.press(screen.getByTestId('scan-source-camera'));
+  });
+  return { ...handlers, onApplyToForm };
+};
+
+const lastUpdater = (fn: jest.Mock) => fn.mock.calls[fn.mock.calls.length - 1][0] as (f: any) => any;
+
+const YOGUR = {
+  id: 9, nombre: 'Yogur Ser', marca: 'Ser', categoria: 'Lacteos', ubicacion: 'Heladera', stock: 4,
+  vencimiento: '2027-03-01', stock_minimo: 2, dias_alerta_vencimiento: 5,
+  descripcion: 'Natural', imagen_url: 'https://cdn/y.jpg', codigo_barras: '7791234567898',
+};
+
+describe('ScanModal - barcode review flow', () => {
+  it('shows the scanned code, editable, in the same window', async () => {
+    await scanBarcode('7791234567898');
+    expect(screen.getByText('Código de barras escaneado')).toBeTruthy();
+    const input = screen.getByTestId('barcode-input');
+    expect(input.props.value).toBe('7791234567898');
+    expect(input.props.maxLength).toBe(14);
+    fireEvent.changeText(input, '77912a34567898');
+    expect(screen.getByTestId('barcode-input').props.value).toBe('7791234567898');
+  });
+
+  it('lists the products that have the code so the user can pick one', async () => {
+    await scanBarcode('7791234567898', [YOGUR, { ...YOGUR, id: 10, vencimiento: undefined }]);
+    await waitFor(() => expect(screen.getByTestId('barcode-product-9')).toBeTruthy());
+    expect(mockedProducts.getProductsByBarcode).toHaveBeenCalledWith('7791234567898');
+    expect(screen.getByTestId('barcode-product-10')).toBeTruthy();
+    expect(screen.getByText('Productos con este código')).toBeTruthy();
+    expect(screen.getByText(/Vence 01\/03\/2027/)).toBeTruthy();
+    expect(screen.getByText(/Sin vencimiento/)).toBeTruthy();
+  });
+
+  it('on confirm with a product picked, goes back to the form with all that product\'s data, keeping the typed stock', async () => {
+    const { onApplyToForm, onClose } = await scanBarcode('7791234567898', [YOGUR]);
+    await waitFor(() => expect(screen.getByTestId('barcode-product-9')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('barcode-product-9'));
+    fireEvent.press(screen.getByTestId('barcode-confirm'));
+
+    const result = lastUpdater(onApplyToForm)({ nombre: 'otro', stock: 12 });
+    expect(result).toMatchObject({
+      nombre: 'Yogur Ser', marca: 'Ser', categoria: 'Lacteos', ubicacion: 'Heladera', vencimiento: '2027-03-01',
+      stock_minimo: 2, dias_alerta_vencimiento: 5, descripcion: 'Natural', imagen_url: 'https://cdn/y.jpg',
+      codigo_barras: '7791234567898', stock: 12,
+    });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('lets the user unpick a product, and then only the barcode is loaded', async () => {
+    const { onApplyToForm } = await scanBarcode('7791234567898', [YOGUR]);
+    await waitFor(() => expect(screen.getByTestId('barcode-product-9')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('barcode-product-9'));
+    fireEvent.press(screen.getByTestId('barcode-product-9'));
+    fireEvent.press(screen.getByTestId('barcode-confirm'));
+    expect(lastUpdater(onApplyToForm)({ nombre: 'Mío', stock: 3 })).toEqual({
+      nombre: 'Mío', stock: 3, codigo_barras: '7791234567898',
+    });
+  });
+
+  it('with no product for the code, confirming loads the form with the barcode and keeps what was typed', async () => {
+    const { onApplyToForm, onClose } = await scanBarcode('7791234567898', []);
+    await waitFor(() => expect(mockedProducts.getProductsByBarcode).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText('No hay productos con este código')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('barcode-confirm'));
+    expect(lastUpdater(onApplyToForm)({ nombre: 'Leche', categoria: 'Lacteos', vencimiento: '2027-01-01' })).toEqual({
+      nombre: 'Leche', categoria: 'Lacteos', vencimiento: '2027-01-01', codigo_barras: '7791234567898',
+    });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('lets the user correct the code before confirming, and searches again with the new one', async () => {
+    const { onApplyToForm } = await scanBarcode('7791234567898', []);
+    fireEvent.changeText(screen.getByTestId('barcode-input'), '73513537');
+    await waitFor(() => expect(mockedProducts.getProductsByBarcode).toHaveBeenCalledWith('73513537'));
+    fireEvent.press(screen.getByTestId('barcode-confirm'));
+    expect(lastUpdater(onApplyToForm)({})).toEqual({ codigo_barras: '73513537' });
+  });
+
+  it('refuses to confirm an invalid code', async () => {
+    const { onApplyToForm } = await scanBarcode('7791234567898', []);
+    fireEvent.changeText(screen.getByTestId('barcode-input'), '123');
+    fireEvent.press(screen.getByTestId('barcode-confirm'));
+    expect(screen.getByText('El código de barras es inválido')).toBeTruthy();
+    expect(onApplyToForm).not.toHaveBeenCalled();
+    expect(mockedProducts.getProductsByBarcode).not.toHaveBeenCalledWith('123');
+  });
+
+  it('offers to type the code when none could be read', async () => {
+    const { onApplyToForm } = await scanBarcode(undefined);
+    expect(screen.getByText('No se pudo leer un código de barras: podés escribirlo')).toBeTruthy();
+    expect(screen.getByTestId('barcode-input').props.value).toBe('');
+    fireEvent.press(screen.getByTestId('barcode-confirm'));
+    expect(screen.getByText('El código de barras es inválido')).toBeTruthy();
+    expect(onApplyToForm).not.toHaveBeenCalled();
+  });
+
+  it('cancel closes the window without touching the form', async () => {
+    const { onApplyToForm, onClose } = await scanBarcode('7791234567898', []);
+    fireEvent.press(screen.getByTestId('barcode-cancel'));
+    expect(onClose).toHaveBeenCalled();
+    expect(onApplyToForm).not.toHaveBeenCalled();
+  });
+
+  it('shows no product list if the lookup fails', async () => {
+    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
+    mockedOcr.scan.mockResolvedValue({
+      status: 'done', doc_type: 'barcode',
+      result: baseResult({ doc_type: 'barcode', draft: baseDraft({ codigo_barras: '7791234567898' }) }),
+    } as ScanState);
+    mockedProducts.getProductsByBarcode.mockRejectedValue(new Error('boom'));
+    setup({ onApplyToForm: jest.fn() });
+    fireEvent.press(screen.getByTestId('doc-type-barcode'));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('scan-source-camera'));
+    });
+    await waitFor(() => expect(mockedProducts.getProductsByBarcode).toHaveBeenCalled());
+    expect(screen.queryByText('Productos con este código')).toBeNull();
+  });
+});
+
+const scanExpiry = async (iso: string | undefined) => {
+  mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
+  mockedOcr.scan.mockResolvedValue({
+    status: 'done',
+    doc_type: 'expiry_date',
+    result: baseResult({ doc_type: 'expiry_date', draft: baseDraft(iso ? { vencimiento: iso } : {}) }),
+  } as ScanState);
+  const onApplyToForm = jest.fn();
+  const handlers = setup({ onApplyToForm });
+  fireEvent.press(screen.getByTestId('doc-type-expiry_date'));
+  await act(async () => {
+    fireEvent.press(screen.getByTestId('scan-source-camera'));
+  });
+  return { ...handlers, onApplyToForm };
+};
+
+describe('ScanModal - expiry_date review flow', () => {
+  it('shows the scanned date as DD/MM/AAAA, editable', async () => {
+    await scanExpiry('2026-05-01');
+    expect(screen.getByText('Fecha de vencimiento leída: 01/05/2026')).toBeTruthy();
+    const input = screen.getByTestId('expiry-input');
+    expect(input.props.value).toBe('01/05/2026');
+    fireEvent.changeText(input, '15062027');
+    expect(screen.getByTestId('expiry-input').props.value).toBe('15/06/2027');
+  });
+
+  it('shows a hint when no date could be read, and starts empty', async () => {
+    await scanExpiry(undefined);
+    expect(screen.getByText('No se pudo leer una fecha en la foto')).toBeTruthy();
+    expect(screen.getByTestId('expiry-input').props.value).toBe('');
+  });
+
+  it('on confirm goes back to the form with the date, keeping everything already filled in', async () => {
+    const { onApplyToForm, onClose } = await scanExpiry('2026-05-01');
+    fireEvent.press(screen.getByTestId('expiry-confirm'));
+    expect(lastUpdater(onApplyToForm)({ nombre: 'Leche', categoria: 'Lacteos', stock: 4, codigo_barras: '7791234567898' })).toEqual({
+      nombre: 'Leche', categoria: 'Lacteos', stock: 4, codigo_barras: '7791234567898', vencimiento: '2026-05-01',
+    });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('replaces a date that was already in the form, and uses the corrected date', async () => {
+    const { onApplyToForm } = await scanExpiry('2026-05-01');
+    fireEvent.changeText(screen.getByTestId('expiry-input'), '31122027');
+    fireEvent.press(screen.getByTestId('expiry-confirm'));
+    expect(lastUpdater(onApplyToForm)({ vencimiento: '2025-01-01', nombre: 'Leche' })).toEqual({
+      vencimiento: '2027-12-31', nombre: 'Leche',
+    });
+  });
+
+  it('refuses to confirm an incomplete or impossible date', async () => {
+    const { onApplyToForm } = await scanExpiry('2026-05-01');
+    fireEvent.changeText(screen.getByTestId('expiry-input'), '3102');
+    fireEvent.press(screen.getByTestId('expiry-confirm'));
+    expect(screen.getByText('Fecha inválida, usá el formato DD/MM/AAAA')).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId('expiry-input'), '31022027');
+    fireEvent.press(screen.getByTestId('expiry-confirm'));
+    expect(onApplyToForm).not.toHaveBeenCalled();
+  });
+
+  it('cancel closes the window without touching the form', async () => {
+    const { onApplyToForm, onClose } = await scanExpiry('2026-05-01');
+    fireEvent.press(screen.getByTestId('expiry-cancel'));
+    expect(onClose).toHaveBeenCalled();
+    expect(onApplyToForm).not.toHaveBeenCalled();
+  });
+});
+
+describe('ScanModal - the window itself', () => {
+  it('is a bottom sheet titled "Escanear imagen" that closes when tapping outside', () => {
+    const { onClose } = setup();
+    expect(screen.getByText('Escanear imagen')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('scan-sheet'));
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId('scan-overlay'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not take the whole screen and uses the same title format as "Flujo de producto" but smaller', () => {
+    setup();
+    const { StyleSheet } = require('react-native');
+    const sheet = StyleSheet.flatten(screen.getByTestId('scan-sheet').props.style);
+    expect(sheet.maxHeight).toBe('85%');
+    const title = StyleSheet.flatten(screen.getByText('Escanear imagen').props.style);
+    expect(title.fontFamily).toBe('Roboto_500Medium');
+    expect(title.fontSize).toBe(20);
+  });
+
+  it('keeps the other document types working without a form callback', async () => {
+    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
+    mockedOcr.scan.mockResolvedValue({
+      status: 'done', doc_type: 'expiry_date',
+      result: baseResult({ doc_type: 'expiry_date', draft: baseDraft({ vencimiento: '2026-05-01' }) }),
+    } as ScanState);
+    const { onClose } = setup();
+    fireEvent.press(screen.getByTestId('doc-type-expiry_date'));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('scan-source-camera'));
+    });
+    fireEvent.press(screen.getByTestId('expiry-confirm'));
+    expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe('ScanModal - barcode product list', () => {
+  const lots = Array.from({ length: 6 }, (_, i) => ({
+    id: 20 + i, nombre: `Lote ${i}`, categoria: 'Lacteos', stock: i + 1, vencimiento: `2027-0${i + 1}-01`,
+  }));
+
+  it('shows 3.5 products at a time inside a scrollable list, so the rest are reached by scrolling', async () => {
+    await scanBarcode('7791234567898', lots);
+    await waitFor(() => expect(screen.getByTestId('barcode-products-list')).toBeTruthy());
+    const { StyleSheet } = require('react-native');
+    const list = screen.getByTestId('barcode-products-list');
+    const row = StyleSheet.flatten(screen.getByTestId('barcode-product-20').props.style);
+    expect(StyleSheet.flatten(list.props.style).maxHeight).toBe(3.5 * (row.height + row.marginBottom));
+    expect(list.props.nestedScrollEnabled).toBe(true);
+    // todos están en la lista, el último también
+    expect(screen.getByTestId('barcode-product-25')).toBeTruthy();
+  });
+
+  it('lets the user pick a product that was below the fold', async () => {
+    const { onApplyToForm } = await scanBarcode('7791234567898', lots);
+    await waitFor(() => expect(screen.getByTestId('barcode-product-25')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('barcode-product-25'));
+    fireEvent.press(screen.getByTestId('barcode-confirm'));
+    expect(lastUpdater(onApplyToForm)({}).nombre).toBe('Lote 5');
+  });
+
+  it('gives every row the same height, even with long names', async () => {
+    await scanBarcode('7791234567898', [{ ...lots[0], nombre: 'Un nombre de producto larguísimo que no entra' }, lots[1]]);
+    await waitFor(() => expect(screen.getByTestId('barcode-product-20')).toBeTruthy());
+    const { StyleSheet } = require('react-native');
+    expect(StyleSheet.flatten(screen.getByTestId('barcode-product-20').props.style).height)
+      .toBe(StyleSheet.flatten(screen.getByTestId('barcode-product-21').props.style).height);
+  });
+
+  it('replaces the previous form data with the picked product, except the stock', async () => {
+    const { onApplyToForm } = await scanBarcode('7791234567898', [{ ...lots[0], codigo_barras: '7791234567898' }]);
+    await waitFor(() => expect(screen.getByTestId('barcode-product-20')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('barcode-product-20'));
+    fireEvent.press(screen.getByTestId('barcode-confirm'));
+    const result = lastUpdater(onApplyToForm)({ nombre: 'viejo', marca: 'Vieja', descripcion: 'borrar', stock: 9 });
+    expect(result.nombre).toBe('Lote 0');
+    expect(result.marca).toBeUndefined();
+    expect(result.descripcion).toBeUndefined();
+    expect(result.stock).toBe(9);
   });
 });

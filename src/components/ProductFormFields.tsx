@@ -1,14 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView,
-  Image, ActivityIndicator, Alert, Modal, Pressable,
+  Image, ActivityIndicator, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
 import { pickFromGallery, pickFromCamera } from '@/services/imageService';
+import BottomSheetModal from '@/components/BottomSheetModal';
 import DatePickerModal from '@/components/DatePickerModal';
+import { applySuggestionToForm } from '@/utils/ocrDraft';
 import { BARCODE_MAX_DIGITS, describeBarcodeLengths, onlyDigits } from '@/utils/barcode';
 import { displayToIso, formatDateDigits, isoToDisplay } from '@/utils/dateInput';
 import { findSimilarOptions } from '@/utils/optionSearch';
@@ -187,16 +189,7 @@ export default function ProductFormFields({
   }, [form.nombre, suggestNombre]);
 
   const handleSelectSuggestion = (s: ProductSuggestion) => {
-    onChange({
-      ...form,
-      nombre: s.nombre,
-      marca: s.marca ?? form.marca,
-      categoria: s.categoria,
-      ubicacion: s.ubicacion ?? form.ubicacion,
-      vencimiento: s.vencimiento ?? form.vencimiento,
-      stock_minimo: s.stock_minimo ?? form.stock_minimo,
-      dias_alerta_vencimiento: s.dias_alerta_vencimiento ?? form.dias_alerta_vencimiento,
-    });
+    onChange(applySuggestionToForm(form, s));
     setNombreSuggestions([]);
   };
 
@@ -430,32 +423,35 @@ export default function ProductFormFields({
         </TouchableOpacity>
       )}
 
-      <Modal visible={showImagePicker} transparent animationType="slide" onRequestClose={() => setShowImagePicker(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowImagePicker(false)}>
-          <Pressable style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>{t('product.imagenSeleccionar')}</Text>
+      {/* Igual que el historial de consumo: el fondo se oscurece con un fundido y solo la hoja sube */}
+      <BottomSheetModal
+        visible={showImagePicker}
+        onRequestClose={() => setShowImagePicker(false)}
+        sheetStyle={styles.modalSheet}
+        overlayTestID="image-picker-overlay"
+        sheetTestID="image-picker-sheet"
+      >
+        <View style={styles.modalHandle} />
+        <Text style={styles.modalTitle}>{t('product.imagenSeleccionar')}</Text>
 
-            <TouchableOpacity style={styles.modalOption} onPress={() => doUpload(pickFromCamera)}>
-              <View style={styles.modalOptionIcon}>
-                <Ionicons name="camera-outline" size={22} color={Colors.primary} />
-              </View>
-              <Text style={styles.modalOptionText}>{t('product.imagenCamara')}</Text>
-            </TouchableOpacity>
+        <TouchableOpacity style={styles.modalOption} onPress={() => doUpload(pickFromCamera)}>
+          <View style={styles.modalOptionIcon}>
+            <Ionicons name="camera-outline" size={22} color={Colors.primary} />
+          </View>
+          <Text style={styles.modalOptionText}>{t('product.imagenCamara')}</Text>
+        </TouchableOpacity>
 
-            <TouchableOpacity style={styles.modalOption} onPress={() => doUpload(pickFromGallery)}>
-              <View style={styles.modalOptionIcon}>
-                <Ionicons name="images-outline" size={22} color={Colors.primary} />
-              </View>
-              <Text style={styles.modalOptionText}>{t('product.imagenGaleria')}</Text>
-            </TouchableOpacity>
+        <TouchableOpacity style={styles.modalOption} onPress={() => doUpload(pickFromGallery)}>
+          <View style={styles.modalOptionIcon}>
+            <Ionicons name="images-outline" size={22} color={Colors.primary} />
+          </View>
+          <Text style={styles.modalOptionText}>{t('product.imagenGaleria')}</Text>
+        </TouchableOpacity>
 
-            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowImagePicker(false)}>
-              <Text style={styles.modalCancelText}>Cancelar</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        <TouchableOpacity style={styles.modalCancel} onPress={() => setShowImagePicker(false)}>
+          <Text style={styles.modalCancelText}>Cancelar</Text>
+        </TouchableOpacity>
+      </BottomSheetModal>
     </View>
   );
 }
@@ -578,11 +574,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fafafa',
   },
   imageChangeBtnText: { fontSize: 13, color: Colors.primary },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
   modalSheet: {
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
@@ -599,9 +590,11 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 12,
   },
+  // Mismo formato que el título "Flujo de producto", un poco más chico
   modalTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 20,
+    lineHeight: 26,
+    fontFamily: 'Roboto_500Medium',
     color: Colors.textPrimary,
     marginBottom: 8,
   },

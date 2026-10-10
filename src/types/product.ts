@@ -38,6 +38,9 @@ export interface ProductSuggestion {
   categoria: string;
   ubicacion?: string;
   vencimiento?: string;
+  descripcion?: string;
+  imagen_url?: string;
+  codigo_barras?: string;
   stock: number;
   stock_minimo?: number;
   dias_alerta_vencimiento?: number;

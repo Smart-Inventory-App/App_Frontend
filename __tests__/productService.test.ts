@@ -44,6 +44,12 @@ describe('productService', () => {
     expect(mockedApi.get).toHaveBeenCalledWith('/products/suggest', { params: { q: 'yog' } });
   });
 
+  it('getProductsByBarcode lists every product with the code (url-encoded)', async () => {
+    mockedApi.get.mockResolvedValue({ data: [{ id: 1 }, { id: 2 }] });
+    await expect(productService.getProductsByBarcode('779 123')).resolves.toEqual([{ id: 1 }, { id: 2 }]);
+    expect(mockedApi.get).toHaveBeenCalledWith('/products/by-barcode/779%20123/all');
+  });
+
   it('getDefaults returns last used values', async () => {
     mockedApi.get.mockResolvedValue({ data: { last_categoria: 'Lacteos' } });
     await expect(productService.getDefaults()).resolves.toEqual({ last_categoria: 'Lacteos' });

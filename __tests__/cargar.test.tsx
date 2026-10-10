@@ -26,10 +26,11 @@ jest.mock('@/services/productService', () => ({
 }));
 
 jest.mock('@/components/ProductFormFields', () => {
-  const { TextInput: RNTextInput } = require('react-native');
+  const { TextInput: RNTextInput, Text: RNText } = require('react-native');
   return function MockProductFormFields({ form, onChange }: any) {
     return (
       <>
+        <RNText testID="mock-form-json">{JSON.stringify(form)}</RNText>
         <RNTextInput
           testID="mock-form-nombre"
           value={form.nombre ?? ''}
@@ -47,10 +48,16 @@ jest.mock('@/components/ProductFormFields', () => {
 
 jest.mock('@/components/ScanModal', () => {
   const { View: RNView, Text: RNText, TouchableOpacity } = require('react-native');
-  return function MockScanModal({ visible, onSuccess, onClose }: any) {
+  return function MockScanModal({ visible, onSuccess, onClose, onApplyToForm }: any) {
     if (!visible) return null;
     return (
       <RNView testID="mock-scan-modal">
+        <TouchableOpacity testID="mock-apply-barcode" onPress={() => onApplyToForm((f: any) => ({ ...f, codigo_barras: '7791234567898' }))}>
+          <RNText>apply barcode</RNText>
+        </TouchableOpacity>
+        <TouchableOpacity testID="mock-apply-expiry" onPress={() => onApplyToForm((f: any) => ({ ...f, vencimiento: '2027-01-01' }))}>
+          <RNText>apply expiry</RNText>
+        </TouchableOpacity>
         <TouchableOpacity testID="mock-scan-success-created" onPress={() => onSuccess('created')}>
           <RNText>created</RNText>
         </TouchableOpacity>
@@ -429,5 +436,39 @@ describe('CargarScreen - código de barras', () => {
     });
     expect(screen.getByText('El código de barras es inválido')).toBeTruthy();
     expect(mockedProducts.createProduct).not.toHaveBeenCalled();
+  });
+});
+
+describe('CargarScreen - scanning feeds the form', () => {
+  const formNow = () => JSON.parse(screen.getByTestId('mock-form-json').props.children);
+
+  it('calls the button "Escanear imágenes"', () => {
+    render(<CargarScreen />);
+    expect(screen.getByText('Escanear imágenes')).toBeTruthy();
+  });
+
+  it('puts the scanned barcode in the form without losing what was already typed', () => {
+    render(<CargarScreen />);
+    fireEvent.changeText(screen.getByTestId('mock-form-nombre'), 'Leche');
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-apply-barcode'));
+    expect(formNow()).toMatchObject({ nombre: 'Leche', categoria: 'Lacteos', stock: 1, codigo_barras: '7791234567898' });
+  });
+
+  it('keeps a scanned barcode when an expiry date is scanned afterwards, and vice versa', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-apply-barcode'));
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-apply-expiry'));
+    expect(formNow()).toMatchObject({ codigo_barras: '7791234567898', vencimiento: '2027-01-01' });
+  });
+
+  it('does not create or finish anything when the form is fed by a scan', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-apply-expiry'));
+    expect(mockedProducts.createProduct).not.toHaveBeenCalled();
+    expect(screen.queryByText('Ver inventario')).toBeNull();
   });
 });

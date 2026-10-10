@@ -396,6 +396,7 @@ export default function CargarScreen() {
         onAddUbicacion={handleAddUbicacion}
         marcaOptions={marcaOptions}
         onAddMarca={handleAddMarca}
+        onApplyToForm={updater => setForm(updater)}
       />
     </KeyboardAvoidingView>
   );
