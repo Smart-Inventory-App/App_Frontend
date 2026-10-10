@@ -172,6 +172,22 @@ describe('CargarScreen - entrada (manual)', () => {
     fireEvent.press(screen.getByText('Cargar otro'));
     expect(screen.getByTestId('mock-form-nombre').props.value).toBe('');
   });
+
+  it('does not preselect the previous categoria and ubicacion when loading another product', async () => {
+    mockedProducts.getDefaults.mockResolvedValue({ last_categoria: 'Lacteos', last_ubicacion: 'Heladera' });
+    mockedProducts.createProduct.mockResolvedValue({ id: 1, merged: false } as any);
+    render(<CargarScreen />);
+    await waitFor(() => expect(mockedProducts.getDefaults).toHaveBeenCalledTimes(1));
+    fireEvent.changeText(screen.getByTestId('mock-form-nombre'), 'Leche');
+    await act(async () => {
+      fireEvent.press(screen.getByText('Guardar producto'));
+    });
+    mockedProducts.getDefaults.mockClear();
+    await act(async () => {
+      fireEvent.press(screen.getByText('Cargar otro'));
+    });
+    expect(mockedProducts.getDefaults).not.toHaveBeenCalled();
+  });
 });
 
 describe('CargarScreen - salida', () => {

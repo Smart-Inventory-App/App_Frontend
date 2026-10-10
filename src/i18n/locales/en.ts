@@ -3,6 +3,7 @@ export default {
     continue: 'Continue',
     loading: 'Loading...',
     appName: 'Smart Inventory',
+    cancel: 'Cancel',
   },
   login: {
     emailPlaceholder: 'email@example.com',
@@ -17,6 +18,8 @@ export default {
     signingIn: 'Signing in...',
     forgotPassword: 'Forgot my password',
     googleError: 'Error signing in with Google',
+    sessionClosed: 'You have been logged out',
+    sessionExpired: 'Your session has expired',
   },
   register: {
     emailLabel: 'Email',
@@ -77,6 +80,8 @@ export default {
   profile: {
     welcome: 'Welcome to Smart Inventory',
     logout: 'Log out',
+    logoutConfirm: 'Are you sure you want to log out?',
+    logoutConfirmAction: 'Log out',
     language: 'Language',
     editProfile: 'Edit profile',
     firstName: 'First name',
@@ -139,6 +144,10 @@ export default {
     sort_vencimiento: 'Expiry',
     sort_categoria: 'Category',
   },
+  calendar: {
+    months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+    weekdays: ['M', 'T', 'W', 'T', 'F', 'S', 'S'],
+  },
   product: {
     nombre: 'Name',
     nombrePlaceholder: 'e.g. Whole milk 1L',
@@ -146,13 +155,14 @@ export default {
     categoriaPlaceholder: 'e.g. Dairy',
     stock: 'Stock',
     marca: 'Brand',
-    vencimiento: 'Expiry date (YYYY-MM-DD)',
-    vencimientoPlaceholder: '2026-12-31 (optional)',
+    vencimiento: 'Expiry date',
+    vencimientoPlaceholder: 'DD/MM/YYYY',
+    descripcionPlaceholder: 'Optional',
+    defaultPlaceholder: 'Default',
     descripcion: 'Description',
     alertasTitle: 'Alerts for this product (optional)',
     stockMinimo: 'Minimum stock',
     diasAlertaVencimiento: 'Expiry warning (days)',
-    usaReglaGeneral: 'Uses your general rule',
     usandoReglaGeneral: 'Using your general rule',
     reglaPropia: "This product's own rule",
     ubicacion: 'Storage location',
@@ -206,7 +216,7 @@ export default {
     validationNombre: 'Name is required',
     validationCategoria: 'Category is required',
     validationStock: 'Stock must be greater than 0',
-    validationVencimiento: 'Invalid date, use format YYYY-MM-DD',
+    validationVencimiento: 'Invalid date, use format DD/MM/YYYY',
   },
   scan: {
     openButton: 'Scan with camera',

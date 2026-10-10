@@ -5,7 +5,8 @@ import * as SecureStore from 'expo-secure-store';
 
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { authService } from '@/services/authService';
-import { setAuthToken } from '@/services/api';
+import { setAuthToken, setUnauthorizedHandler } from '@/services/api';
+import { clearFlashMessage, peekFlashMessage } from '@/utils/flashMessage';
 import {
   getFirebaseToken,
   registerTokenWithBackend,
@@ -28,6 +29,7 @@ jest.mock('@/services/authService', () => ({
 
 jest.mock('@/services/api', () => ({
   setAuthToken: jest.fn(),
+  setUnauthorizedHandler: jest.fn(),
 }));
 
 const mockedAuth = authService as jest.Mocked<typeof authService>;
@@ -101,6 +103,40 @@ describe('AuthContext', () => {
 
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('auth_access_token');
     expect(screen.getByTestId('authenticated').props.children).toBe('false');
+  });
+
+  it('leaves a "session closed" message for the login screen when logging out', async () => {
+    clearFlashMessage();
+    (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('stored-token');
+    render(<AuthProvider><Probe /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('authenticated').props.children).toBe('true'));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('logout'));
+    });
+    expect(peekFlashMessage()).toBe('login.sessionClosed');
+    clearFlashMessage();
+  });
+
+  it('logs out automatically when the API reports an expired session', async () => {
+    clearFlashMessage();
+    (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('stored-token');
+    render(<AuthProvider><Probe /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('authenticated').props.children).toBe('true'));
+    const handler = (setUnauthorizedHandler as jest.Mock).mock.calls.find((c) => typeof c[0] === 'function')![0];
+    await act(async () => {
+      handler();
+    });
+    expect(screen.getByTestId('authenticated').props.children).toBe('false');
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('auth_access_token');
+    expect(peekFlashMessage()).toBe('login.sessionExpired');
+    clearFlashMessage();
+  });
+
+  it('unregisters the expired-session handler on unmount', async () => {
+    const { unmount } = render(<AuthProvider><Probe /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading').props.children).toBe('false'));
+    unmount();
+    expect(setUnauthorizedHandler).toHaveBeenLastCalledWith(null);
   });
 
   it('registers a new account without logging in', async () => {

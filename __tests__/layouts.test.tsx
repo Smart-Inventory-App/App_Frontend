@@ -41,7 +41,20 @@ describe('Layouts', () => {
   });
 
   it('TabsLayout renders Tabs with all screens', () => {
+    (useAuth as jest.Mock).mockReturnValue({ isAuthenticated: true, isLoading: false });
     render(<TabsLayout />);
+  });
+
+  it('TabsLayout redirects to login when the session is gone', () => {
+    (useAuth as jest.Mock).mockReturnValue({ isAuthenticated: false, isLoading: false });
+    render(<TabsLayout />);
+    expect(screen.getByText('redirect:/(auth)/login')).toBeTruthy();
+  });
+
+  it('TabsLayout does not redirect while auth is still loading', () => {
+    (useAuth as jest.Mock).mockReturnValue({ isAuthenticated: false, isLoading: true });
+    render(<TabsLayout />);
+    expect(screen.queryByText('redirect:/(auth)/login')).toBeNull();
   });
 
   it('RootLayout shows a spinner while i18n initializes, then renders children', async () => {

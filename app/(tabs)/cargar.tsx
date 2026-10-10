@@ -165,7 +165,6 @@ export default function CargarScreen() {
     setMerged(false);
     setScanSuccessKind(null);
     setError(null);
-    applyDefaults();
   };
 
   const handleScanSuccess = (kind: ScanSuccessKind) => {

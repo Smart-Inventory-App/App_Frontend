@@ -42,6 +42,19 @@ describe('LoginScreen', () => {
     await waitFor(() => expect(screen.queryByText('La cuenta ha sido creada exitosamente')).toBeNull());
   });
 
+  it('shows the session-closed message after logging out', () => {
+    setFlashMessage('login.sessionClosed');
+    render(<LoginScreen />);
+    expect(screen.getByText('Se ha cerrado sesión')).toBeTruthy();
+  });
+
+  it('shows the session-expired message when the session ended on its own', () => {
+    setFlashMessage('login.sessionExpired');
+    render(<LoginScreen />);
+    expect(screen.getByText('La sesión ha expirado')).toBeTruthy();
+    expect(screen.queryByText('Se ha cerrado sesión')).toBeNull();
+  });
+
   it('hides the account-created banner on its own after a few seconds', async () => {
     jest.useFakeTimers();
     setFlashMessage('register.accountCreated');

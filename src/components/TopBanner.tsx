@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useRef } from 'react';
 import { Animated, PanResponder, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../constants/colors';
@@ -77,7 +76,6 @@ export default function TopBanner({ message, onDismiss, autoDismissMs }: Props) 
           activeOpacity={0.9}
           accessibilityRole="alert"
         >
-          <Ionicons name="checkmark-circle" size={22} color={Colors.white} />
           <Text style={styles.text}>{message}</Text>
         </TouchableOpacity>
       </Animated.View>
@@ -99,9 +97,8 @@ const styles = StyleSheet.create({
   animated: { width: '100%', maxWidth: 480 },
   banner: {
     width: '100%',
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'center',
     backgroundColor: Colors.valid,
     borderRadius: 10,
     paddingVertical: 14,
@@ -112,5 +109,5 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
   },
-  text: { flex: 1, color: Colors.white, fontSize: 15, fontWeight: '600' },
+  text: { color: Colors.white, fontSize: 15, fontWeight: '600', textAlign: 'center' },
 });
