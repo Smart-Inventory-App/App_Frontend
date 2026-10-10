@@ -140,6 +140,8 @@ export default {
     filterCategory: 'Category',
     filterLocation: 'Location',
     allCategories: 'All',
+    searchCategory: 'Search category',
+    searchLocation: 'Search location',
     allLocations: 'All',
     sortBy: 'Sort:',
     sort_nombre: 'Name',

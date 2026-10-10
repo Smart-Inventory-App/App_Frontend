@@ -144,6 +144,8 @@ export default {
     filterCategory: 'Categoría',
     filterLocation: 'Ubicación',
     allCategories: 'Todas',
+    searchCategory: 'Buscar categoría',
+    searchLocation: 'Buscar ubicación',
     allLocations: 'Todas',
     sortBy: 'Ordenar:',
     sort_nombre: 'Nombre',

@@ -21,7 +21,9 @@ import { truncateLabel } from '@/utils/text';
 import ProductFormFields from '@/components/ProductFormFields';
 import BottomSheetModal from '@/components/BottomSheetModal';
 import ConfirmModal from '@/components/ConfirmModal';
+import FilterChipsRow from '@/components/FilterChipsRow';
 import HistorialModal from '@/components/HistorialModal';
+import ScreenHeader from '@/components/ScreenHeader';
 import TopBanner from '@/components/TopBanner';
 
 export default function InventarioScreen() {
@@ -220,9 +222,7 @@ export default function InventarioScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('inventory.title')}</Text>
-      </View>
+      <ScreenHeader title={t('inventory.title')} />
 
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={16} color={Colors.placeholder} style={styles.searchIcon} />
@@ -247,7 +247,7 @@ export default function InventarioScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.chipsScroll}
-          contentContainerStyle={[styles.chipsContent, { paddingLeft: 0 }]}
+          contentContainerStyle={[styles.chipsContent, styles.sortChipsContent]}
         >
           {(['nombre', 'stock', 'vencimiento', 'categoria'] as const).map(field => {
             const active = sortField === field;
@@ -269,67 +269,27 @@ export default function InventarioScreen() {
       </View>
 
       {categories.length > 0 && (
-        <View style={styles.filterRow}>
-          <Text style={styles.filterLabel}>{t('inventory.filterCategory')}</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.chipsScroll}
-            contentContainerStyle={styles.chipsContent}
-          >
-            <TouchableOpacity
-              style={[styles.chip, !selectedCategoria && styles.chipActive]}
-              onPress={() => setSelectedCategoria(null)}
-            >
-              <Text style={[styles.chipText, !selectedCategoria && styles.chipTextActive]}>
-                {t('inventory.allCategories')}
-              </Text>
-            </TouchableOpacity>
-            {categories.map(cat => (
-              <TouchableOpacity
-                key={cat}
-                style={[styles.chip, selectedCategoria === cat && styles.chipActive]}
-                onPress={() => setSelectedCategoria(prev => prev === cat ? null : cat)}
-              >
-                <Text style={[styles.chipText, selectedCategoria === cat && styles.chipTextActive]}>
-                  {truncateLabel(cat)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+        <FilterChipsRow
+          testKey="categoria"
+          label={t('inventory.filterCategory')}
+          allLabel={t('inventory.allCategories')}
+          searchPlaceholder={t('inventory.searchCategory')}
+          options={categories}
+          selected={selectedCategoria}
+          onSelect={setSelectedCategoria}
+        />
       )}
 
       {ubicaciones.length > 0 && (
-        <View style={styles.filterRow}>
-          <Text style={styles.filterLabel}>{t('inventory.filterLocation')}</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.chipsScroll}
-            contentContainerStyle={styles.chipsContent}
-          >
-            <TouchableOpacity
-              style={[styles.chip, !selectedUbicacion && styles.chipActive]}
-              onPress={() => setSelectedUbicacion(null)}
-            >
-              <Text style={[styles.chipText, !selectedUbicacion && styles.chipTextActive]}>
-                {t('inventory.allLocations')}
-              </Text>
-            </TouchableOpacity>
-            {ubicaciones.map(loc => (
-              <TouchableOpacity
-                key={loc}
-                style={[styles.chip, selectedUbicacion === loc && styles.chipActive]}
-                onPress={() => setSelectedUbicacion(prev => prev === loc ? null : loc)}
-              >
-                <Text style={[styles.chipText, selectedUbicacion === loc && styles.chipTextActive]}>
-                  {truncateLabel(loc)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+        <FilterChipsRow
+          testKey="ubicacion"
+          label={t('inventory.filterLocation')}
+          allLabel={t('inventory.allLocations')}
+          searchPlaceholder={t('inventory.searchLocation')}
+          options={ubicaciones}
+          selected={selectedUbicacion}
+          onSelect={setSelectedUbicacion}
+        />
       )}
 
       {loading ? (
@@ -410,8 +370,6 @@ export default function InventarioScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f2f3f6' },
-  header: { backgroundColor: '#fff', padding: 16, paddingTop: 48 },
-  title: { fontSize: 22, fontWeight: 'bold', color: Colors.textPrimary },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -440,20 +398,12 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontWeight: '600',
   },
-  filterRow: { marginBottom: 4 },
-  filterLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: 16,
-    marginBottom: 4,
-    marginTop: 6,
-  },
   chipsScroll: { flexGrow: 0 },
   chipsContent: { paddingHorizontal: 16, paddingBottom: 4, gap: 8, flexDirection: 'row' },
+  // Sin relleno inferior y centrados para quedar alineados con el texto "Ordenar:"
+  sortChipsContent: { paddingLeft: 0, paddingBottom: 0, alignItems: 'center' },
   chip: {
+    flexShrink: 0,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,

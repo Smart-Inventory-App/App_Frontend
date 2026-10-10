@@ -347,3 +347,58 @@ describe('InventarioScreen - long values', () => {
     await waitFor(() => expect(screen.getAllByText(`${LONG.slice(0, 20)}...`)).toHaveLength(2));
   });
 });
+
+describe('InventarioScreen - header, sort row and filters', () => {
+  it('uses the shared header with the inventory title', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    expect(screen.getByTestId('screen-header')).toBeTruthy();
+    expect(screen.getByText('Inventario')).toBeTruthy();
+  });
+
+  it('aligns the sort chips vertically with the "Ordenar:" label (no extra bottom padding)', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    const { UNSAFE_getAllByType } = render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const { ScrollView, StyleSheet } = require('react-native');
+    const sortScroll = UNSAFE_getAllByType(ScrollView).find(
+      (s: any) => StyleSheet.flatten(s.props.contentContainerStyle)?.alignItems === 'center',
+    );
+    const style = StyleSheet.flatten(sortScroll.props.contentContainerStyle);
+    expect(style.paddingBottom).toBe(0);
+    expect(style.paddingLeft).toBe(0);
+  });
+
+  it('has no horizontal swipe in the category and location filters: a search button comes first instead', async () => {
+    mockedProducts.getFilterOptions.mockResolvedValue({
+      categorias: Array.from({ length: 20 }, (_, i) => `Categoria ${i}`),
+      ubicaciones: Array.from({ length: 20 }, (_, i) => `Ubicacion ${i}`),
+      marcas: [],
+    });
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByTestId('filter-search-categoria')).toBeTruthy());
+    expect(screen.getByTestId('filter-search-ubicacion')).toBeTruthy();
+    expect(screen.queryByTestId('filter-categorias')).toBeNull();
+    expect(screen.queryByTestId('filter-ubicaciones')).toBeNull();
+    // la lupa va antes de "Todas"
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('filter-search-categoria')).toBeLessThan(tree.indexOf('Todas'));
+  });
+
+  it('filters by a category found with the search button', async () => {
+    mockedProducts.getFilterOptions.mockResolvedValue({ categorias: ['Lacteos', 'Limpieza'], ubicaciones: [], marcas: [] });
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByTestId('filter-search-categoria')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('filter-search-categoria'));
+    fireEvent.changeText(screen.getByTestId('filter-search-input-categoria'), 'limp');
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('filter-match-categoria-Limpieza'));
+    });
+    await waitFor(() =>
+      expect(mockedProducts.getProducts).toHaveBeenLastCalledWith(expect.objectContaining({ categoria: 'Limpieza' })),
+    );
+  });
+});

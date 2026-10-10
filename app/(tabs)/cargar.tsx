@@ -17,6 +17,7 @@ import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
 import ProductFormFields from '@/components/ProductFormFields';
+import ScreenHeader from '@/components/ScreenHeader';
 import ScanModal, { ScanSuccessKind } from '@/components/ScanModal';
 
 const SALIDA_NOTA_MAX = 50;
@@ -244,27 +245,31 @@ export default function CargarScreen() {
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('product.loadTitle')}</Text>
-        <View style={styles.directionRow}>
-          <TouchableOpacity
+      <ScreenHeader
+        title={t('product.loadTitle')}
+        keepTitleWhole
+        right={
+          <View testID="direction-row" style={styles.directionRow}>
+            <TouchableOpacity
+              testID="direction-entrada"
             style={[styles.directionBtn, direction === 'entrada' && styles.directionBtnActive]}
-            onPress={() => handleSelectDirection('entrada')}
-          >
-            <Text style={[styles.directionBtnText, direction === 'entrada' && styles.directionBtnTextActive]}>
-              {t('product.entrada')}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.directionBtn, direction === 'salida' && styles.directionBtnActiveSalida]}
-            onPress={() => handleSelectDirection('salida')}
-          >
-            <Text style={[styles.directionBtnText, direction === 'salida' && styles.directionBtnTextActive]}>
-              {t('product.salida')}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+              onPress={() => handleSelectDirection('entrada')}
+            >
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.directionBtnText, direction === 'entrada' && styles.directionBtnTextActive]}>
+                {t('product.entrada')}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.directionBtn, direction === 'salida' && styles.directionBtnActiveSalida]}
+              onPress={() => handleSelectDirection('salida')}
+            >
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.directionBtnText, direction === 'salida' && styles.directionBtnTextActive]}>
+                {t('product.salida')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        }
+      />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         {direction === 'entrada' ? (
           <>
@@ -395,18 +400,20 @@ export default function CargarScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { backgroundColor: '#fff', padding: 16, paddingTop: 48 },
-  title: { fontSize: 22, fontWeight: 'bold', color: Colors.textPrimary },
-  directionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  // Un poco corridos hacia la izquierda; si no entran, los textos se achican antes que el título
+  directionRow: { flexShrink: 1, flexDirection: 'row', gap: 12, marginRight: 10 },
+  // Texto un poco más chico que el título (22) y botón que no supera el renglón del banner (28 px)
   directionBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    flexShrink: 1,
+    height: 28,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRadius: 14,
     backgroundColor: '#f2f3f6',
   },
   directionBtnActive: { backgroundColor: Colors.primary },
   directionBtnActiveSalida: { backgroundColor: Colors.error },
-  directionBtnText: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
+  directionBtnText: { fontSize: 18, lineHeight: 24, fontWeight: '600', color: Colors.textSecondary },
   directionBtnTextActive: { color: '#fff' },
   container: { flex: 1, backgroundColor: '#f2f3f6' },
   scanBtn: {

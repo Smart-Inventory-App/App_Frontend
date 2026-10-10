@@ -364,3 +364,50 @@ describe('CargarScreen - salida limits and reason format', () => {
     expect(screen.getByTestId('salida-nota-counter').props.children.join('')).toBe('19/50');
   });
 });
+
+describe('CargarScreen - shared header', () => {
+  it('puts the Entrada/Salida switch inside the banner, on the right of the title, keeping the banner height', () => {
+    render(<CargarScreen />);
+    const { within } = require('@testing-library/react-native');
+    const header = screen.getByTestId('screen-header');
+    expect(within(header).getByText('Flujo de producto')).toBeTruthy();
+    expect(within(header).getByText('Entrada')).toBeTruthy();
+    expect(within(header).getByText('Salida')).toBeTruthy();
+    expect(StyleSheet.flatten(header.props.style).height).toBe(92);
+    // el título va primero y el selector después: queda a la derecha
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('Flujo de producto')).toBeLessThan(tree.indexOf('Entrada'));
+  });
+
+  it('keeps the switch working from the banner', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByText('Salida'));
+    expect(screen.getByText('Registrar salida')).toBeTruthy();
+    fireEvent.press(screen.getByText('Entrada'));
+    expect(screen.getByText('Guardar producto')).toBeTruthy();
+  });
+});
+
+describe('CargarScreen - big Entrada/Salida buttons', () => {
+  it('writes the buttons a bit smaller than the title and keeps the banner height', () => {
+    render(<CargarScreen />);
+    const flat = (node: any) => StyleSheet.flatten(node.props.style);
+    const title = screen.getByText('Flujo de producto');
+    const entrada = screen.getByText('Entrada');
+    expect(flat(entrada).fontSize).toBe(18);
+    expect(flat(entrada).fontSize).toBeLessThan(flat(title).fontSize);
+    expect(flat(screen.getByTestId('screen-header')).height).toBe(92);
+    // el botón entra en el renglón del banner (28 px)
+    expect(StyleSheet.flatten(screen.getByTestId('direction-entrada').props.style).height).toBe(28);
+  });
+
+  it('shrinks the button text before cutting the title, and sits a bit away from the right edge', () => {
+    render(<CargarScreen />);
+    const entrada = screen.getByText('Entrada');
+    expect(entrada.props.adjustsFontSizeToFit).toBe(true);
+    expect(entrada.props.numberOfLines).toBe(1);
+    expect(StyleSheet.flatten(screen.getByText('Flujo de producto').props.style).flexShrink).toBe(0);
+    expect(StyleSheet.flatten(screen.getByTestId('direction-row').props.style).marginRight).toBeGreaterThan(0);
+    expect(StyleSheet.flatten(screen.getByTestId('direction-row').props.style).gap).toBe(12);
+  });
+});
