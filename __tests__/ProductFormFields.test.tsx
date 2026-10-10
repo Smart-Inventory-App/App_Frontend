@@ -511,3 +511,12 @@ describe('ProductFormFields - character limits and counters', () => {
     expect(screen.getAllByText(shown).length).toBeGreaterThan(0);
   });
 });
+
+describe('ProductFormFields - stock limit', () => {
+  it('does not accept more than six digits (999999 at most)', () => {
+    render(<Wrapper />);
+    expect(screen.getByPlaceholderText('0').props.maxLength).toBe(6);
+    fireEvent.changeText(screen.getByPlaceholderText('0'), '999999');
+    expect(screen.getByDisplayValue('999999')).toBeTruthy();
+  });
+});

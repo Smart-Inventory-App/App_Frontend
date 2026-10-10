@@ -16,6 +16,7 @@ import { truncateLabel } from '@/utils/text';
 const NOMBRE_MAX = 20;
 const OPTION_MAX = 20;
 const DESCRIPCION_MAX = 400;
+const STOCK_MAX_DIGITS = 6;
 
 interface Props {
   form: Partial<ProductCreate>;
@@ -290,6 +291,7 @@ export default function ProductFormFields({
         placeholder="0"
         placeholderTextColor={Colors.placeholder}
         keyboardType="numeric"
+        maxLength={STOCK_MAX_DIGITS}
         value={form.stock !== undefined ? String(form.stock) : ''}
         onChangeText={v => {
           const digits = v.replace(/[^0-9]/g, '');

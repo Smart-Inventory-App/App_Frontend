@@ -181,32 +181,49 @@ describe('InventarioScreen', () => {
     fireEvent.press(screen.UNSAFE_getAllByType(Ionicons).find((n: any) => n.props.name === 'close'));
   });
 
+  const DELETE_CONFIRM = '¿Eliminar el producto Leche?\nEsta acción no se puede deshacer.';
+  const pressTrash = () =>
+    fireEvent.press(screen.UNSAFE_getAllByType(Ionicons).find((n: any) => n.props.name === 'trash'));
+
+  it('asks for confirmation before deleting a product, and cancelling does nothing', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    expect(screen.queryByText(DELETE_CONFIRM)).toBeNull();
+    pressTrash();
+    expect(screen.getByText(DELETE_CONFIRM)).toBeTruthy();
+    fireEvent.press(screen.getByText('Cancelar'));
+    expect(screen.queryByText(DELETE_CONFIRM)).toBeNull();
+    expect(mockedProducts.deleteProduct).not.toHaveBeenCalled();
+  });
+
   it('deletes a product after confirming', async () => {
     mockedProducts.getProducts.mockResolvedValue([product()]);
     mockedProducts.deleteProduct.mockResolvedValue(undefined);
-    (Alert.alert as jest.Mock).mockImplementation((_title, _msg, buttons) => {
-      buttons?.find((b: any) => b.style === 'destructive')?.onPress?.();
-    });
     render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    pressTrash();
     await act(async () => {
-      fireEvent.press(screen.UNSAFE_getAllByType(Ionicons).find((n: any) => n.props.name === 'trash'));
+      fireEvent.press(screen.getByText('Eliminar'));
     });
     expect(mockedProducts.deleteProduct).toHaveBeenCalledWith(1);
+    expect(screen.queryByText(DELETE_CONFIRM)).toBeNull();
+    await waitFor(() => expect(screen.queryByText('Leche')).toBeNull());
+    expect(screen.getByText('El producto Leche ha sido eliminado correctamente')).toBeTruthy();
   });
 
   it('shows an alert when deleting fails', async () => {
     mockedProducts.getProducts.mockResolvedValue([product()]);
     mockedProducts.deleteProduct.mockRejectedValue(new Error('boom'));
-    (Alert.alert as jest.Mock).mockImplementation((_title, _msg, buttons) => {
-      buttons?.find((b: any) => b.style === 'destructive')?.onPress?.();
-    });
     render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    pressTrash();
     await act(async () => {
-      fireEvent.press(screen.UNSAFE_getAllByType(Ionicons).find((n: any) => n.props.name === 'trash'));
+      fireEvent.press(screen.getByText('Eliminar'));
     });
     expect(Alert.alert).toHaveBeenLastCalledWith('Error', 'No se pudo eliminar el producto');
+    expect(screen.getByText('Leche')).toBeTruthy();
+    expect(screen.queryByText(/ha sido eliminado correctamente/)).toBeNull();
   });
 
   it('opens and closes the historial modal', async () => {
@@ -231,5 +248,102 @@ describe('InventarioScreen', () => {
     await waitFor(() => expect(screen.getByText('Vence pronto')).toBeTruthy());
     expect(screen.getByText('Vence en unos días')).toBeTruthy();
     expect(screen.getByText('Sin vencimiento')).toBeTruthy();
+  });
+});
+
+describe('InventarioScreen - edit modal and success messages', () => {
+  const pencil = () =>
+    fireEvent.press(screen.UNSAFE_getAllByType(Ionicons).find((n: any) => n.props.name === 'pencil'));
+
+  it('closes the edit window without saving when tapping outside it', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    pencil();
+    expect(screen.getByTestId('edit-sheet')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('edit-sheet'));
+    expect(screen.getByTestId('edit-sheet')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('edit-overlay'));
+    await waitFor(() => expect(screen.queryByTestId('edit-sheet')).toBeNull(), { timeout: 3000 });
+    expect(mockedProducts.updateProduct).not.toHaveBeenCalled();
+  });
+
+  it('closes the edit window from the system back button without saving', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    const { UNSAFE_getAllByType } = render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    pencil();
+    const { Modal } = require('react-native');
+    const editModal = UNSAFE_getAllByType(Modal).find((m: any) => m.props.visible);
+    act(() => { editModal.props.onRequestClose(); });
+    await waitFor(() => expect(screen.queryByTestId('edit-sheet')).toBeNull(), { timeout: 3000 });
+    expect(mockedProducts.updateProduct).not.toHaveBeenCalled();
+  });
+
+  it('shows a success message with the product name after editing', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    mockedProducts.updateProduct.mockResolvedValue(product({ nombre: 'Leche light' }));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    pencil();
+    await act(async () => {
+      fireEvent.press(screen.getByText('Guardar cambios'));
+    });
+    expect(screen.getByText('El producto Leche light ha sido editado correctamente')).toBeTruthy();
+  });
+
+  it('does not show a success message when saving fails', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    mockedProducts.updateProduct.mockRejectedValue(new Error('boom'));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    pencil();
+    await act(async () => {
+      fireEvent.press(screen.getByText('Guardar cambios'));
+    });
+    expect(screen.queryByText(/ha sido editado correctamente/)).toBeNull();
+  });
+});
+
+describe('InventarioScreen - edit window layout', () => {
+  it('leaves a right margin so the fields do not touch the scroll bar', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    const { UNSAFE_getAllByType } = render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    fireEvent.press(screen.UNSAFE_getAllByType(Ionicons).find((n: any) => n.props.name === 'pencil'));
+    const { ScrollView, StyleSheet } = require('react-native');
+    const withMargin = UNSAFE_getAllByType(ScrollView).find(
+      (s: any) => StyleSheet.flatten(s.props.contentContainerStyle)?.paddingRight === 14,
+    );
+    expect(withMargin).toBeTruthy();
+  });
+});
+
+describe('InventarioScreen - long values', () => {
+  const LONG = 'Supermercado Mayorista Central';
+
+  it('shows at most 20 characters of marca, categoria and ubicacion, then "..."', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product({ marca: LONG, categoria: LONG, ubicacion: LONG })]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const shown = `${LONG.slice(0, 20)}...`;
+    expect(screen.getByText(shown)).toBeTruthy();
+    expect(screen.getByText(`Categoría: ${shown}`)).toBeTruthy();
+    // marca, categoría y ubicación
+    expect(screen.getAllByText(new RegExp(shown.replace('.', '\.')))).toHaveLength(3);
+    expect(screen.queryByText(LONG)).toBeNull();
+  });
+
+  it('leaves short values untouched', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product({ marca: 'Sancor' })]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Sancor')).toBeTruthy());
+  });
+
+  it('also shortens long category and location filter chips', async () => {
+    mockedProducts.getFilterOptions.mockResolvedValue({ categorias: [LONG], ubicaciones: [LONG], marcas: [] });
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getAllByText(`${LONG.slice(0, 20)}...`)).toHaveLength(2));
   });
 });

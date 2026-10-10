@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import CargarScreen from '../app/(tabs)/cargar';
@@ -205,7 +206,7 @@ describe('CargarScreen - salida', () => {
     mockedProducts.suggestProducts.mockResolvedValue([{ id: 1, nombre: 'Leche', categoria: 'Lacteos', stock: 3 } as any]);
     render(<CargarScreen />);
     fireEvent.press(screen.getByText('Salida'));
-    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tengas cargado'), 'lech');
+    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado'), 'lech');
     await act(async () => {
       await jest.advanceTimersByTimeAsync(300);
     });
@@ -225,7 +226,7 @@ describe('CargarScreen - salida', () => {
     mockedProducts.registerEvent.mockResolvedValue({ event_type: 'consumed', quantity: 1, remaining_stock: 2 });
     render(<CargarScreen />);
     fireEvent.press(screen.getByText('Salida'));
-    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tengas cargado'), 'lech');
+    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado'), 'lech');
     await act(async () => {
       await jest.advanceTimersByTimeAsync(300);
     });
@@ -250,7 +251,7 @@ describe('CargarScreen - salida', () => {
     mockedProducts.registerEvent.mockRejectedValue({ response: { data: { detail: 'sin stock' } } });
     render(<CargarScreen />);
     fireEvent.press(screen.getByText('Salida'));
-    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tengas cargado'), 'lech');
+    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado'), 'lech');
     await act(async () => {
       await jest.advanceTimersByTimeAsync(300);
     });
@@ -267,7 +268,7 @@ describe('CargarScreen - salida', () => {
   it('clears the suggestions when the query is cleared', async () => {
     render(<CargarScreen />);
     fireEvent.press(screen.getByText('Salida'));
-    const input = screen.getByPlaceholderText('Buscá un producto que ya tengas cargado');
+    const input = screen.getByPlaceholderText('Buscá un producto que ya tenés cargado');
     fireEvent.changeText(input, 'a');
     expect(mockedProducts.suggestProducts).not.toHaveBeenCalled();
   });
@@ -277,7 +278,7 @@ describe('CargarScreen - salida', () => {
     mockedProducts.registerEvent.mockResolvedValue({ event_type: 'consumed', quantity: 1, remaining_stock: 2 });
     render(<CargarScreen />);
     fireEvent.press(screen.getByText('Salida'));
-    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tengas cargado'), 'lech');
+    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado'), 'lech');
     await waitFor(() => expect(mockedProducts.suggestProducts).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
     fireEvent.press(screen.getByText('Leche'));
@@ -325,5 +326,41 @@ describe('CargarScreen - scan integration', () => {
     fireEvent.press(screen.getByTestId('open-scan-modal'));
     fireEvent.press(screen.getByTestId('mock-scan-close'));
     expect(screen.queryByTestId('mock-scan-modal')).toBeNull();
+  });
+});
+
+describe('CargarScreen - salida labels', () => {
+  it('labels the exit fields as requested', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByText('Salida'));
+    expect(screen.getByText('Producto *')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado')).toBeTruthy();
+    expect(screen.getByText('Motivo *')).toBeTruthy();
+    expect(screen.getByText('Motivo (Opcional)')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Descripción de salida (ej. vencido en heladera)')).toBeTruthy();
+  });
+});
+
+describe('CargarScreen - salida limits and reason format', () => {
+  const goToSalida = () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByText('Salida'));
+  };
+
+  it('limits the quantity to six digits', () => {
+    goToSalida();
+    const quantity = screen.getAllByPlaceholderText('0')[0];
+    expect(quantity.props.maxLength).toBe(6);
+  });
+
+  it('gives the reason the same multiline format as a product description, limited to 50 characters, with a counter', () => {
+    goToSalida();
+    const input = screen.getByTestId('input-salida-nota');
+    expect(input.props.multiline).toBe(true);
+    expect(input.props.maxLength).toBe(50);
+    expect(StyleSheet.flatten(input.props.style).height).toBe(72);
+    expect(screen.getByTestId('salida-nota-counter').props.children.join('')).toBe('0/50');
+    fireEvent.changeText(input, 'vencido en heladera');
+    expect(screen.getByTestId('salida-nota-counter').props.children.join('')).toBe('19/50');
   });
 });

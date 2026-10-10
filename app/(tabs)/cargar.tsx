@@ -19,6 +19,8 @@ import { ProductCreate, ProductSuggestion } from '@/types/product';
 import ProductFormFields from '@/components/ProductFormFields';
 import ScanModal, { ScanSuccessKind } from '@/components/ScanModal';
 
+const SALIDA_NOTA_MAX = 50;
+
 const EMPTY_FORM = (): Partial<ProductCreate> => ({});
 
 type Direction = 'entrada' | 'salida';
@@ -320,11 +322,12 @@ export default function CargarScreen() {
               placeholder="0"
               placeholderTextColor={Colors.placeholder}
               keyboardType="numeric"
+              maxLength={6}
               value={salidaCantidad}
               onChangeText={v => setSalidaCantidad(v.replace(/[^0-9]/g, ''))}
             />
 
-            <Text style={styles.label}>{t('product.salidaMotivo')}</Text>
+            <Text style={styles.label}>{t('product.salidaMotivo')} *</Text>
             <View style={styles.chipsContent}>
               <TouchableOpacity
                 style={[styles.chip, salidaMotivo === 'consumed' && styles.chipActive]}
@@ -344,11 +347,18 @@ export default function CargarScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.label}>{t('product.historialNotaPlaceholder')}</Text>
+            <View style={styles.labelRow}>
+              <Text style={styles.labelInRow}>{t('product.historialNotaPlaceholder')}</Text>
+              <Text testID="salida-nota-counter" style={styles.counter}>{salidaNota.length}/{SALIDA_NOTA_MAX}</Text>
+            </View>
             <TextInput
-              style={styles.input}
+              testID="input-salida-nota"
+              style={[styles.input, styles.multiline]}
               placeholder={t('product.salidaNotaPlaceholder')}
               placeholderTextColor={Colors.placeholder}
+              multiline
+              numberOfLines={3}
+              maxLength={SALIDA_NOTA_MAX}
               value={salidaNota}
               onChangeText={setSalidaNota}
             />
@@ -414,6 +424,10 @@ const styles = StyleSheet.create({
   scanBtnText: { color: Colors.primary, fontWeight: '600', fontSize: 14 },
   content: { padding: 16, paddingBottom: 40 },
   label: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginTop: 12 },
+  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 12 },
+  labelInRow: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
+  counter: { fontSize: 12, color: Colors.textSecondary },
+  multiline: { textAlignVertical: 'top', height: 72 },
   input: {
     borderWidth: 1,
     borderColor: Colors.inputBorder,

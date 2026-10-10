@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,9 +11,15 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import BottomSheetModal from '@/components/BottomSheetModal';
+import ConfirmModal from '@/components/ConfirmModal';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { ConsumptionEvent, Product } from '@/types/product';
+import { formatArgentinaDateTime, humanizeEventNote } from '@/utils/datetime';
+
+const NOTE_MAX = 50;
+const STOCK_MAX_DIGITS = 6;
 
 interface Props {
   product: Product | null;
@@ -32,6 +37,8 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
   const [editMotivo, setEditMotivo] = useState<'consumed' | 'expired' | 'restocked'>('consumed');
   const [editNote, setEditNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [eventToDelete, setEventToDelete] = useState<ConsumptionEvent | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const load = () => {
     if (!product) return;
@@ -46,6 +53,7 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
     if (visible && product) {
       load();
       setEditingId(null);
+      setErrorMessage(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, product?.id]);
@@ -57,6 +65,7 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
   };
 
   const startEdit = (event: ConsumptionEvent) => {
+    setErrorMessage(null);
     setEditingId(event.id);
     setEditQuantity(String(event.quantity));
     setEditMotivo(event.event_type);
@@ -73,167 +82,182 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
     try {
       await productService.updateConsumptionEvent(product.id, event.id, n, editMotivo, editNote);
       setEditingId(null);
+      setErrorMessage(null);
       load();
       onChanged();
-    } catch (err: unknown) {
-      const detail = (err as any)?.response?.data?.detail;
-      Alert.alert('Error', typeof detail === 'string' ? detail : t('product.historialUpdateError'));
+    } catch {
+      // Stock insuficiente u otro motivo: siempre el mismo aviso
+      setErrorMessage(t('product.historialEditBlocked'));
     } finally {
       setSaving(false);
     }
   };
 
+  // La confirmación es un modal propio: Alert.alert con botones no funciona en la web.
   const deleteEvent = (event: ConsumptionEvent) => {
     if (!product) return;
-    Alert.alert(
-      t('product.historialDeleteTitle'),
-      t('product.historialDeleteConfirm'),
-      [
-        { text: t('product.historialCancelar'), style: 'cancel' },
-        {
-          text: t('product.historialBorrar'),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await productService.deleteConsumptionEvent(product.id, event.id);
-              load();
-              onChanged();
-            } catch (err: unknown) {
-              const detail = (err as any)?.response?.data?.detail;
-              Alert.alert('Error', typeof detail === 'string' ? detail : t('product.historialDeleteError'));
-            }
-          },
-        },
-      ]
-    );
+    setErrorMessage(null);
+    setEventToDelete(event);
+  };
+
+  const confirmDeleteEvent = async () => {
+    const event = eventToDelete;
+    setEventToDelete(null);
+    if (!product || !event) return;
+    try {
+      await productService.deleteConsumptionEvent(product.id, event.id);
+      setErrorMessage(null);
+      load();
+      onChanged();
+    } catch {
+      setErrorMessage(t('product.historialEditBlocked'));
+    }
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
-          <View style={styles.header}>
-            <Text style={styles.title}>{t('product.historial')}</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color={Colors.textPrimary} />
-            </TouchableOpacity>
-          </View>
-          {product ? <Text style={styles.subtitle}>{product.nombre}</Text> : null}
-
-          {loading ? (
-            <ActivityIndicator color={Colors.primary} style={{ marginVertical: 24 }} />
-          ) : events.length === 0 ? (
-            <Text style={styles.emptyText}>{t('product.historialEmpty')}</Text>
-          ) : (
-            <ScrollView style={{ maxHeight: 420 }}>
-              {events.map(event => {
-                const isEditing = editingId === event.id;
-                return (
-                  <View key={event.id} style={styles.row}>
-                    {isEditing ? (
-                      <View style={styles.editForm}>
-                        <TextInput
-                          style={styles.editInput}
-                          keyboardType="numeric"
-                          value={editQuantity}
-                          onChangeText={v => setEditQuantity(v.replace(/[^0-9]/g, ''))}
-                        />
-                        <View style={styles.editMotivoRow}>
-                          <TouchableOpacity
-                            style={[styles.motivoChip, editMotivo === 'consumed' && styles.motivoChipActive]}
-                            onPress={() => setEditMotivo('consumed')}
-                          >
-                            <Text style={[styles.motivoChipText, editMotivo === 'consumed' && styles.motivoChipTextActive]}>
-                              {t('product.salidaMotivoConsumido')}
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[styles.motivoChip, editMotivo === 'expired' && styles.motivoChipActive]}
-                            onPress={() => setEditMotivo('expired')}
-                          >
-                            <Text style={[styles.motivoChipText, editMotivo === 'expired' && styles.motivoChipTextActive]}>
-                              {t('product.salidaMotivoVencido')}
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[styles.motivoChip, editMotivo === 'restocked' && styles.motivoChipActive]}
-                            onPress={() => setEditMotivo('restocked')}
-                          >
-                            <Text style={[styles.motivoChipText, editMotivo === 'restocked' && styles.motivoChipTextActive]}>
-                              {t('product.historialEntrada')}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                        <TextInput
-                          style={styles.editInput}
-                          placeholder={t('product.historialNotaPlaceholder')}
-                          placeholderTextColor={Colors.placeholder}
-                          value={editNote}
-                          onChangeText={setEditNote}
-                        />
-                        <View style={styles.editActions}>
-                          <TouchableOpacity onPress={cancelEdit} style={styles.editActionBtn}>
-                            <Text style={styles.editCancelText}>{t('product.historialCancelar')}</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => saveEdit(event)}
-                            style={[styles.editActionBtn, styles.editSaveBtn, saving && { opacity: 0.6 }]}
-                            disabled={saving}
-                          >
-                            <Text style={styles.editSaveText}>{t('product.historialGuardar')}</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    ) : (
-                      <>
-                        <View style={styles.rowInfo}>
-                          <Text style={styles.rowQuantity}>
-                            {event.event_type === 'restocked' ? '+' : '-'}{event.quantity}
-                          </Text>
-                          <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              {event.reverses_event_id != null && (
-                                <Ionicons name="arrow-undo" size={12} color={Colors.textSecondary} />
-                              )}
-                              <Text style={styles.rowMotivo}>{motivoLabel(event.event_type)}</Text>
-                              {event.reversed && (
-                                <View style={styles.badge}>
-                                  <Text style={styles.badgeText}>{t('product.historialCorregido')}</Text>
-                                </View>
-                              )}
-                            </View>
-                            <Text style={styles.rowDate}>
-                              {new Date(event.consumed_at).toLocaleString()}
-                              {event.actor_email ? ` · ${event.actor_email}` : ''}
-                            </Text>
-                            {event.note ? <Text style={styles.rowNote}>{event.note}</Text> : null}
-                          </View>
-                        </View>
-                        {event.reverses_event_id == null && !event.reversed && (
-                          <View style={styles.rowActions}>
-                            <TouchableOpacity onPress={() => startEdit(event)} style={styles.actionBtn}>
-                              <Ionicons name="pencil" size={16} color={Colors.primary} />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => deleteEvent(event)} style={styles.actionBtn}>
-                              <Ionicons name="trash" size={16} color={Colors.error} />
-                            </TouchableOpacity>
-                          </View>
-                        )}
-                      </>
-                    )}
-                  </View>
-                );
-              })}
-            </ScrollView>
-          )}
-        </View>
+    // Tocar afuera de la hoja cierra el historial
+    <BottomSheetModal
+      visible={visible}
+      onRequestClose={onClose}
+      sheetStyle={styles.sheet}
+      overlayTestID="historial-overlay"
+      sheetTestID="historial-sheet"
+    >
+      <View style={styles.header}>
+        <Text style={styles.title}>{t('product.historial')}</Text>
+        <TouchableOpacity onPress={onClose}>
+          <Ionicons name="close" size={24} color={Colors.textPrimary} />
+        </TouchableOpacity>
       </View>
-    </Modal>
+      {product ? <Text style={styles.subtitle}>{product.nombre}</Text> : null}
+
+      {errorMessage ? (
+        <View testID="historial-error" style={styles.errorBox}>
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        </View>
+      ) : null}
+
+      {loading ? (
+        <ActivityIndicator color={Colors.primary} style={{ marginVertical: 24 }} />
+      ) : events.length === 0 ? (
+        <Text style={styles.emptyText}>{t('product.historialEmpty')}</Text>
+      ) : (
+        <ScrollView style={{ maxHeight: 420 }}>
+          {events.map(event => {
+            const isEditing = editingId === event.id;
+            return (
+              <View key={event.id} style={[styles.row, !isEditing && styles.rowFixed]}>
+                {isEditing ? (
+                  <View style={styles.editForm}>
+                    <Text style={styles.editLabel}>{t('product.historialUnidades')}</Text>
+                    <TextInput
+                      style={styles.editInput}
+                      keyboardType="numeric"
+                      value={editQuantity}
+                      maxLength={STOCK_MAX_DIGITS}
+                      onChangeText={v => setEditQuantity(v.replace(/[^0-9]/g, ''))}
+                    />
+                    {/* Una entrada solo cambia unidades y motivo; una salida también puede pasar de consumido a vencido */}
+                    {event.event_type !== 'restocked' && (
+                    <View style={styles.editMotivoRow}>
+                      <TouchableOpacity
+                        style={[styles.motivoChip, editMotivo === 'consumed' && styles.motivoChipActive]}
+                        onPress={() => setEditMotivo('consumed')}
+                      >
+                        <Text style={[styles.motivoChipText, editMotivo === 'consumed' && styles.motivoChipTextActive]}>
+                          {t('product.salidaMotivoConsumido')}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.motivoChip, editMotivo === 'expired' && styles.motivoChipActive]}
+                        onPress={() => setEditMotivo('expired')}
+                      >
+                        <Text style={[styles.motivoChipText, editMotivo === 'expired' && styles.motivoChipTextActive]}>
+                          {t('product.salidaMotivoVencido')}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    )}
+                    <View style={styles.editLabelRow}>
+                      <Text style={styles.editLabel}>{t('product.historialMotivo')}</Text>
+                      <Text testID="historial-note-counter" style={styles.editCounter}>{editNote.length}/{NOTE_MAX}</Text>
+                    </View>
+                    <TextInput
+                      style={styles.editInput}
+                      placeholder={t('product.historialNotaPlaceholder')}
+                      placeholderTextColor={Colors.placeholder}
+                      value={editNote}
+                      maxLength={NOTE_MAX}
+                      onChangeText={setEditNote}
+                    />
+                    <View style={styles.editActions}>
+                      <TouchableOpacity onPress={cancelEdit} style={styles.editActionBtn}>
+                        <Text style={styles.editCancelText}>{t('product.historialCancelar')}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => saveEdit(event)}
+                        style={[styles.editActionBtn, styles.editSaveBtn, saving && { opacity: 0.6 }]}
+                        disabled={saving}
+                      >
+                        <Text style={styles.editSaveText}>{t('product.historialGuardar')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <>
+                    <View style={styles.rowInfo}>
+                      <Text style={styles.rowQuantity}>
+                        {event.event_type === 'restocked' ? '+' : '-'}{event.quantity}
+                      </Text>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          {event.reverses_event_id != null && (
+                            <Ionicons name="arrow-undo" size={12} color={Colors.textSecondary} />
+                          )}
+                          <Text style={styles.rowMotivo}>{motivoLabel(event.event_type)}</Text>
+                          {event.reversed && (
+                            <View style={styles.badge}>
+                              <Text style={styles.badgeText}>{t('product.historialCorregido')}</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.rowDate} numberOfLines={1}>
+                          {formatArgentinaDateTime(event.consumed_at)}
+                          {event.actor_email ? ` · ${event.actor_email}` : ''}
+                        </Text>
+                        {event.note ? <Text style={styles.rowNote} numberOfLines={1} ellipsizeMode="tail">{humanizeEventNote(event.note, events)}</Text> : null}
+                      </View>
+                    </View>
+                    {event.reverses_event_id == null && !event.reversed && (
+                      <View style={styles.rowActions}>
+                        <TouchableOpacity onPress={() => startEdit(event)} style={styles.actionBtn}>
+                          <Ionicons name="pencil" size={16} color={Colors.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => deleteEvent(event)} style={styles.actionBtn}>
+                          <Ionicons name="trash" size={16} color={Colors.error} />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </>
+                )}
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
+      <ConfirmModal
+        visible={!!eventToDelete}
+        message={t('product.historialDeleteConfirm')}
+        confirmLabel={t('product.historialBorrar')}
+        cancelLabel={t('product.historialCancelar')}
+        onConfirm={confirmDeleteEvent}
+        onCancel={() => setEventToDelete(null)}
+      />
+    </BottomSheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
@@ -267,6 +291,12 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 10, color: Colors.textSecondary, fontWeight: '600' },
   rowActions: { flexDirection: 'row', gap: 4 },
   actionBtn: { padding: 6 },
+  rowFixed: { height: 66 },
+  errorBox: { backgroundColor: '#fdecea', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 10 },
+  errorText: { color: Colors.error, fontSize: 13, fontWeight: '600', textAlign: 'center' },
+  editLabel: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
+  editLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: -4 },
+  editCounter: { fontSize: 12, color: Colors.textSecondary },
   editForm: { flex: 1, gap: 8 },
   editInput: {
     borderWidth: 1,
