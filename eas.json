@@ -13,12 +13,18 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_AUTH_URL": "https://auth-production-cef7.up.railway.app",
-        "EXPO_PUBLIC_API_URL": "https://appbackend-production-20f6.up.railway.app"
+        "EXPO_PUBLIC_AUTH_URL": "https://auth-dev-c9e4.up.railway.app",
+        "EXPO_PUBLIC_API_URL": "https://appbackend-dev.up.railway.app",
+        "EXPO_PUBLIC_IMAGE_STORAGE_URL": "https://imagestorageservice-dev.up.railway.app"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_AUTH_URL": "https://auth-production-cef7.up.railway.app",
+        "EXPO_PUBLIC_API_URL": "https://appbackend-production-20f6.up.railway.app",
+        "EXPO_PUBLIC_IMAGE_STORAGE_URL": "https://imagestorageservice-production.up.railway.app"
+      }
     }
   },
   "submit": {

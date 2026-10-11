@@ -71,6 +71,12 @@ export default function VerifyCodeScreen() {
     }
   };
 
+  // Vuelve al login inicial (paso del email): limpia el stack de recuperación y recrea el login desde cero.
+  const handleBackToLogin = () => {
+    router.dismissAll();
+    router.replace('/(auth)/login');
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.flex}
@@ -113,6 +119,10 @@ export default function VerifyCodeScreen() {
         <TouchableOpacity onPress={handleResend} disabled={resending}>
           <Text style={styles.resendLink}>{resending ? t('verifyCode.resending') : t('verifyCode.resendCode')}</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity onPress={handleBackToLogin} style={styles.backToLogin}>
+          <Text style={styles.backToLoginText}>{t('verifyCode.backToLogin')}</Text>
+        </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -136,6 +146,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.textPrimary,
     backgroundColor: Colors.white,
+    padding: 0,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   digitBoxError: { borderColor: Colors.inputBorderError },
   errorText: { color: Colors.error, fontSize: 13, marginBottom: 12 },
@@ -151,4 +165,7 @@ const styles = StyleSheet.create({
   buttonDisabled: { backgroundColor: Colors.disabled },
   buttonText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
   resendLink: { color: Colors.primary, fontSize: 14, fontWeight: '500' },
+  backToLogin: { marginTop: 16 },
+  // Mismo formato que el link "Olvidé mi contraseña" del login
+  backToLoginText: { color: Colors.textSecondary, fontSize: 14, marginTop: 4 },
 });

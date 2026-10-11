@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -15,16 +15,19 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { authService } from '../../src/services/authService';
 import { getAuthError } from '../../src/utils/authError';
+import { setFlashMessage } from '../../src/utils/flashMessage';
 
-function RuleRow({ valid, label }: { valid: boolean; label: string }) {
+type RuleState = 'valid' | 'invalid' | 'pending';
+type DifferenceStatus = 'idle' | 'checking' | 'different' | 'same';
+
+function RuleRow({ state, label }: { state: RuleState; label: string }) {
+  const icon = state === 'valid' ? '✓' : state === 'invalid' ? '✗' : '○';
+  const iconColor = state === 'valid' ? Colors.valid : state === 'invalid' ? Colors.error : Colors.textSecondary;
+  const labelColor = state === 'invalid' ? Colors.error : Colors.textSecondary;
   return (
     <View style={styles.ruleRow}>
-      <Text style={[styles.ruleIcon, { color: valid ? Colors.valid : Colors.error }]}>
-        {valid ? '✓' : '✗'}
-      </Text>
-      <Text style={[styles.ruleLabel, { color: valid ? Colors.textSecondary : Colors.error }]}>
-        {label}
-      </Text>
+      <Text style={[styles.ruleIcon, { color: iconColor }]}>{icon}</Text>
+      <Text style={[styles.ruleLabel, { color: labelColor }]}>{label}</Text>
     </View>
   );
 }
@@ -36,16 +39,40 @@ export default function ChangePasswordScreen() {
   const [repeat, setRepeat] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [differenceStatus, setDifferenceStatus] = useState<DifferenceStatus>('idle');
 
   const rules = [
     { key: 'minLength', test: (pw: string) => pw.length >= 8 },
     { key: 'uppercase', test: (pw: string) => /[A-Z]/.test(pw) },
     { key: 'lowercase', test: (pw: string) => /[a-z]/.test(pw) },
     { key: 'numberOrSpecial', test: (pw: string) => /[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pw) },
-    { key: 'differentFromPrevious', test: () => true },
   ];
 
-  const allValid = rules.slice(0, 4).every((r) => r.test(password)) && password === repeat;
+  // Compara contra la contraseña actual en el servidor (acá no se conoce), con una pausa al tipear.
+  useEffect(() => {
+    if (!password) { setDifferenceStatus('idle'); return; }
+    let cancelled = false;
+    setDifferenceStatus('checking');
+    const timer = setTimeout(async () => {
+      try {
+        const different = await authService.checkNewPassword(reset_token, password);
+        if (!cancelled) setDifferenceStatus(different ? 'different' : 'same');
+      } catch {
+        if (!cancelled) setDifferenceStatus('idle');
+      }
+    }, 500);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [password, reset_token]);
+
+  const differenceRuleState: RuleState =
+    differenceStatus === 'different' ? 'valid' : differenceStatus === 'same' ? 'invalid' : 'pending';
+
+  const passwordsMatch = password.length > 0 && password === repeat;
+  const matchRuleState: RuleState =
+    password.length === 0 && repeat.length === 0 ? 'pending' : passwordsMatch ? 'valid' : 'invalid';
+
+  const allValid =
+    rules.every((r) => r.test(password)) && passwordsMatch && differenceStatus !== 'same';
 
   const handleChange = async () => {
     if (!allValid) return;
@@ -53,10 +80,15 @@ export default function ChangePasswordScreen() {
     setError('');
     try {
       await authService.resetPassword(reset_token, password);
+      setFlashMessage('changePassword.success');
       router.replace('/(auth)/login');
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
-      setError(getAuthError(detail, t, t('changePassword.genericError')));
+      if (detail === 'auth.password_same_as_current') {
+        setDifferenceStatus('same');
+      } else {
+        setError(getAuthError(detail, t, t('changePassword.genericError')));
+      }
     } finally {
       setLoading(false);
     }
@@ -93,13 +125,15 @@ export default function ChangePasswordScreen() {
         />
 
         <View style={styles.rulesContainer}>
+          <RuleRow state={differenceRuleState} label={t('changePassword.rules.differentFromCurrent')} />
           {rules.map((rule) => (
             <RuleRow
               key={rule.key}
-              valid={rule.test(password)}
+              state={rule.test(password) ? 'valid' : 'invalid'}
               label={t(`changePassword.rules.${rule.key}` as any)}
             />
           ))}
+          <RuleRow state={matchRuleState} label={t('changePassword.rules.passwordsMatch')} />
         </View>
 
         {!!error && <Text style={styles.errorText}>{error}</Text>}

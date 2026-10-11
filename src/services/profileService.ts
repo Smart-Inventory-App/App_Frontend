@@ -2,6 +2,8 @@ import api from './api';
 import authApi from './authApi';
 import { getFirebaseToken } from './firebaseService';
 
+export type UserType = 'individuo' | 'comercio';
+
 export interface UserProfile {
   sub: string;
   email?: string;
@@ -12,6 +14,7 @@ export interface UserProfile {
   expiryDaysThreshold: number;
   notificationToken?: string | null;
   alertCheckHour: number;
+  userType: UserType;
 }
 
 interface MeResponse {
@@ -26,6 +29,7 @@ interface ProfileFields {
   coverageDaysThreshold: number;
   expiryDaysThreshold: number;
   alertCheckHour: number;
+  userType: UserType;
 }
 
 export const profileService = {
@@ -44,6 +48,7 @@ export const profileService = {
     coverageDaysThreshold?: number,
     expiryDaysThreshold?: number,
     alertCheckHour?: number,
+    userType?: UserType,
   ): Promise<UserProfile> {
     const [{ data: profile }, { data: me }] = await Promise.all([
       api.put<ProfileFields>('/profile/', {
@@ -53,6 +58,7 @@ export const profileService = {
         coverageDaysThreshold,
         expiryDaysThreshold,
         alertCheckHour,
+        userType,
       }),
       authApi.get<MeResponse>('/auth/me'),
     ]);

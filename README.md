@@ -1,6 +1,8 @@
-# App Frontend — Smart Inventory
+# App Frontend — Smart Inventory Platform
 
-React Native + Expo (web/iOS/Android) frontend para Smart Inventory.
+[![codecov](https://codecov.io/gh/Smart-Inventory-App/App_Frontend/branch/main/graph/badge.svg?token=D7VKX0SD3X)](https://codecov.io/gh/Smart-Inventory-App/App_Frontend)
+
+React Native + Expo (web/iOS/Android) **Frontend** para la app de Smart Inventory Platform.
 
 ---
 

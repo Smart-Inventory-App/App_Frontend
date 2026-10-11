@@ -16,16 +16,21 @@ import { Colors } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { authService } from '../../src/services/authService';
 import { getAuthError } from '../../src/utils/authError';
+import { setFlashMessage } from '../../src/utils/flashMessage';
 
-function RuleRow({ valid, label }: { valid: boolean; label: string }) {
+type RuleState = 'valid' | 'invalid' | 'pending';
+type EmailStatus = 'idle' | 'checking' | 'available' | 'taken';
+
+const EMAIL_FORMAT = /^\S+@\S+\.\S+$/;
+
+function RuleRow({ state, label }: { state: RuleState; label: string }) {
+  const icon = state === 'valid' ? '✓' : state === 'invalid' ? '✗' : '○';
+  const iconColor = state === 'valid' ? Colors.valid : state === 'invalid' ? Colors.error : Colors.textSecondary;
+  const labelColor = state === 'invalid' ? Colors.error : Colors.textSecondary;
   return (
     <View style={styles.ruleRow}>
-      <Text style={[styles.ruleIcon, { color: valid ? Colors.valid : Colors.error }]}>
-        {valid ? '✓' : '✗'}
-      </Text>
-      <Text style={[styles.ruleLabel, { color: valid ? Colors.textSecondary : Colors.error }]}>
-        {label}
-      </Text>
+      <Text style={[styles.ruleIcon, { color: iconColor }]}>{icon}</Text>
+      <Text style={[styles.ruleLabel, { color: labelColor }]}>{label}</Text>
     </View>
   );
 }
@@ -36,9 +41,8 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [repeat, setRepeat] = useState('');
-  const [emailTaken, setEmailTaken] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<EmailStatus>('idle');
   const [loading, setLoading] = useState(false);
-  const [showRules, setShowRules] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const rules = [
@@ -46,21 +50,32 @@ export default function RegisterScreen() {
     { key: 'uppercase', test: (pw: string) => /[A-Z]/.test(pw) },
     { key: 'lowercase', test: (pw: string) => /[a-z]/.test(pw) },
     { key: 'numberOrSpecial', test: (pw: string) => /[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pw) },
-    { key: 'emailAvailable', test: (_pw: string) => !emailTaken },
   ];
+  const emailTaken = emailStatus === 'taken';
+  const passwordsMatch = password.length > 0 && password === repeat;
+  const emailRuleState: RuleState =
+    emailStatus === 'available' ? 'valid' : emailStatus === 'taken' ? 'invalid' : 'pending';
+  const passwordRuleState = (ok: boolean): RuleState =>
+    password.length === 0 ? 'pending' : ok ? 'valid' : 'invalid';
+  const matchRuleState: RuleState =
+    password.length === 0 && repeat.length === 0 ? 'pending' : passwordsMatch ? 'valid' : 'invalid';
 
   useEffect(() => {
-    if (!email || !email.includes('@')) { setEmailTaken(false); return; }
+    if (!EMAIL_FORMAT.test(email.trim())) { setEmailStatus('idle'); return; }
+    let cancelled = false;
+    setEmailStatus('checking');
     const timer = setTimeout(async () => {
       try {
         const exists = await authService.checkEmail(email.trim());
-        setEmailTaken(exists);
-      } catch { /* ignore */ }
+        if (!cancelled) setEmailStatus(exists ? 'taken' : 'available');
+      } catch {
+        if (!cancelled) setEmailStatus('idle');
+      }
     }, 600);
-    return () => clearTimeout(timer);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [email]);
 
-  const allValid = rules.every((r) => r.test(password)) && password === repeat;
+  const allValid = rules.every((r) => r.test(password)) && !emailTaken && passwordsMatch;
 
   const handleRegister = async () => {
     if (!allValid) return;
@@ -68,11 +83,12 @@ export default function RegisterScreen() {
     setError(null);
     try {
       await register(email.trim(), password);
+      setFlashMessage('register.accountCreated');
       router.replace('/(auth)/login');
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
       if (detail === 'auth.email_already_registered') {
-        setEmailTaken(true);
+        setEmailStatus('taken');
       } else if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
         setError(t('errors.network'));
       } else {
@@ -81,6 +97,12 @@ export default function RegisterScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Vuelve al login inicial (paso del email): limpia el stack y recrea el login desde cero.
+  const handleBackToLogin = () => {
+    router.dismissAll();
+    router.replace('/(auth)/login');
   };
 
   return (
@@ -102,11 +124,14 @@ export default function RegisterScreen() {
           placeholder="email@example.com"
           placeholderTextColor={Colors.placeholder}
           value={email}
-          onChangeText={(v) => { setEmail(v); setEmailTaken(false); }}
+          onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
           autoCorrect={false}
         />
+        <View style={styles.emailRule}>
+          <RuleRow state={emailRuleState} label={t('register.rules.emailAvailable')} />
+        </View>
 
         <Text style={styles.label}>{t('register.passwordLabel')}</Text>
         <TextInput
@@ -114,7 +139,7 @@ export default function RegisterScreen() {
           placeholder="••••••••"
           placeholderTextColor={Colors.placeholder}
           value={password}
-          onChangeText={(v) => { setPassword(v); setShowRules(true); }}
+          onChangeText={setPassword}
           secureTextEntry
         />
 
@@ -128,17 +153,16 @@ export default function RegisterScreen() {
           secureTextEntry
         />
 
-        {(showRules || password.length > 0) && (
-          <View style={styles.rulesContainer}>
-            {rules.map((rule) => (
-              <RuleRow
-                key={rule.key}
-                valid={rule.test(password)}
-                label={t(`register.rules.${rule.key}` as any)}
-              />
-            ))}
-          </View>
-        )}
+        <View style={styles.rulesContainer}>
+          {rules.map((rule) => (
+            <RuleRow
+              key={rule.key}
+              state={passwordRuleState(rule.test(password))}
+              label={t(`register.rules.${rule.key}` as any)}
+            />
+          ))}
+          <RuleRow state={matchRuleState} label={t('register.rules.passwordsMatch')} />
+        </View>
 
         {!!error && <Text style={styles.errorText}>{error}</Text>}
 
@@ -148,6 +172,10 @@ export default function RegisterScreen() {
           disabled={!allValid || loading}
         >
           <Text style={styles.buttonText}>{loading ? t('register.creating') : t('register.createAccount')}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={handleBackToLogin} style={styles.backToLogin}>
+          <Text style={styles.backToLoginText}>{t('register.backToLogin')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -176,6 +204,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
   },
   inputError: { borderColor: Colors.inputBorderError },
+  emailRule: { width: '100%', marginTop: -6, marginBottom: 12 },
   rulesContainer: { width: '100%', marginBottom: 16 },
   ruleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   ruleIcon: { fontSize: 14, marginRight: 6, fontWeight: '700' },
@@ -191,5 +220,8 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { backgroundColor: Colors.disabled },
   buttonText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
+  backToLogin: { marginTop: 16 },
+  // Mismo formato que el link "Olvidé mi contraseña" del login
+  backToLoginText: { color: Colors.textSecondary, fontSize: 14, marginTop: 4 },
   errorText: { color: Colors.error, fontSize: 13, alignSelf: 'flex-start', marginBottom: 8 },
 });

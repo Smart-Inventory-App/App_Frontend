@@ -10,7 +10,7 @@
     "test": "jest --watchAll=false --passWithNoTests",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "build": "node -v && expo export --platform web",
-    "serve": "npx serve dist --single --listen 8080",
+    "serve": "serve dist --single",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -45,6 +45,7 @@
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.23.0",
     "react-native-web": "^0.21.0",
+    "serve": "^14.2.6",
     "wrangler": "^4.97.0"
   },
   "devDependencies": {
@@ -67,6 +68,7 @@
   },
   "jest": {
     "preset": "jest-expo",
+    "testTimeout": 30000,
     "setupFiles": [
       "./jest.setup.js"
     ],

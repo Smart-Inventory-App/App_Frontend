@@ -4,7 +4,6 @@ import {
   Alert,
   FlatList,
   Image,
-  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,8 +17,15 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { Product, ProductCreate } from '@/types/product';
+import { isValidBarcode } from '@/utils/barcode';
+import { truncateLabel } from '@/utils/text';
 import ProductFormFields from '@/components/ProductFormFields';
+import BottomSheetModal from '@/components/BottomSheetModal';
+import ConfirmModal from '@/components/ConfirmModal';
+import FilterChipsRow from '@/components/FilterChipsRow';
 import HistorialModal from '@/components/HistorialModal';
+import ScreenHeader from '@/components/ScreenHeader';
+import TopBanner from '@/components/TopBanner';
 
 export default function InventarioScreen() {
   const { t } = useTranslation();
@@ -41,6 +47,8 @@ export default function InventarioScreen() {
   const [extraUbicaciones, setExtraUbicaciones] = useState<string[]>([]);
   const [extraCategorias, setExtraCategorias] = useState<string[]>([]);
   const [extraMarcas, setExtraMarcas] = useState<string[]>([]);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [banner, setBanner] = useState<{ id: number; message: string } | null>(null);
   const [sortField, setSortField] = useState<'nombre' | 'stock' | 'vencimiento' | 'categoria' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -103,27 +111,24 @@ export default function InventarioScreen() {
     }
   };
 
-  const handleDelete = (product: Product) => {
-    Alert.alert(
-      t('inventory.deleteTitle'),
-      t('inventory.deleteConfirm', { name: product.nombre }),
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: t('inventory.deleteTitle'),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await productService.deleteProduct(product.id);
-              setProducts(prev => prev.filter(p => p.id !== product.id));
-              loadFilterOptions();
-            } catch {
-              Alert.alert('Error', t('inventory.deleteError'));
-            }
-          },
-        },
-      ]
-    );
+  // El id nuevo hace que el banner se vuelva a montar si hay dos avisos seguidos.
+  const showBanner = (message: string) => setBanner(prev => ({ id: (prev?.id ?? 0) + 1, message }));
+
+  // La confirmación es un modal propio: Alert.alert con botones no funciona en la web.
+  const handleDelete = (product: Product) => setProductToDelete(product);
+
+  const confirmDelete = async () => {
+    const product = productToDelete;
+    setProductToDelete(null);
+    if (!product) return;
+    try {
+      await productService.deleteProduct(product.id);
+      setProducts(prev => prev.filter(p => p.id !== product.id));
+      loadFilterOptions();
+      showBanner(t('inventory.deletedOk', { name: product.nombre }));
+    } catch {
+      Alert.alert('Error', t('inventory.deleteError'));
+    }
   };
 
   const openEdit = (product: Product) => {
@@ -136,6 +141,7 @@ export default function InventarioScreen() {
       vencimiento: product.vencimiento,
       descripcion: product.descripcion,
       ubicacion: product.ubicacion,
+      codigo_barras: product.codigo_barras,
       imagen_url: product.imagen_url,
       stock_minimo: product.stock_minimo,
       dias_alerta_vencimiento: product.dias_alerta_vencimiento,
@@ -144,12 +150,17 @@ export default function InventarioScreen() {
 
   const handleSaveEdit = async () => {
     if (!editingProduct) return;
+    if (editForm.codigo_barras && !isValidBarcode(editForm.codigo_barras)) {
+      Alert.alert('Error', t('product.validationCodigoBarras'));
+      return;
+    }
     setSaving(true);
     try {
       const updated = await productService.updateProduct(editingProduct.id, editForm);
       setProducts(prev => prev.map(p => (p.id === updated.id ? updated : p)));
       setEditingProduct(null);
       loadFilterOptions();
+      showBanner(t('inventory.editedOk', { name: updated.nombre }));
     } catch {
       Alert.alert('Error', t('inventory.saveError'));
     } finally {
@@ -183,11 +194,11 @@ export default function InventarioScreen() {
         />
         <View style={styles.itemInfo}>
           <Text style={styles.itemName}>{item.nombre}</Text>
-          {item.marca ? <Text style={styles.itemSub}>{item.marca}</Text> : null}
-          <Text style={styles.itemSub}>{t('inventory.filterCategory')}: {item.categoria}</Text>
+          {item.marca ? <Text style={styles.itemSub}>{truncateLabel(item.marca)}</Text> : null}
+          <Text style={styles.itemSub}>{t('inventory.filterCategory')}: {truncateLabel(item.categoria)}</Text>
           {item.ubicacion ? (
             <Text style={styles.itemSub}>
-              <Ionicons name="location-outline" size={11} /> {item.ubicacion}
+              <Ionicons name="location-outline" size={11} /> {truncateLabel(item.ubicacion)}
             </Text>
           ) : null}
           <View style={styles.itemRow}>
@@ -217,9 +228,7 @@ export default function InventarioScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('inventory.title')}</Text>
-      </View>
+      <ScreenHeader title={t('inventory.title')} />
 
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={16} color={Colors.placeholder} style={styles.searchIcon} />
@@ -244,7 +253,7 @@ export default function InventarioScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.chipsScroll}
-          contentContainerStyle={[styles.chipsContent, { paddingLeft: 0 }]}
+          contentContainerStyle={[styles.chipsContent, styles.sortChipsContent]}
         >
           {(['nombre', 'stock', 'vencimiento', 'categoria'] as const).map(field => {
             const active = sortField === field;
@@ -266,67 +275,27 @@ export default function InventarioScreen() {
       </View>
 
       {categories.length > 0 && (
-        <View style={styles.filterRow}>
-          <Text style={styles.filterLabel}>{t('inventory.filterCategory')}</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.chipsScroll}
-            contentContainerStyle={styles.chipsContent}
-          >
-            <TouchableOpacity
-              style={[styles.chip, !selectedCategoria && styles.chipActive]}
-              onPress={() => setSelectedCategoria(null)}
-            >
-              <Text style={[styles.chipText, !selectedCategoria && styles.chipTextActive]}>
-                {t('inventory.allCategories')}
-              </Text>
-            </TouchableOpacity>
-            {categories.map(cat => (
-              <TouchableOpacity
-                key={cat}
-                style={[styles.chip, selectedCategoria === cat && styles.chipActive]}
-                onPress={() => setSelectedCategoria(prev => prev === cat ? null : cat)}
-              >
-                <Text style={[styles.chipText, selectedCategoria === cat && styles.chipTextActive]}>
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+        <FilterChipsRow
+          testKey="categoria"
+          label={t('inventory.filterCategory')}
+          allLabel={t('inventory.allCategories')}
+          searchPlaceholder={t('inventory.searchCategory')}
+          options={categories}
+          selected={selectedCategoria}
+          onSelect={setSelectedCategoria}
+        />
       )}
 
       {ubicaciones.length > 0 && (
-        <View style={styles.filterRow}>
-          <Text style={styles.filterLabel}>{t('inventory.filterLocation')}</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.chipsScroll}
-            contentContainerStyle={styles.chipsContent}
-          >
-            <TouchableOpacity
-              style={[styles.chip, !selectedUbicacion && styles.chipActive]}
-              onPress={() => setSelectedUbicacion(null)}
-            >
-              <Text style={[styles.chipText, !selectedUbicacion && styles.chipTextActive]}>
-                {t('inventory.allLocations')}
-              </Text>
-            </TouchableOpacity>
-            {ubicaciones.map(loc => (
-              <TouchableOpacity
-                key={loc}
-                style={[styles.chip, selectedUbicacion === loc && styles.chipActive]}
-                onPress={() => setSelectedUbicacion(prev => prev === loc ? null : loc)}
-              >
-                <Text style={[styles.chipText, selectedUbicacion === loc && styles.chipTextActive]}>
-                  {loc}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+        <FilterChipsRow
+          testKey="ubicacion"
+          label={t('inventory.filterLocation')}
+          allLabel={t('inventory.allLocations')}
+          searchPlaceholder={t('inventory.searchLocation')}
+          options={ubicaciones}
+          selected={selectedUbicacion}
+          onSelect={setSelectedUbicacion}
+        />
       )}
 
       {loading ? (
@@ -347,37 +316,49 @@ export default function InventarioScreen() {
         />
       )}
 
-      <Modal visible={!!editingProduct} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('inventory.editTitle')}</Text>
-              <TouchableOpacity onPress={() => setEditingProduct(null)}>
-                <Ionicons name="close" size={24} color={Colors.textPrimary} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView>
-              <ProductFormFields
-                form={editForm}
-                onChange={setEditForm}
-                ubicacionOptions={ubicaciones}
-                onAddUbicacion={loc => setExtraUbicaciones(prev => [...new Set([...prev, loc])])}
-                categoriaOptions={categories}
-                onAddCategoria={cat => setExtraCategorias(prev => [...new Set([...prev, cat])])}
-                marcaOptions={marcas}
-                onAddMarca={marca => setExtraMarcas(prev => [...new Set([...prev, marca])])}
-              />
-            </ScrollView>
-            <TouchableOpacity
-              style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-              onPress={handleSaveEdit}
-              disabled={saving}
-            >
-              <Text style={styles.saveBtnText}>{saving ? t('inventory.saving') : t('inventory.saveChanges')}</Text>
-            </TouchableOpacity>
-          </View>
+      {/* Tocar afuera de la hoja (o el botón atrás) cierra sin guardar */}
+      <BottomSheetModal
+        visible={!!editingProduct}
+        onRequestClose={() => setEditingProduct(null)}
+        sheetStyle={styles.modalSheet}
+        overlayTestID="edit-overlay"
+        sheetTestID="edit-sheet"
+      >
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>{t('inventory.editTitle')}</Text>
+          <TouchableOpacity onPress={() => setEditingProduct(null)}>
+            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+          </TouchableOpacity>
         </View>
-      </Modal>
+        <ScrollView contentContainerStyle={styles.modalScrollContent}>
+          <ProductFormFields
+            form={editForm}
+            onChange={setEditForm}
+            ubicacionOptions={ubicaciones}
+            onAddUbicacion={loc => setExtraUbicaciones(prev => [...new Set([...prev, loc])])}
+            categoriaOptions={categories}
+            onAddCategoria={cat => setExtraCategorias(prev => [...new Set([...prev, cat])])}
+            marcaOptions={marcas}
+            onAddMarca={marca => setExtraMarcas(prev => [...new Set([...prev, marca])])}
+          />
+        </ScrollView>
+        <TouchableOpacity
+          style={[styles.saveBtn, saving && { opacity: 0.6 }]}
+          onPress={handleSaveEdit}
+          disabled={saving}
+        >
+          <Text style={styles.saveBtnText}>{saving ? t('inventory.saving') : t('inventory.saveChanges')}</Text>
+        </TouchableOpacity>
+      </BottomSheetModal>
+
+      <ConfirmModal
+        visible={!!productToDelete}
+        message={t('inventory.deleteConfirm', { name: productToDelete?.nombre ?? '' })}
+        confirmLabel={t('inventory.deleteAction')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={confirmDelete}
+        onCancel={() => setProductToDelete(null)}
+      />
 
       <HistorialModal
         product={historialProduct}
@@ -385,14 +366,16 @@ export default function InventarioScreen() {
         onClose={() => setHistorialProduct(null)}
         onChanged={load}
       />
+
+      {banner && (
+        <TopBanner key={banner.id} message={banner.message} autoDismissMs={5000} onDismiss={() => setBanner(null)} />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f2f3f6' },
-  header: { backgroundColor: '#fff', padding: 16, paddingTop: 48 },
-  title: { fontSize: 22, fontWeight: 'bold', color: Colors.textPrimary },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -421,20 +404,12 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontWeight: '600',
   },
-  filterRow: { marginBottom: 4 },
-  filterLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: 16,
-    marginBottom: 4,
-    marginTop: 6,
-  },
   chipsScroll: { flexGrow: 0 },
   chipsContent: { paddingHorizontal: 16, paddingBottom: 4, gap: 8, flexDirection: 'row' },
+  // Sin relleno inferior y centrados para quedar alineados con el texto "Ordenar:"
+  sortChipsContent: { paddingLeft: 0, paddingBottom: 0, alignItems: 'center' },
   chip: {
+    flexShrink: 0,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,
@@ -468,7 +443,6 @@ const styles = StyleSheet.create({
   labelRed: { backgroundColor: '#e5484d' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   emptyText: { color: Colors.textSecondary, fontSize: 15 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
@@ -476,6 +450,8 @@ const styles = StyleSheet.create({
     padding: 20,
     maxHeight: '85%',
   },
+  // Separa los campos de la barra de scroll de la derecha
+  modalScrollContent: { paddingRight: 14 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.textPrimary },
   saveBtn: {
