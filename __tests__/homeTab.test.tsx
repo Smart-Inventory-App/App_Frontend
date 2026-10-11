@@ -120,3 +120,18 @@ describe('HomeScreen (tabs/index)', () => {
     expect(screen.queryByText('P4')).toBeNull();
   });
 });
+
+describe('HomeScreen - shared header', () => {
+  it('uses the shared banner with the welcome message and the app name on the right', async () => {
+    mockedProducts.getProducts.mockResolvedValue([]);
+    mockedProfile.getProfile.mockResolvedValue({
+      sub: 'u1', username: 'ana', coverageDaysThreshold: 5, expiryDaysThreshold: 7, alertCheckHour: 8, userType: 'individuo',
+    });
+    render(<HomeScreen />);
+    await waitFor(() => expect(screen.getByText('Bienvenido, ana')).toBeTruthy());
+    expect(screen.getByTestId('screen-header')).toBeTruthy();
+    // el nombre de la app va a la izquierda y el saludo queda a la derecha
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('Smart Inventory')).toBeLessThan(tree.indexOf('Bienvenido, ana'));
+  });
+});

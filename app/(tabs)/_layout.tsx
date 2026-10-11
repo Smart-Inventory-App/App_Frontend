@@ -1,9 +1,15 @@
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../../src/context/AuthContext';
 
 export default function TabsLayout() {
   const { t } = useTranslation();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Si la sesión se cierra (manual o por vencimiento), se vuelve al login.
+  if (!isLoading && !isAuthenticated) return <Redirect href="/(auth)/login" />;
+
   return (
     <Tabs screenOptions={{ headerShown: false }}>
       <Tabs.Screen

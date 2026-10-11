@@ -3,13 +3,14 @@ import * as SecureStore from 'expo-secure-store';
 import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { authService } from '../services/authService';
-import { setAuthToken } from '../services/api';
+import { setAuthToken, setUnauthorizedHandler } from '../services/api';
 import {
   getFirebaseToken,
   registerTokenWithBackend,
   setupForegroundHandler,
   subscribeToTokenRefresh,
 } from '../services/notificationService';
+import { setFlashMessage } from '../utils/flashMessage';
 
 const TOKEN_KEY = 'auth_access_token';
 
@@ -77,13 +78,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await _afterLogin(result.access_token);
   };
 
-  const logout = async () => {
+  const endSession = async (flashKey: string) => {
+    setFlashMessage(flashKey);
     unsubscribeTokenRefresh.current?.();
     unsubscribeTokenRefresh.current = null;
     await storage.delete(TOKEN_KEY);
     setAuthToken(null);
     setToken(null);
   };
+
+  const logout = () => endSession('login.sessionClosed');
 
   const register = async (email: string, password: string) => {
     await authService.register(email, password);
@@ -93,6 +97,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await authService.googleLogin(accessToken);
     await _afterLogin(result.access_token);
   };
+
+  // Sesión vencida: cualquier 401 del backend con sesión activa cierra la sesión automáticamente.
+  const endSessionRef = useRef(endSession);
+  endSessionRef.current = endSession;
+  useEffect(() => {
+    setUnauthorizedHandler(() => { void endSessionRef.current('login.sessionExpired'); });
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   return (
     <AuthContext.Provider value={{ token, isLoading, isAuthenticated: !!token, login, logout, register, loginWithGoogle }}>

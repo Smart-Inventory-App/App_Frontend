@@ -5,9 +5,15 @@ import VerifyCodeScreen from '../app/(auth)/verify-code';
 import { authService } from '@/services/authService';
 
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
+const mockDismissAll = jest.fn();
 
 jest.mock('expo-router', () => ({
-  router: { push: (...args: any[]) => mockPush(...args) },
+  router: {
+    push: (...args: any[]) => mockPush(...args),
+    replace: (...args: any[]) => mockReplace(...args),
+    dismissAll: (...args: any[]) => mockDismissAll(...args),
+  },
   useLocalSearchParams: () => ({ email: 'a@b.com' }),
 }));
 
@@ -81,6 +87,16 @@ describe('VerifyCodeScreen', () => {
       fireEvent.press(screen.getByText('Reenviar Código'));
     });
     expect(mockedAuthService.forgotPassword).toHaveBeenCalledWith('a@b.com');
+  });
+
+  it('goes back to the initial login screen, clearing the recovery stack first', () => {
+    const calls: string[] = [];
+    mockDismissAll.mockImplementation(() => calls.push('dismissAll'));
+    mockReplace.mockImplementation(() => calls.push('replace'));
+    render(<VerifyCodeScreen />);
+    fireEvent.press(screen.getByText('Volver al inicio de sesión'));
+    expect(calls).toEqual(['dismissAll', 'replace']);
+    expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
   });
 
   it('silently ignores a resend failure', async () => {

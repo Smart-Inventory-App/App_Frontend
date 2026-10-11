@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Image, Alert } from 'react-native';
+import { Image, Alert, StyleSheet } from 'react-native';
 import ProductFormFields from '../src/components/ProductFormFields';
 import { pickFromCamera, pickFromGallery } from '@/services/imageService';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
@@ -37,17 +37,18 @@ describe('ProductFormFields - basic inputs', () => {
     fireEvent.changeText(screen.getByPlaceholderText('ej. Leche entera 1L'), 'Leche');
     expect(screen.getByDisplayValue('Leche')).toBeTruthy();
 
-    fireEvent.changeText(screen.getByPlaceholderText('opcional'), 'Entera');
+    fireEvent.changeText(screen.getByTestId('input-descripcion'), 'Entera');
     expect(screen.getByDisplayValue('Entera')).toBeTruthy();
 
-    fireEvent.changeText(screen.getByPlaceholderText('2026-12-31 (opcional)'), '2026-05-01');
-    expect(screen.getByDisplayValue('2026-05-01')).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId('input-vencimiento'), '01052026');
+    expect(screen.getByDisplayValue('01/05/2026')).toBeTruthy();
   });
 
   it('clears vencimiento when emptied', () => {
     render(<Wrapper form={{ vencimiento: '2026-05-01' }} />);
-    fireEvent.changeText(screen.getByPlaceholderText('2026-12-31 (opcional)'), '');
-    expect(screen.getByPlaceholderText('2026-12-31 (opcional)').props.value).toBe('');
+    expect(screen.getByTestId('input-vencimiento').props.value).toBe('01/05/2026');
+    fireEvent.changeText(screen.getByTestId('input-vencimiento'), '');
+    expect(screen.getByTestId('input-vencimiento').props.value).toBe('');
   });
 
   it('only accepts digits for stock', () => {
@@ -246,7 +247,8 @@ describe('ProductFormFields - image picker', () => {
     await act(async () => {
       fireEvent.press(screen.getByText('Tomar foto'));
     });
-    expect(screen.getByText('Seleccionar imagen')).toBeTruthy();
+    expect(screen.UNSAFE_queryAllByType(Image)).toHaveLength(0);
+    await waitFor(() => expect(screen.getAllByText('Seleccionar imagen')).toHaveLength(1), { timeout: 3000 });
   });
 
   it('shows an alert when the picker throws', async () => {
@@ -284,5 +286,353 @@ describe('ProductFormFields - image picker', () => {
     render(<Wrapper />);
     fireEvent.press(screen.getByText('Seleccionar imagen'));
     // Overlay press dismisses the modal (top-level Pressable's onPress).
+  });
+});
+
+function Harness({ initial = {}, ...rest }: { initial?: Partial<ProductCreate> } & Partial<React.ComponentProps<typeof ProductFormFields>>) {
+  const [form, setForm] = useState<Partial<ProductCreate>>(initial);
+  latestForm = form;
+  return (
+    <ProductFormFields
+      categoriaOptions={['Lácteos', 'Limpieza']}
+      marcaOptions={['Sancor']}
+      ubicacionOptions={['Heladera']}
+      {...rest}
+      form={form}
+      onChange={setForm}
+    />
+  );
+}
+
+let latestForm: Partial<ProductCreate> = {};
+
+describe('ProductFormFields - vencimiento (DD/MM/AAAA)', () => {
+  const dateInput = () => screen.getByTestId('input-vencimiento');
+
+  it('puts the slashes in automatically while only digits are typed', () => {
+    render(<Harness />);
+    fireEvent.changeText(dateInput(), '3');
+    expect(dateInput().props.value).toBe('3');
+    fireEvent.changeText(dateInput(), '311');
+    expect(dateInput().props.value).toBe('31/1');
+    fireEvent.changeText(dateInput(), '31122026');
+    expect(dateInput().props.value).toBe('31/12/2026');
+  });
+
+  it('stores the ISO date once the date is complete and real', () => {
+    render(<Harness />);
+    fireEvent.changeText(dateInput(), '31122026');
+    expect(latestForm.vencimiento).toBe('2026-12-31');
+  });
+
+  it('keeps the partial text in the form (so validation rejects it) until the date is complete', () => {
+    render(<Harness />);
+    fireEvent.changeText(dateInput(), '3112');
+    expect(latestForm.vencimiento).toBe('31/12');
+  });
+
+  it('keeps an impossible date as typed and marks the field as invalid', () => {
+    render(<Harness />);
+    fireEvent.changeText(dateInput(), '31022026');
+    expect(latestForm.vencimiento).toBe('31/02/2026');
+    expect(StyleSheet.flatten(dateInput().props.style).borderColor).toBe('#FF3B30');
+  });
+
+  it('does not mark the field as invalid for a valid or still-incomplete date', () => {
+    render(<Harness />);
+    fireEvent.changeText(dateInput(), '3112');
+    expect(StyleSheet.flatten(dateInput().props.style).borderColor).not.toBe('#FF3B30');
+    fireEvent.changeText(dateInput(), '31122026');
+    expect(StyleSheet.flatten(dateInput().props.style).borderColor).not.toBe('#FF3B30');
+  });
+
+  it('shows an existing ISO value as DD/MM/AAAA', () => {
+    render(<Harness initial={{ vencimiento: '2026-05-01' }} />);
+    expect(dateInput().props.value).toBe('01/05/2026');
+  });
+
+  it('empties the stored value when the field is cleared', () => {
+    render(<Harness initial={{ vencimiento: '2026-05-01' }} />);
+    fireEvent.changeText(dateInput(), '');
+    expect(latestForm.vencimiento).toBeUndefined();
+  });
+
+  it('reflects a value that changes from outside the field', () => {
+    const onChange = jest.fn();
+    const { rerender } = render(<ProductFormFields form={{}} onChange={onChange} />);
+    rerender(<ProductFormFields form={{ vencimiento: '2027-01-02' }} onChange={onChange} />);
+    expect(dateInput().props.value).toBe('02/01/2027');
+    rerender(<ProductFormFields form={{}} onChange={onChange} />);
+    expect(dateInput().props.value).toBe('');
+  });
+
+  it('has a calendar button to the right of the field that fills the date', () => {
+    render(<Harness initial={{ vencimiento: '2026-10-15' }} />);
+    expect(screen.queryByText('Octubre 2026')).toBeNull();
+    fireEvent.press(screen.getByTestId('open-calendar'));
+    expect(screen.getByText('Octubre 2026')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('calendar-day-20'));
+    expect(dateInput().props.value).toBe('20/10/2026');
+    expect(latestForm.vencimiento).toBe('2026-10-20');
+    expect(screen.queryByText('Octubre 2026')).toBeNull();
+  });
+
+  it('closes the calendar without changing the date', () => {
+    render(<Harness initial={{ vencimiento: '2026-10-15' }} />);
+    fireEvent.press(screen.getByTestId('open-calendar'));
+    fireEvent.press(screen.getAllByText('Cancelar')[0]);
+    expect(latestForm.vencimiento).toBe('2026-10-15');
+    expect(dateInput().props.value).toBe('15/10/2026');
+  });
+});
+
+describe('ProductFormFields - add buttons and similar options', () => {
+  it('puts the square add button before the chips', () => {
+    render(<Harness />);
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('add-categoria')).toBeGreaterThan(-1);
+    expect(tree.indexOf('add-categoria')).toBeLessThan(tree.indexOf('Lácteos'));
+    expect(tree.indexOf('add-marca')).toBeLessThan(tree.indexOf('Sancor'));
+    expect(tree.indexOf('add-ubicacion')).toBeLessThan(tree.indexOf('Heladera'));
+  });
+
+  it('draws the add button as a white square with a plus', () => {
+    render(<Harness />);
+    const style = StyleSheet.flatten(screen.getByTestId('add-categoria').props.style);
+    expect(style.backgroundColor).toBe('#fff');
+    expect(style.borderRadius).toBe(8);
+    expect(style.width).toBe(style.height);
+  });
+
+  it('suggests existing options that look like what is being typed, ignoring accents and case', () => {
+    render(<Harness />);
+    fireEvent.press(screen.getByTestId('add-categoria'));
+    expect(screen.queryByTestId('similar-categoria-Lácteos')).toBeNull();
+    fireEvent.changeText(screen.getByTestId('input-categoria'), 'lacte');
+    expect(screen.getByTestId('similar-categoria-Lácteos')).toBeTruthy();
+    expect(screen.queryByTestId('similar-categoria-Limpieza')).toBeNull();
+    fireEvent.changeText(screen.getByTestId('input-categoria'), 'zzz');
+    expect(screen.queryByTestId('similar-categoria-Lácteos')).toBeNull();
+  });
+
+  it('selects the existing option when a suggestion is tapped, without adding a duplicate', () => {
+    const onAddCategoria = jest.fn();
+    render(<Harness onAddCategoria={onAddCategoria} />);
+    fireEvent.press(screen.getByTestId('add-categoria'));
+    fireEvent.changeText(screen.getByTestId('input-categoria'), 'lim');
+    fireEvent.press(screen.getByTestId('similar-categoria-Limpieza'));
+    expect(latestForm.categoria).toBe('Limpieza');
+    expect(onAddCategoria).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('input-categoria')).toBeNull();
+  });
+
+  it('works the same for marca and ubicacion', () => {
+    render(<Harness />);
+    fireEvent.press(screen.getByTestId('add-marca'));
+    fireEvent.changeText(screen.getByTestId('input-marca'), 'san');
+    fireEvent.press(screen.getByTestId('similar-marca-Sancor'));
+    expect(latestForm.marca).toBe('Sancor');
+
+    fireEvent.press(screen.getByTestId('add-ubicacion'));
+    fireEvent.changeText(screen.getByTestId('input-ubicacion'), 'hela');
+    fireEvent.press(screen.getByTestId('similar-ubicacion-Heladera'));
+    expect(latestForm.ubicacion).toBe('Heladera');
+  });
+
+  it('cancelling the new value clears the typed text and the suggestions', () => {
+    render(<Harness />);
+    fireEvent.press(screen.getByTestId('add-categoria'));
+    fireEvent.changeText(screen.getByTestId('input-categoria'), 'lacte');
+    fireEvent.press(screen.UNSAFE_getAllByProps({ name: 'close' })[0]);
+    expect(screen.queryByTestId('similar-categoria-Lácteos')).toBeNull();
+    fireEvent.press(screen.getByTestId('add-categoria'));
+    expect(screen.getByTestId('input-categoria').props.value).toBe('');
+  });
+});
+
+describe('ProductFormFields - labels and placeholders', () => {
+  it('labels the date field just "Vencimiento", with the format as its placeholder, and "Opcional" in the description', () => {
+    render(<Wrapper />);
+    expect(screen.getByText('Vencimiento')).toBeTruthy();
+    expect(screen.queryByText(/DD\/MM\/AAAA/)).toBeNull();
+    expect(screen.getByTestId('input-vencimiento').props.placeholder).toBe('DD/MM/AAAA');
+    expect(screen.getByTestId('input-descripcion').props.placeholder).toBe('Opcional');
+  });
+
+  it('shows "Default" in the alert rule fields', () => {
+    render(<Wrapper />);
+    expect(screen.getAllByPlaceholderText('Default')).toHaveLength(2);
+  });
+});
+
+describe('ProductFormFields - character limits and counters', () => {
+  const LONG = 'Supermercado Mayorista Central';
+
+  it('shows the nombre counter above the field, updating as the user types', () => {
+    render(<Wrapper />);
+    expect(screen.getByTestId('nombre-counter').props.children.join('')).toBe('0/20');
+    fireEvent.changeText(screen.getByPlaceholderText('ej. Leche entera 1L'), 'Rare water');
+    expect(screen.getByTestId('nombre-counter').props.children.join('')).toBe('10/20');
+    expect(screen.getByPlaceholderText('ej. Leche entera 1L').props.maxLength).toBe(20);
+  });
+
+  it('shows the descripcion counter with its 400 limit', () => {
+    render(<Wrapper />);
+    expect(screen.getByTestId('descripcion-counter').props.children.join('')).toBe('0/400');
+    fireEvent.changeText(screen.getByTestId('input-descripcion'), 'x'.repeat(127));
+    expect(screen.getByTestId('descripcion-counter').props.children.join('')).toBe('127/400');
+    expect(screen.getByTestId('input-descripcion').props.maxLength).toBe(400);
+  });
+
+  it('limits the new categoria, marca and ubicacion inputs to 20 characters', () => {
+    render(<Wrapper />);
+    for (const key of ['categoria', 'marca', 'ubicacion']) {
+      fireEvent.press(screen.getByTestId(`add-${key}`));
+      expect(screen.getByTestId(`input-${key}`).props.maxLength).toBe(20);
+      fireEvent.press(screen.UNSAFE_getAllByProps({ name: 'close' })[0]);
+    }
+  });
+
+  it('shows the first 20 characters and "..." for long options, keeping the full value when selected', () => {
+    render(<Wrapper categoriaOptions={[LONG]} marcaOptions={[LONG]} ubicacionOptions={[LONG]} />);
+    const shown = `${LONG.slice(0, 20)}...`;
+    expect(screen.getAllByText(shown)).toHaveLength(3);
+    expect(screen.queryByText(LONG)).toBeNull();
+    fireEvent.press(screen.getAllByText(shown)[0]);
+    expect(screen.getAllByText(shown).length).toBeGreaterThan(0);
+  });
+
+  it('truncates a selected value that is not in the options, and long similar suggestions', () => {
+    render(<Wrapper categoriaOptions={[LONG]} form={{ categoria: 'Otra categoria muy larga', marca: LONG, ubicacion: LONG }} />);
+    const shown = `${LONG.slice(0, 20)}...`;
+    expect(screen.getByText(`${'Otra categoria muy larga'.slice(0, 20)}...`)).toBeTruthy();
+    expect(screen.getAllByText(shown).length).toBeGreaterThan(0);
+    fireEvent.press(screen.getByTestId('add-categoria'));
+    fireEvent.changeText(screen.getByTestId('input-categoria'), 'super');
+    expect(screen.getAllByText(shown).length).toBeGreaterThan(0);
+  });
+});
+
+describe('ProductFormFields - stock limit', () => {
+  it('does not accept more than six digits (999999 at most)', () => {
+    render(<Wrapper />);
+    expect(screen.getByPlaceholderText('0').props.maxLength).toBe(6);
+    fireEvent.changeText(screen.getByPlaceholderText('0'), '999999');
+    expect(screen.getByDisplayValue('999999')).toBeTruthy();
+  });
+});
+
+describe('ProductFormFields - código de barras', () => {
+  const input = () => screen.getByTestId('input-codigo-barras');
+
+  it('sits right below Vencimiento, titled "Código de barras", listing the accepted lengths inside', () => {
+    render(<Wrapper />);
+    expect(screen.getByText('Código de barras')).toBeTruthy();
+    expect(input().props.placeholder).toBe('Código numérico de 8, 12, 13 o 14 dígitos de largo');
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('Vencimiento')).toBeLessThan(tree.indexOf('Código de barras'));
+    expect(tree.indexOf('Código de barras')).toBeLessThan(tree.indexOf('input-descripcion'));
+  });
+
+  it('accepts only digits, up to 14, and shows no character counter', () => {
+    render(<Wrapper />);
+    expect(input().props.maxLength).toBe(14);
+    expect(input().props.keyboardType).toBe('number-pad');
+    fireEvent.changeText(input(), '779-12a3');
+    expect(input().props.value).toBe('779123');
+    expect(screen.queryByText(/\d+\/1[34]/)).toBeNull();
+  });
+
+  it('stores the barcode, and clears it when emptied', () => {
+    render(<Harness />);
+    fireEvent.changeText(input(), '7791234567898');
+    expect(latestForm.codigo_barras).toBe('7791234567898');
+    fireEvent.changeText(input(), '');
+    expect(latestForm.codigo_barras).toBeUndefined();
+  });
+
+  it('shows an existing barcode', () => {
+    render(<Wrapper form={{ codigo_barras: '7791234567898' }} />);
+    expect(input().props.value).toBe('7791234567898');
+  });
+});
+
+describe('ProductFormFields - selecting an existing product by name', () => {
+  const existing: ProductSuggestion = {
+    id: 1, nombre: 'Yogur Ser', marca: 'Ser', categoria: 'Lacteos', ubicacion: 'Heladera', stock: 2,
+    vencimiento: '2027-01-01', stock_minimo: 3, dias_alerta_vencimiento: 4,
+    descripcion: 'Natural', imagen_url: 'https://cdn/y.jpg', codigo_barras: '7791234567898',
+  };
+
+  it('also loads its barcode, minimum stock, anticipation days, description and image', async () => {
+    jest.useFakeTimers();
+    const suggestNombre = jest.fn().mockResolvedValue([existing]);
+    render(<Harness suggestNombre={suggestNombre} />);
+    const input = screen.getByPlaceholderText('ej. Leche entera 1L');
+    fireEvent(input, 'focus');
+    fireEvent.changeText(input, 'yog');
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(300);
+    });
+    jest.useRealTimers();
+    await waitFor(() => expect(screen.getByText('Yogur Ser · Ser')).toBeTruthy());
+    fireEvent.press(screen.getByText('Yogur Ser · Ser'));
+
+    expect(latestForm).toMatchObject({
+      nombre: 'Yogur Ser', codigo_barras: '7791234567898', stock_minimo: 3, dias_alerta_vencimiento: 4,
+      descripcion: 'Natural', imagen_url: 'https://cdn/y.jpg',
+    });
+    expect(screen.getByTestId('input-codigo-barras').props.value).toBe('7791234567898');
+    expect(screen.getByTestId('input-descripcion').props.value).toBe('Natural');
+    expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/y.jpg' });
+  });
+});
+
+describe('ProductFormFields - image picker sheet', () => {
+  it('opens as a bottom sheet (fading backdrop, sliding sheet) titled like the other windows, smaller', () => {
+    render(<Wrapper />);
+    expect(screen.queryByTestId('image-picker-sheet')).toBeNull();
+    fireEvent.press(screen.getByText('Seleccionar imagen'));
+    expect(screen.getByTestId('image-picker-sheet')).toBeTruthy();
+    const title = StyleSheet.flatten(screen.getAllByText('Seleccionar imagen').pop()!.props.style);
+    expect(title.fontFamily).toBe('Roboto_500Medium');
+    expect(title.fontSize).toBe(20);
+  });
+
+  it('closes when tapping outside the sheet but not when tapping the sheet', async () => {
+    render(<Wrapper />);
+    fireEvent.press(screen.getByText('Seleccionar imagen'));
+    fireEvent.press(screen.getByTestId('image-picker-sheet'));
+    expect(screen.getByTestId('image-picker-sheet')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('image-picker-overlay'));
+    await waitFor(() => expect(screen.queryByTestId('image-picker-sheet')).toBeNull(), { timeout: 3000 });
+  });
+});
+
+describe('ProductFormFields - selecting a product replaces what was typed', () => {
+  it('empties the barcode field typed before when the chosen product has no barcode', async () => {
+    jest.useFakeTimers();
+    const noBarcode: ProductSuggestion = {
+      id: 1, nombre: 'Yogur Ser', marca: 'Ser', categoria: 'Lacteos', stock: 2, descripcion: 'Natural',
+    };
+    const suggestNombre = jest.fn().mockResolvedValue([noBarcode]);
+    render(<Harness suggestNombre={suggestNombre} initial={{ codigo_barras: '7791234567898', vencimiento: '2027-01-01', imagen_url: 'https://cdn/x.jpg' }} />);
+    expect(screen.getByTestId('input-codigo-barras').props.value).toBe('7791234567898');
+
+    const input = screen.getByPlaceholderText('ej. Leche entera 1L');
+    fireEvent(input, 'focus');
+    fireEvent.changeText(input, 'yog');
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(300);
+    });
+    jest.useRealTimers();
+    await waitFor(() => expect(screen.getByText('Yogur Ser · Ser')).toBeTruthy());
+    fireEvent.press(screen.getByText('Yogur Ser · Ser'));
+
+    expect(screen.getByTestId('input-codigo-barras').props.value).toBe('');
+    expect(screen.getByTestId('input-vencimiento').props.value).toBe('');
+    expect(screen.UNSAFE_queryAllByType(Image)).toHaveLength(0);
+    expect(screen.getByTestId('input-descripcion').props.value).toBe('Natural');
+    expect(latestForm.codigo_barras).toBeUndefined();
   });
 });

@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,6 +17,7 @@ import { ProductCreate, ProductSuggestion } from '@/types/product';
 import { ProductMatch, SalidaOCRResult, ScanDocType, ScanState, SCAN_DOC_TYPES } from '@/types/ocr';
 import {
   applyMatchToForm,
+  applySuggestionToForm,
   buildSalidaItems,
   draftToProductForm,
   formatWaitSeconds,
@@ -27,7 +26,15 @@ import {
   ReceiptLineState,
   validateProductForm,
 } from '@/utils/ocrDraft';
+import BottomSheetModal from '@/components/BottomSheetModal';
 import ProductFormFields from '@/components/ProductFormFields';
+import { BARCODE_MAX_DIGITS, isValidBarcode, onlyDigits } from '@/utils/barcode';
+import { displayToIso, formatDateDigits, isoToDisplay } from '@/utils/dateInput';
+
+// La lista de productos con el código muestra 3,5 filas: la mitad de la cuarta invita a deslizar
+const BARCODE_ROW_HEIGHT = 60;
+const BARCODE_ROW_GAP = 8;
+const BARCODE_LIST_MAX_HEIGHT = 3.5 * (BARCODE_ROW_HEIGHT + BARCODE_ROW_GAP);
 
 type Step = 'doc-type' | 'source' | 'processing' | 'review' | 'receipt-result';
 
@@ -43,6 +50,11 @@ interface Props {
   onAddUbicacion?: (loc: string) => void;
   marcaOptions?: string[];
   onAddMarca?: (marca: string) => void;
+  /**
+   * El código de barras y la fecha de vencimiento escaneados no crean nada: se vuelcan al formulario de
+   * "Flujo de producto" conservando lo que el usuario ya había completado.
+   */
+  onApplyToForm?: (updater: (form: Partial<ProductCreate>) => Partial<ProductCreate>) => void;
 }
 
 const DOC_TYPE_ICONS: Record<ScanDocType, keyof typeof Ionicons.glyphMap> = {
@@ -62,6 +74,7 @@ export default function ScanModal({
   onAddUbicacion,
   marcaOptions = [],
   onAddMarca,
+  onApplyToForm,
 }: Props) {
   const { t } = useTranslation();
 
@@ -75,10 +88,14 @@ export default function ScanModal({
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
 
-  const [expiryValue, setExpiryValue] = useState('');
-  const [expiryQuery, setExpiryQuery] = useState('');
-  const [expirySuggestions, setExpirySuggestions] = useState<ProductSuggestion[]>([]);
-  const [expirySelected, setExpirySelected] = useState<ProductSuggestion | null>(null);
+  // Fecha de vencimiento escaneada: lo que se leyó y lo que el usuario deja (DD/MM/AAAA)
+  const [expiryRead, setExpiryRead] = useState('');
+  const [expiryText, setExpiryText] = useState('');
+
+  // Código de barras escaneado, editable, y los productos del usuario que lo tienen
+  const [barcodeValue, setBarcodeValue] = useState('');
+  const [barcodeProducts, setBarcodeProducts] = useState<ProductSuggestion[]>([]);
+  const [barcodeSelectedId, setBarcodeSelectedId] = useState<number | null>(null);
 
   const [lines, setLines] = useState<ReceiptLineState[]>([]);
   const [activeSearchIndex, setActiveSearchIndex] = useState<number | null>(null);
@@ -101,18 +118,23 @@ export default function ScanModal({
     };
   }, []);
 
+  // Busca los productos que tienen el código mientras el usuario lo corrige
   useEffect(() => {
-    if (expirySelected) return;
-    const q = expiryQuery.trim();
-    if (q.length < 2) {
-      setExpirySuggestions([]);
+    if (docType !== 'barcode' || step !== 'review') return;
+    if (!isValidBarcode(barcodeValue)) {
+      setBarcodeProducts([]);
+      setBarcodeSelectedId(null);
       return;
     }
+    let cancelled = false;
     const handle = setTimeout(() => {
-      productService.suggestProducts(q).then(setExpirySuggestions).catch(() => setExpirySuggestions([]));
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [expiryQuery, expirySelected]);
+      productService
+        .getProductsByBarcode(barcodeValue)
+        .then(found => { if (!cancelled) setBarcodeProducts(found); })
+        .catch(() => { if (!cancelled) setBarcodeProducts([]); });
+    }, 400);
+    return () => { cancelled = true; clearTimeout(handle); };
+  }, [docType, step, barcodeValue]);
 
   useEffect(() => {
     if (activeSearchIndex === null) return;
@@ -136,10 +158,11 @@ export default function ScanModal({
     setDraftForm({});
     setConfirmError(null);
     setConfirming(false);
-    setExpiryValue('');
-    setExpiryQuery('');
-    setExpirySuggestions([]);
-    setExpirySelected(null);
+    setExpiryRead('');
+    setExpiryText('');
+    setBarcodeValue('');
+    setBarcodeProducts([]);
+    setBarcodeSelectedId(null);
     setLines([]);
     setActiveSearchIndex(null);
     setLineSearchQuery('');
@@ -215,7 +238,11 @@ export default function ScanModal({
     if (type === 'receipt') {
       setLines(initReceiptLines(result.items));
     } else if (type === 'expiry_date') {
-      setExpiryValue(result.draft?.vencimiento ?? '');
+      const read = isoToDisplay(result.draft?.vencimiento ?? '');
+      setExpiryRead(read);
+      setExpiryText(read);
+    } else if (type === 'barcode') {
+      setBarcodeValue(onlyDigits(result.draft?.codigo_barras ?? ''));
     } else {
       setDraftForm(draftToProductForm(result.draft));
     }
@@ -245,22 +272,30 @@ export default function ScanModal({
     }
   };
 
-  const handleConfirmExpiry = async () => {
-    if (!expirySelected) {
-      setConfirmError(t('scan.expiryNoProductSelected'));
+  // Vuelve al formulario de "Flujo de producto" con la fecha escaneada, sin tocar el resto de lo completado
+  const handleConfirmExpiry = () => {
+    const iso = displayToIso(expiryText);
+    if (!iso) {
+      setConfirmError(t('product.validationVencimiento'));
       return;
     }
-    setConfirmError(null);
-    setConfirming(true);
-    try {
-      await productService.updateProduct(expirySelected.id, { vencimiento: expiryValue || undefined });
-      onSuccess('updated');
-      handleClose();
-    } catch (err: unknown) {
-      setConfirmError(getScanErrorMessage(err, t('inventory.saveError')));
-    } finally {
-      setConfirming(false);
+    onApplyToForm?.(form => ({ ...form, vencimiento: iso }));
+    handleClose();
+  };
+
+  // Con un producto elegido se cargan sus datos; si no, solo el código de barras
+  const handleConfirmBarcode = () => {
+    if (!isValidBarcode(barcodeValue)) {
+      setConfirmError(t('product.validationCodigoBarras'));
+      return;
     }
+    const selected = barcodeProducts.find(p => p.id === barcodeSelectedId);
+    if (selected) {
+      onApplyToForm?.(form => applySuggestionToForm(form, selected));
+    } else {
+      onApplyToForm?.(form => ({ ...form, codigo_barras: barcodeValue }));
+    }
+    handleClose();
   };
 
   const handleConfirmReceipt = async () => {
@@ -285,12 +320,6 @@ export default function ScanModal({
   const handleReceiptDone = () => {
     onSuccess('salida');
     handleClose();
-  };
-
-  const pickExpirySuggestion = (s: ProductSuggestion) => {
-    setExpirySelected(s);
-    setExpiryQuery(s.nombre + (s.marca ? ` · ${s.marca}` : ''));
-    setExpirySuggestions([]);
   };
 
   const openLineSearch = (index: number) => {
@@ -414,38 +443,97 @@ export default function ScanModal({
     );
   };
 
+  const renderActions = (onConfirm: () => void, testPrefix: string) => (
+    <View style={styles.actionsRow}>
+      <TouchableOpacity style={styles.cancelAction} onPress={handleClose} testID={`${testPrefix}-cancel`}>
+        <Text style={styles.cancelActionText}>{t('common.cancel')}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.confirmAction} onPress={onConfirm} testID={`${testPrefix}-confirm`}>
+        <Text style={styles.confirmActionText}>{t('scan.confirm')}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderBarcodeReview = () => {
+    const valid = isValidBarcode(barcodeValue);
+    return (
+      <View>
+        {confirmError && <Text style={styles.errorBanner}>{confirmError}</Text>}
+        <Text style={styles.sectionTitle}>
+          {barcodeValue ? t('scan.barcodeTitle') : t('scan.barcodeNone')}
+        </Text>
+        <Text style={styles.label}>{t('product.codigoBarras')}</Text>
+        <TextInput
+          style={styles.input}
+          keyboardType="number-pad"
+          maxLength={BARCODE_MAX_DIGITS}
+          value={barcodeValue}
+          onChangeText={(v) => { setBarcodeValue(onlyDigits(v)); setConfirmError(null); }}
+          placeholder={t('product.codigoBarras')}
+          placeholderTextColor={Colors.placeholder}
+          testID="barcode-input"
+        />
+        {valid && barcodeProducts.length > 0 && (
+          <View style={styles.matchesBox}>
+            <Text style={styles.sectionTitle}>{t('scan.barcodeProductsTitle')}</Text>
+            <ScrollView
+              testID="barcode-products-list"
+              style={{ maxHeight: BARCODE_LIST_MAX_HEIGHT }}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+            >
+            {barcodeProducts.map(p => (
+              <TouchableOpacity
+                key={p.id}
+                style={[styles.productRow, barcodeSelectedId === p.id && styles.productRowActive]}
+                onPress={() => setBarcodeSelectedId(prev => (prev === p.id ? null : p.id))}
+                testID={`barcode-product-${p.id}`}
+              >
+                <Ionicons
+                  name={barcodeSelectedId === p.id ? 'radio-button-on' : 'radio-button-off'}
+                  size={18}
+                  color={Colors.primary}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.matchText} numberOfLines={1}>{p.nombre}{p.marca ? ` · ${p.marca}` : ''}</Text>
+                  <Text style={styles.hintText} numberOfLines={1}>
+                    {p.vencimiento ? t('scan.productExpires', { date: isoToDisplay(p.vencimiento) }) : t('scan.productNoExpiry')}
+                    {' · '}Stock: {p.stock}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+            </ScrollView>
+          </View>
+        )}
+        {valid && barcodeProducts.length === 0 && (
+          <Text style={styles.hintText}>{t('scan.barcodeNoProducts')}</Text>
+        )}
+        {renderActions(handleConfirmBarcode, 'barcode')}
+      </View>
+    );
+  };
+
   const renderExpiryReview = () => {
     if (!scanResult) return null;
     return (
       <View>
         {confirmError && <Text style={styles.errorBanner}>{confirmError}</Text>}
         <Text style={styles.sectionTitle}>
-          {expiryValue ? t('scan.expiryTitle', { date: expiryValue }) : t('scan.expiryNoDate')}
+          {expiryRead ? t('scan.expiryTitle', { date: expiryRead }) : t('scan.expiryNoDate')}
         </Text>
-        <Text style={styles.label}>{t('scan.expirySelectProduct')}</Text>
+        <Text style={styles.label}>{t('product.vencimiento')}</Text>
         <TextInput
           style={styles.input}
-          placeholder={t('scan.expirySearchPlaceholder')}
+          keyboardType="number-pad"
+          maxLength={10}
+          value={expiryText}
+          onChangeText={(v) => { setExpiryText(formatDateDigits(v)); setConfirmError(null); }}
+          placeholder={t('product.vencimientoPlaceholder')}
           placeholderTextColor={Colors.placeholder}
-          value={expiryQuery}
-          onChangeText={(v) => { setExpiryQuery(v); setExpirySelected(null); }}
-          testID="expiry-search-input"
+          testID="expiry-input"
         />
-        {!expirySelected && expirySuggestions.length > 0 && (
-          <View style={styles.suggestionsBox}>
-            {expirySuggestions.map(s => (
-              <TouchableOpacity key={s.id} style={styles.suggestionItem} onPress={() => pickExpirySuggestion(s)}>
-                <Text style={styles.suggestionText}>{s.nombre}{s.marca ? ` · ${s.marca}` : ''}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-        <TouchableOpacity style={styles.confirmButton} onPress={handleConfirmExpiry} disabled={confirming} testID="confirm-expiry">
-          <Text style={styles.confirmButtonText}>{confirming ? t('scan.confirming') : t('scan.confirm')}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.backLink} onPress={resetAll}>
-          <Text style={styles.backLinkText}>{t('scan.scanAnother')}</Text>
-        </TouchableOpacity>
+        {renderActions(handleConfirmExpiry, 'expiry')}
       </View>
     );
   };
@@ -541,6 +629,7 @@ export default function ScanModal({
   const renderReview = () => {
     if (docType === 'receipt') return renderReceiptReview();
     if (docType === 'expiry_date') return renderExpiryReview();
+    if (docType === 'barcode') return renderBarcodeReview();
     return renderSingleReview();
   };
 
@@ -580,24 +669,34 @@ export default function ScanModal({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>{t('scan.title')}</Text>
-          <TouchableOpacity onPress={handleClose} testID="scan-modal-close">
-            <Ionicons name="close" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-        </View>
-        <ScrollView contentContainerStyle={styles.content}>
-          {renderStep()}
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
+    // Hoja inferior como el historial de consumo: no ocupa toda la pantalla y tocar afuera la cierra
+    <BottomSheetModal
+      visible={visible}
+      onRequestClose={handleClose}
+      sheetStyle={styles.sheet}
+      overlayTestID="scan-overlay"
+      sheetTestID="scan-sheet"
+    >
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>{t('scan.title')}</Text>
+        <TouchableOpacity onPress={handleClose} testID="scan-modal-close">
+          <Ionicons name="close" size={24} color={Colors.textPrimary} />
+        </TouchableOpacity>
+      </View>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {renderStep()}
+      </ScrollView>
+    </BottomSheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
+  sheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '85%',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -606,7 +705,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.textPrimary },
+  // Mismo formato que el título "Flujo de producto", un poco más chico
+  headerTitle: { fontSize: 20, lineHeight: 26, fontFamily: 'Roboto_500Medium', color: Colors.textPrimary },
   content: { padding: 16, paddingBottom: 40 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary, marginTop: 12, marginBottom: 8 },
   docTypeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
@@ -644,6 +744,31 @@ const styles = StyleSheet.create({
   hintText: { color: Colors.textSecondary, fontSize: 13, marginTop: 4 },
   matchesBox: { marginTop: 8, marginBottom: 8 },
   matchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
+  productRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    height: BARCODE_ROW_HEIGHT,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+    borderRadius: 10,
+    marginBottom: BARCODE_ROW_GAP,
+  },
+  productRowActive: { borderColor: Colors.primary, backgroundColor: '#f0f9f6' },
+  actionsRow: { flexDirection: 'row', gap: 12, marginTop: 20 },
+  cancelAction: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  cancelActionText: { color: Colors.textSecondary, fontWeight: '600', fontSize: 16 },
+  confirmAction: { flex: 1, backgroundColor: Colors.primary, borderRadius: 10, padding: 14, alignItems: 'center' },
+  confirmActionText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   matchText: { fontSize: 13, color: Colors.textPrimary },
   label: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginTop: 12 },
   input: {

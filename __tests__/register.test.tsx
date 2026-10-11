@@ -1,13 +1,19 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import RegisterScreen from '../app/(auth)/register';
 import { useAuth } from '@/context/AuthContext';
 import { authService } from '@/services/authService';
+import { clearFlashMessage, peekFlashMessage } from '@/utils/flashMessage';
 
 const mockReplace = jest.fn();
+const mockDismissAll = jest.fn();
 
 jest.mock('expo-router', () => ({
-  router: { replace: (...args: any[]) => mockReplace(...args) },
+  router: {
+    replace: (...args: any[]) => mockReplace(...args),
+    dismissAll: (...args: any[]) => mockDismissAll(...args),
+  },
 }));
 
 jest.mock('../src/context/AuthContext', () => ({
@@ -23,6 +29,7 @@ const mockedAuthService = authService as jest.Mocked<typeof authService>;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  clearFlashMessage();
   (useAuth as jest.Mock).mockReturnValue({ register: mockRegister });
   mockedAuthService.checkEmail.mockResolvedValue(false);
 });
@@ -36,6 +43,78 @@ describe('RegisterScreen', () => {
       fireEvent.press(screen.getByText('Crear Cuenta'));
     });
     expect(mockRegister).not.toHaveBeenCalled();
+  });
+
+  it('shows the email check with a waiting circle until the email is complete, then green or red', async () => {
+    jest.useFakeTimers();
+    render(<RegisterScreen />);
+    const colorOf = (label: string) => StyleSheet.flatten(screen.getByText(label).props.style).color;
+    expect(screen.getByText('Correo no registrado')).toBeTruthy();
+    expect(screen.getAllByText('○')).toHaveLength(6);
+
+    fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b');
+    expect(screen.getAllByText('○')).toHaveLength(6);
+
+    mockedAuthService.checkEmail.mockResolvedValue(false);
+    fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b.com');
+    expect(screen.getAllByText('○')).toHaveLength(6);
+    await act(async () => { await jest.advanceTimersByTimeAsync(600); });
+    expect(screen.getAllByText('○')).toHaveLength(5);
+    expect(screen.getAllByText('✓')).toHaveLength(1);
+    expect(colorOf('Correo no registrado')).not.toBe('#FF3B30');
+
+    mockedAuthService.checkEmail.mockResolvedValue(true);
+    fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'taken@b.com');
+    expect(screen.getAllByText('○')).toHaveLength(6);
+    await act(async () => { await jest.advanceTimersByTimeAsync(600); });
+    expect(colorOf('Correo no registrado')).toBe('#FF3B30');
+    expect(screen.getAllByText('✗')).toHaveLength(1);
+    jest.useRealTimers();
+  });
+
+  it('goes back to waiting when the email is edited into an incomplete one', async () => {
+    jest.useFakeTimers();
+    mockedAuthService.checkEmail.mockResolvedValue(true);
+    render(<RegisterScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b.com');
+    await act(async () => { await jest.advanceTimersByTimeAsync(600); });
+    expect(screen.getAllByText('✗')).toHaveLength(1);
+    fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b');
+    expect(screen.getAllByText('○')).toHaveLength(6);
+    jest.useRealTimers();
+  });
+
+  it('goes back to the initial login screen, clearing the stack first', () => {
+    const calls: string[] = [];
+    mockDismissAll.mockImplementation(() => calls.push('dismissAll'));
+    mockReplace.mockImplementation(() => calls.push('replace'));
+    render(<RegisterScreen />);
+    fireEvent.press(screen.getByText('Volver al inicio de sesión'));
+    expect(calls).toEqual(['dismissAll', 'replace']);
+    expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
+    expect(peekFlashMessage()).toBeNull();
+  });
+
+  it('shows the password rules from the start in a neutral state, then validates them', () => {
+    render(<RegisterScreen />);
+    expect(screen.getByText('Mínimo de 8 caracteres')).toBeTruthy();
+    expect(screen.getByText('Las contraseñas coinciden')).toBeTruthy();
+    expect(screen.queryByText('✗')).toBeNull();
+    expect(screen.queryByText('✓')).toBeNull();
+    fireEvent.changeText(screen.getAllByPlaceholderText('••••••••')[0], 'abc');
+    expect(screen.getAllByText('✓').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('✗').length).toBeGreaterThan(0);
+  });
+
+  it('turns the "passwords match" rule green only when both passwords are equal', () => {
+    render(<RegisterScreen />);
+    const colorOf = (label: string) => StyleSheet.flatten(screen.getByText(label).props.style).color;
+    fireEvent.changeText(screen.getAllByPlaceholderText('••••••••')[0], 'Password1!');
+    expect(colorOf('Las contraseñas coinciden')).toBe('#FF3B30');
+    fireEvent.changeText(screen.getAllByPlaceholderText('••••••••')[1], 'Password1');
+    expect(colorOf('Las contraseñas coinciden')).toBe('#FF3B30');
+    fireEvent.changeText(screen.getAllByPlaceholderText('••••••••')[1], 'Password1!');
+    expect(colorOf('Las contraseñas coinciden')).not.toBe('#FF3B30');
   });
 
   it('shows the password rules once typing starts, and marks them valid', () => {
@@ -57,6 +136,7 @@ describe('RegisterScreen', () => {
 
     expect(mockRegister).toHaveBeenCalledWith('a@b.com', 'Password1!');
     expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
+    expect(peekFlashMessage()).toBe('register.accountCreated');
   });
 
   it('marks the email as taken when the backend reports it', async () => {

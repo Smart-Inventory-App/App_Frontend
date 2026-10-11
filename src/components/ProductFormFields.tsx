@@ -1,13 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView,
-  Image, ActivityIndicator, Alert, Modal, Pressable,
+  Image, ActivityIndicator, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
 import { pickFromGallery, pickFromCamera } from '@/services/imageService';
+import BottomSheetModal from '@/components/BottomSheetModal';
+import DatePickerModal from '@/components/DatePickerModal';
+import { applySuggestionToForm } from '@/utils/ocrDraft';
+import { BARCODE_MAX_DIGITS, describeBarcodeLengths, onlyDigits } from '@/utils/barcode';
+import { displayToIso, formatDateDigits, isoToDisplay } from '@/utils/dateInput';
+import { findSimilarOptions } from '@/utils/optionSearch';
+import { truncateLabel } from '@/utils/text';
+
+const NOMBRE_MAX = 20;
+const OPTION_MAX = 20;
+const DESCRIPCION_MAX = 400;
+const STOCK_MAX_DIGITS = 6;
 
 interface Props {
   form: Partial<ProductCreate>;
@@ -26,6 +38,120 @@ const normalizeToExisting = (value: string, options: string[]): string => {
   return match ?? value;
 };
 
+interface OptionPickerProps {
+  label: string;
+  required?: boolean;
+  testKey: string;
+  options: string[];
+  value?: string;
+  placeholder: string;
+  onChange: (value: string | undefined) => void;
+  onAdd?: (value: string) => void;
+  showLocationIcon?: boolean;
+}
+
+// Campo de selección por chips (categoría, marca, ubicación) con alta de valores nuevos.
+function OptionPicker({
+  label, required, testKey, options, value, placeholder, onChange, onAdd, showLocationIcon,
+}: OptionPickerProps) {
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState('');
+  const similar = useMemo(() => findSimilarOptions(draft, options), [draft, options]);
+
+  const close = () => {
+    setAdding(false);
+    setDraft('');
+  };
+
+  const handleConfirm = () => {
+    const trimmed = draft.trim();
+    if (!trimmed) { close(); return; }
+    const chosen = normalizeToExisting(trimmed, options);
+    onChange(chosen);
+    onAdd?.(chosen);
+    close();
+  };
+
+  const handlePickSimilar = (option: string) => {
+    onChange(option);
+    close();
+  };
+
+  return (
+    <>
+      <Text style={styles.label}>{label}{required ? ' *' : ''}</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipsScroll}
+        contentContainerStyle={styles.chipsContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {!adding && (
+          <TouchableOpacity testID={`add-${testKey}`} style={styles.squareBtn} onPress={() => setAdding(true)}>
+            <Ionicons name="add" size={20} color={Colors.primary} />
+          </TouchableOpacity>
+        )}
+        {options.map(option => (
+          <TouchableOpacity
+            key={option}
+            style={[styles.chip, value === option && styles.chipActive]}
+            onPress={() => onChange(value === option ? undefined : option)}
+          >
+            <Text style={[styles.chipText, value === option && styles.chipTextActive]}>{truncateLabel(option, OPTION_MAX)}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {adding && (
+        <>
+          <View style={styles.newLocRow}>
+            <TextInput
+              testID={`input-${testKey}`}
+              style={[styles.input, styles.newLocInput]}
+              placeholder={placeholder}
+              placeholderTextColor={Colors.placeholder}
+              value={draft}
+              onChangeText={setDraft}
+              autoFocus
+              maxLength={OPTION_MAX}
+              onSubmitEditing={handleConfirm}
+            />
+            <TouchableOpacity testID={`confirm-${testKey}`} style={styles.newLocConfirm} onPress={handleConfirm}>
+              <Ionicons name="checkmark" size={20} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.newLocCancel} onPress={close}>
+              <Ionicons name="close" size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          {similar.length > 0 && (
+            <View style={styles.suggestionsBox}>
+              {similar.map(option => (
+                <TouchableOpacity
+                  key={option}
+                  testID={`similar-${testKey}-${option}`}
+                  style={styles.suggestionItem}
+                  onPress={() => handlePickSimilar(option)}
+                >
+                  <Ionicons name="search-outline" size={14} color={Colors.textSecondary} />
+                  <Text style={styles.suggestionText}>{truncateLabel(option, OPTION_MAX)}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </>
+      )}
+
+      {value && !options.includes(value) && !adding && (
+        <Text style={styles.selectedLoc}>
+          {showLocationIcon && <Ionicons name="location-outline" size={12} />}
+          {showLocationIcon ? ` ${truncateLabel(value, OPTION_MAX)}` : truncateLabel(value, OPTION_MAX)}
+        </Text>
+      )}
+    </>
+  );
+}
+
 export default function ProductFormFields({
   form,
   onChange,
@@ -38,12 +164,8 @@ export default function ProductFormFields({
   suggestNombre,
 }: Props) {
   const { t } = useTranslation();
-  const [showNewLoc, setShowNewLoc] = useState(false);
-  const [newLoc, setNewLoc] = useState('');
-  const [showNewCat, setShowNewCat] = useState(false);
-  const [newCat, setNewCat] = useState('');
-  const [showNewMarca, setShowNewMarca] = useState(false);
-  const [newMarca, setNewMarca] = useState('');
+  const [vencText, setVencText] = useState(() => isoToDisplay(form.vencimiento));
+  const [showCalendar, setShowCalendar] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [nombreSuggestions, setNombreSuggestions] = useState<ProductSuggestion[]>([]);
@@ -67,16 +189,7 @@ export default function ProductFormFields({
   }, [form.nombre, suggestNombre]);
 
   const handleSelectSuggestion = (s: ProductSuggestion) => {
-    onChange({
-      ...form,
-      nombre: s.nombre,
-      marca: s.marca ?? form.marca,
-      categoria: s.categoria,
-      ubicacion: s.ubicacion ?? form.ubicacion,
-      vencimiento: s.vencimiento ?? form.vencimiento,
-      stock_minimo: s.stock_minimo ?? form.stock_minimo,
-      dias_alerta_vencimiento: s.dias_alerta_vencimiento ?? form.dias_alerta_vencimiento,
-    });
+    onChange(applySuggestionToForm(form, s));
     setNombreSuggestions([]);
   };
 
@@ -94,51 +207,35 @@ export default function ProductFormFields({
     }
   };
 
-  const handleSelectUbicacion = (loc: string) => {
-    set('ubicacion', form.ubicacion === loc ? undefined : loc);
+  // Si el valor cambia desde afuera (sugerencia, OCR, reinicio del formulario), se refleja en el campo de texto.
+  useEffect(() => {
+    const current = form.vencimiento ?? '';
+    const typed = displayToIso(vencText) ?? vencText;
+    if (current !== typed && current !== vencText) setVencText(isoToDisplay(form.vencimiento));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.vencimiento]);
+
+  // Se guarda AAAA-MM-DD cuando la fecha está completa y es real; si no, el texto tal cual (la validación lo rechaza).
+  const handleVencimientoChange = (raw: string) => {
+    const formatted = formatDateDigits(raw);
+    setVencText(formatted);
+    set('vencimiento', formatted === '' ? undefined : (displayToIso(formatted) ?? formatted));
   };
 
-  const handleConfirmNewLoc = () => {
-    const trimmed = newLoc.trim();
-    if (!trimmed) { setShowNewLoc(false); return; }
-    const value = normalizeToExisting(trimmed, ubicacionOptions);
-    set('ubicacion', value);
-    onAddUbicacion?.(value);
-    setNewLoc('');
-    setShowNewLoc(false);
+  const handlePickDate = (iso: string) => {
+    setVencText(isoToDisplay(iso));
+    set('vencimiento', iso);
+    setShowCalendar(false);
   };
 
-  const handleSelectCategoria = (cat: string) => {
-    set('categoria', form.categoria === cat ? undefined : cat);
-  };
-
-  const handleConfirmNewCat = () => {
-    const trimmed = newCat.trim();
-    if (!trimmed) { setShowNewCat(false); return; }
-    const value = normalizeToExisting(trimmed, categoriaOptions);
-    set('categoria', value);
-    onAddCategoria?.(value);
-    setNewCat('');
-    setShowNewCat(false);
-  };
-
-  const handleSelectMarca = (marca: string) => {
-    set('marca', form.marca === marca ? undefined : marca);
-  };
-
-  const handleConfirmNewMarca = () => {
-    const trimmed = newMarca.trim();
-    if (!trimmed) { setShowNewMarca(false); return; }
-    const value = normalizeToExisting(trimmed, marcaOptions);
-    set('marca', value);
-    onAddMarca?.(value);
-    setNewMarca('');
-    setShowNewMarca(false);
-  };
+  const vencInvalid = vencText.length === 10 && displayToIso(vencText) === null;
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{t('product.nombre')} *</Text>
+      <View style={styles.labelRow}>
+        <Text style={styles.labelInRow}>{t('product.nombre')} *</Text>
+        <Text testID="nombre-counter" style={styles.counter}>{(form.nombre ?? '').length}/{NOMBRE_MAX}</Text>
+      </View>
       <TextInput
         style={styles.input}
         placeholder={t('product.nombrePlaceholder')}
@@ -147,7 +244,7 @@ export default function ProductFormFields({
         onChangeText={v => set('nombre', v)}
         onFocus={() => setNombreFocused(true)}
         onBlur={() => setTimeout(() => setNombreFocused(false), 150)}
-        maxLength={20}
+        maxLength={NOMBRE_MAX}
       />
       {nombreFocused && nombreSuggestions.length > 0 && (
         <View style={styles.suggestionsBox}>
@@ -171,56 +268,16 @@ export default function ProductFormFields({
         </View>
       )}
 
-      <Text style={styles.label}>{t('product.categoria')} *</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.chipsScroll}
-        contentContainerStyle={styles.chipsContent}
-      >
-        {categoriaOptions.map(cat => (
-          <TouchableOpacity
-            key={cat}
-            style={[styles.chip, form.categoria === cat && styles.chipActive]}
-            onPress={() => handleSelectCategoria(cat)}
-          >
-            <Text style={[styles.chipText, form.categoria === cat && styles.chipTextActive]}>
-              {cat}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        {!showNewCat && (
-          <TouchableOpacity testID="add-categoria" style={styles.chipAdd} onPress={() => setShowNewCat(true)}>
-            <Ionicons name="add" size={16} color={Colors.primary} />
-          </TouchableOpacity>
-        )}
-      </ScrollView>
-
-      {showNewCat && (
-        <View style={styles.newLocRow}>
-          <TextInput
-            testID="input-categoria"
-            style={[styles.input, styles.newLocInput]}
-            placeholder={t('product.categoriaPlaceholder')}
-            placeholderTextColor={Colors.placeholder}
-            value={newCat}
-            onChangeText={setNewCat}
-            autoFocus
-            maxLength={20}
-            onSubmitEditing={handleConfirmNewCat}
-          />
-          <TouchableOpacity testID="confirm-categoria" style={styles.newLocConfirm} onPress={handleConfirmNewCat}>
-            <Ionicons name="checkmark" size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.newLocCancel} onPress={() => { setShowNewCat(false); setNewCat(''); }}>
-            <Ionicons name="close" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {form.categoria && !categoriaOptions.includes(form.categoria) && !showNewCat && (
-        <Text style={styles.selectedLoc}>{form.categoria}</Text>
-      )}
+      <OptionPicker
+        label={t('product.categoria')}
+        required
+        testKey="categoria"
+        options={categoriaOptions}
+        value={form.categoria}
+        placeholder={t('product.categoriaPlaceholder')}
+        onChange={v => set('categoria', v)}
+        onAdd={onAddCategoria}
+      />
 
       <Text style={styles.label}>{t('product.stock')} *</Text>
       <TextInput
@@ -228,6 +285,7 @@ export default function ProductFormFields({
         placeholder="0"
         placeholderTextColor={Colors.placeholder}
         keyboardType="numeric"
+        maxLength={STOCK_MAX_DIGITS}
         value={form.stock !== undefined ? String(form.stock) : ''}
         onChangeText={v => {
           const digits = v.replace(/[^0-9]/g, '');
@@ -235,63 +293,49 @@ export default function ProductFormFields({
         }}
       />
 
-      <Text style={styles.label}>{t('product.marca')}</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.chipsScroll}
-        contentContainerStyle={styles.chipsContent}
-      >
-        {marcaOptions.map(marca => (
-          <TouchableOpacity
-            key={marca}
-            style={[styles.chip, form.marca === marca && styles.chipActive]}
-            onPress={() => handleSelectMarca(marca)}
-          >
-            <Text style={[styles.chipText, form.marca === marca && styles.chipTextActive]}>
-              {marca}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        {!showNewMarca && (
-          <TouchableOpacity testID="add-marca" style={styles.chipAdd} onPress={() => setShowNewMarca(true)}>
-            <Ionicons name="add" size={16} color={Colors.primary} />
-          </TouchableOpacity>
-        )}
-      </ScrollView>
-
-      {showNewMarca && (
-        <View style={styles.newLocRow}>
-          <TextInput
-            testID="input-marca"
-            style={[styles.input, styles.newLocInput]}
-            placeholder={t('product.optional')}
-            placeholderTextColor={Colors.placeholder}
-            value={newMarca}
-            onChangeText={setNewMarca}
-            autoFocus
-            onSubmitEditing={handleConfirmNewMarca}
-          />
-          <TouchableOpacity testID="confirm-marca" style={styles.newLocConfirm} onPress={handleConfirmNewMarca}>
-            <Ionicons name="checkmark" size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.newLocCancel} onPress={() => { setShowNewMarca(false); setNewMarca(''); }}>
-            <Ionicons name="close" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {form.marca && !marcaOptions.includes(form.marca) && !showNewMarca && (
-        <Text style={styles.selectedLoc}>{form.marca}</Text>
-      )}
+      <OptionPicker
+        label={t('product.marca')}
+        testKey="marca"
+        options={marcaOptions}
+        value={form.marca}
+        placeholder={t('product.optional')}
+        onChange={v => set('marca', v)}
+        onAdd={onAddMarca}
+      />
 
       <Text style={styles.label}>{t('product.vencimiento')}</Text>
+      <View style={styles.dateRow}>
+        <TextInput
+          testID="input-vencimiento"
+          style={[styles.input, styles.dateInput, vencInvalid && styles.inputError]}
+          placeholder={t('product.vencimientoPlaceholder')}
+          placeholderTextColor={Colors.placeholder}
+          keyboardType="number-pad"
+          maxLength={10}
+          value={vencText}
+          onChangeText={handleVencimientoChange}
+        />
+        <TouchableOpacity testID="open-calendar" style={[styles.squareBtn, styles.calendarBtn]} onPress={() => setShowCalendar(true)}>
+          <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
+        </TouchableOpacity>
+      </View>
+      <DatePickerModal
+        visible={showCalendar}
+        value={form.vencimiento}
+        onSelect={handlePickDate}
+        onClose={() => setShowCalendar(false)}
+      />
+
+      <Text style={styles.label}>{t('product.codigoBarras')}</Text>
       <TextInput
+        testID="input-codigo-barras"
         style={styles.input}
-        placeholder={t('product.vencimientoPlaceholder')}
+        placeholder={t('product.codigoBarrasPlaceholder', { lengths: describeBarcodeLengths(t('product.codigoBarrasOr')) })}
         placeholderTextColor={Colors.placeholder}
-        value={form.vencimiento ?? ''}
-        onChangeText={v => set('vencimiento', v || undefined)}
+        keyboardType="number-pad"
+        maxLength={BARCODE_MAX_DIGITS}
+        value={form.codigo_barras ?? ''}
+        onChangeText={v => set('codigo_barras', onlyDigits(v) || undefined)}
       />
 
       <Text style={styles.sectionLabel}>{t('product.alertasTitle')}</Text>
@@ -300,7 +344,7 @@ export default function ProductFormFields({
           <Text style={styles.label}>{t('product.stockMinimo')}</Text>
           <TextInput
             style={styles.input}
-            placeholder={t('product.usaReglaGeneral')}
+            placeholder={t('product.defaultPlaceholder')}
             placeholderTextColor={Colors.placeholder}
             keyboardType="numeric"
             value={form.stock_minimo != null ? String(form.stock_minimo) : ''}
@@ -317,7 +361,7 @@ export default function ProductFormFields({
           <Text style={styles.label}>{t('product.diasAlertaVencimiento')}</Text>
           <TextInput
             style={styles.input}
-            placeholder={t('product.usaReglaGeneral')}
+            placeholder={t('product.defaultPlaceholder')}
             placeholderTextColor={Colors.placeholder}
             keyboardType="numeric"
             value={form.dias_alerta_vencimiento != null ? String(form.dias_alerta_vencimiento) : ''}
@@ -332,69 +376,32 @@ export default function ProductFormFields({
         </View>
       </View>
 
-      <Text style={styles.label}>{t('product.descripcion')}</Text>
+      <View style={styles.labelRow}>
+        <Text style={styles.labelInRow}>{t('product.descripcion')}</Text>
+        <Text testID="descripcion-counter" style={styles.counter}>{(form.descripcion ?? '').length}/{DESCRIPCION_MAX}</Text>
+      </View>
       <TextInput
         style={[styles.input, styles.multiline]}
-        placeholder={t('product.optional')}
+        testID="input-descripcion"
+        placeholder={t('product.descripcionPlaceholder')}
         placeholderTextColor={Colors.placeholder}
         multiline
         numberOfLines={3}
         value={form.descripcion ?? ''}
         onChangeText={v => set('descripcion', v || undefined)}
-        maxLength={400}
+        maxLength={DESCRIPCION_MAX}
       />
 
-      <Text style={styles.label}>{t('product.ubicacion')}</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.chipsScroll}
-        contentContainerStyle={styles.chipsContent}
-      >
-        {ubicacionOptions.map(loc => (
-          <TouchableOpacity
-            key={loc}
-            style={[styles.chip, form.ubicacion === loc && styles.chipActive]}
-            onPress={() => handleSelectUbicacion(loc)}
-          >
-            <Text style={[styles.chipText, form.ubicacion === loc && styles.chipTextActive]}>
-              {loc}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        {!showNewLoc && (
-          <TouchableOpacity testID="add-ubicacion" style={styles.chipAdd} onPress={() => setShowNewLoc(true)}>
-            <Ionicons name="add" size={16} color={Colors.primary} />
-          </TouchableOpacity>
-        )}
-      </ScrollView>
-
-      {showNewLoc && (
-        <View style={styles.newLocRow}>
-          <TextInput
-            testID="input-ubicacion"
-            style={[styles.input, styles.newLocInput]}
-            placeholder={t('product.ubicacionPlaceholder')}
-            placeholderTextColor={Colors.placeholder}
-            value={newLoc}
-            onChangeText={setNewLoc}
-            autoFocus
-            onSubmitEditing={handleConfirmNewLoc}
-          />
-          <TouchableOpacity testID="confirm-ubicacion" style={styles.newLocConfirm} onPress={handleConfirmNewLoc}>
-            <Ionicons name="checkmark" size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.newLocCancel} onPress={() => { setShowNewLoc(false); setNewLoc(''); }}>
-            <Ionicons name="close" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {form.ubicacion && !ubicacionOptions.includes(form.ubicacion) && !showNewLoc && (
-        <Text style={styles.selectedLoc}>
-          <Ionicons name="location-outline" size={12} /> {form.ubicacion}
-        </Text>
-      )}
+      <OptionPicker
+        label={t('product.ubicacion')}
+        testKey="ubicacion"
+        options={ubicacionOptions}
+        value={form.ubicacion}
+        placeholder={t('product.ubicacionPlaceholder')}
+        onChange={v => set('ubicacion', v)}
+        onAdd={onAddUbicacion}
+        showLocationIcon
+      />
 
       <Text style={styles.label}>{t('product.imagen')}</Text>
       {form.imagen_url ? (
@@ -416,32 +423,35 @@ export default function ProductFormFields({
         </TouchableOpacity>
       )}
 
-      <Modal visible={showImagePicker} transparent animationType="slide" onRequestClose={() => setShowImagePicker(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowImagePicker(false)}>
-          <Pressable style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>{t('product.imagenSeleccionar')}</Text>
+      {/* Igual que el historial de consumo: el fondo se oscurece con un fundido y solo la hoja sube */}
+      <BottomSheetModal
+        visible={showImagePicker}
+        onRequestClose={() => setShowImagePicker(false)}
+        sheetStyle={styles.modalSheet}
+        overlayTestID="image-picker-overlay"
+        sheetTestID="image-picker-sheet"
+      >
+        <View style={styles.modalHandle} />
+        <Text style={styles.modalTitle}>{t('product.imagenSeleccionar')}</Text>
 
-            <TouchableOpacity style={styles.modalOption} onPress={() => doUpload(pickFromCamera)}>
-              <View style={styles.modalOptionIcon}>
-                <Ionicons name="camera-outline" size={22} color={Colors.primary} />
-              </View>
-              <Text style={styles.modalOptionText}>{t('product.imagenCamara')}</Text>
-            </TouchableOpacity>
+        <TouchableOpacity style={styles.modalOption} onPress={() => doUpload(pickFromCamera)}>
+          <View style={styles.modalOptionIcon}>
+            <Ionicons name="camera-outline" size={22} color={Colors.primary} />
+          </View>
+          <Text style={styles.modalOptionText}>{t('product.imagenCamara')}</Text>
+        </TouchableOpacity>
 
-            <TouchableOpacity style={styles.modalOption} onPress={() => doUpload(pickFromGallery)}>
-              <View style={styles.modalOptionIcon}>
-                <Ionicons name="images-outline" size={22} color={Colors.primary} />
-              </View>
-              <Text style={styles.modalOptionText}>{t('product.imagenGaleria')}</Text>
-            </TouchableOpacity>
+        <TouchableOpacity style={styles.modalOption} onPress={() => doUpload(pickFromGallery)}>
+          <View style={styles.modalOptionIcon}>
+            <Ionicons name="images-outline" size={22} color={Colors.primary} />
+          </View>
+          <Text style={styles.modalOptionText}>{t('product.imagenGaleria')}</Text>
+        </TouchableOpacity>
 
-            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowImagePicker(false)}>
-              <Text style={styles.modalCancelText}>Cancelar</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        <TouchableOpacity style={styles.modalCancel} onPress={() => setShowImagePicker(false)}>
+          <Text style={styles.modalCancelText}>Cancelar</Text>
+        </TouchableOpacity>
+      </BottomSheetModal>
     </View>
   );
 }
@@ -449,6 +459,9 @@ export default function ProductFormFields({
 const styles = StyleSheet.create({
   container: { gap: 4 },
   label: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginTop: 12 },
+  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 12 },
+  labelInRow: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
+  counter: { fontSize: 12, color: Colors.textSecondary },
   input: {
     borderWidth: 1,
     borderColor: Colors.inputBorder,
@@ -503,16 +516,20 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   chipText: { fontSize: 13, color: Colors.textSecondary },
   chipTextActive: { color: '#fff', fontWeight: '600' },
-  chipAdd: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  squareBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#fff',
   },
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  dateInput: { flex: 1, marginTop: 0 },
+  calendarBtn: { height: 40, width: 40 },
+  inputError: { borderColor: Colors.inputBorderError },
   newLocRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
   newLocInput: { flex: 1, marginTop: 0 },
   newLocConfirm: {
@@ -557,11 +574,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fafafa',
   },
   imageChangeBtnText: { fontSize: 13, color: Colors.primary },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
   modalSheet: {
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
@@ -578,9 +590,11 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 12,
   },
+  // Mismo formato que el título "Flujo de producto", un poco más chico
   modalTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 20,
+    lineHeight: 26,
+    fontFamily: 'Roboto_500Medium',
     color: Colors.textPrimary,
     marginBottom: 8,
   },

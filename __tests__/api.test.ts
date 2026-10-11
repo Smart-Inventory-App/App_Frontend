@@ -1,8 +1,9 @@
-import api, { getAuthToken, setAuthToken } from '../src/services/api';
+import api, { getAuthToken, setAuthToken, setUnauthorizedHandler } from '../src/services/api';
 
 describe('api instance', () => {
   afterEach(() => {
     setAuthToken(null);
+    setUnauthorizedHandler(null);
   });
 
   it('has no token by default', () => {
@@ -46,5 +47,51 @@ describe('api instance', () => {
     const error = new Error('network error');
     const interceptor = (api.interceptors.response as any).handlers[0].rejected;
     await expect(interceptor(error)).rejects.toBe(error);
+  });
+});
+
+describe('expired session handling', () => {
+  const rejected = () => (api.interceptors.response as any).handlers[0].rejected;
+
+  afterEach(() => {
+    setAuthToken(null);
+    setUnauthorizedHandler(null);
+  });
+
+  it('notifies the handler once on a 401 while a session is active, clearing the token first', async () => {
+    const handler = jest.fn(() => {
+      expect(getAuthToken()).toBeNull();
+    });
+    setAuthToken('tok');
+    setUnauthorizedHandler(handler);
+    const error = { response: { status: 401 } };
+    await expect(rejected()(error)).rejects.toBe(error);
+    await expect(rejected()(error)).rejects.toBe(error);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a 401 when there is no active session', async () => {
+    const handler = jest.fn();
+    setUnauthorizedHandler(handler);
+    const error = { response: { status: 401 } };
+    await expect(rejected()(error)).rejects.toBe(error);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('ignores other error statuses', async () => {
+    const handler = jest.fn();
+    setAuthToken('tok');
+    setUnauthorizedHandler(handler);
+    const error = { response: { status: 500 } };
+    await expect(rejected()(error)).rejects.toBe(error);
+    expect(handler).not.toHaveBeenCalled();
+    expect(getAuthToken()).toBe('tok');
+  });
+
+  it('does not fail when no handler is registered', async () => {
+    setAuthToken('tok');
+    const error = { response: { status: 401 } };
+    await expect(rejected()(error)).rejects.toBe(error);
+    expect(getAuthToken()).toBe('tok');
   });
 });

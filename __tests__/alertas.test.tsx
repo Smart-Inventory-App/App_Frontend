@@ -88,3 +88,12 @@ describe('AlertasScreen', () => {
     await waitFor(() => expect(console.error).toHaveBeenCalledWith('Error fetching alerts:', expect.any(Error)));
   });
 });
+
+describe('AlertasScreen - shared header', () => {
+  it('uses the shared banner with the title "Centro de Alertas"', async () => {
+    mockedAlerts.getAlerts.mockResolvedValue([]);
+    render(<AlertasScreen />);
+    expect(screen.getByTestId('screen-header')).toBeTruthy();
+    expect(screen.getByText('Centro de Alertas')).toBeTruthy();
+  });
+});

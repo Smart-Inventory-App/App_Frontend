@@ -225,13 +225,28 @@ describe('PerfilScreen', () => {
     await waitFor(() => expect(console.error).toHaveBeenCalledWith('Error loading notifications status:', expect.any(Error)));
   });
 
-  it('logs out and navigates to login', async () => {
+  it('asks for confirmation before logging out, and does nothing if cancelled', async () => {
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    expect(screen.queryByText('¿Estás seguro que querés cerrar sesión?')).toBeNull();
+    fireEvent.press(screen.getByText('Cerrar sesión'));
+    expect(screen.getByText('¿Estás seguro que querés cerrar sesión?')).toBeTruthy();
+    expect(mockLogout).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByText('Cancelar'));
+    expect(screen.queryByText('¿Estás seguro que querés cerrar sesión?')).toBeNull();
+    expect(mockLogout).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('logs out and navigates to login once the user confirms', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    fireEvent.press(screen.getByText('Cerrar sesión'));
     await act(async () => {
-      fireEvent.press(screen.getByText('Cerrar sesión'));
+      fireEvent.press(screen.getByText('Cerrar'));
     });
     expect(mockLogout).toHaveBeenCalled();
     expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
+    expect(screen.queryByText('¿Estás seguro que querés cerrar sesión?')).toBeNull();
   });
 });

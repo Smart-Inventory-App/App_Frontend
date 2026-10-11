@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import CargarScreen from '../app/(tabs)/cargar';
@@ -25,24 +26,38 @@ jest.mock('@/services/productService', () => ({
 }));
 
 jest.mock('@/components/ProductFormFields', () => {
-  const { TextInput: RNTextInput } = require('react-native');
+  const { TextInput: RNTextInput, Text: RNText } = require('react-native');
   return function MockProductFormFields({ form, onChange }: any) {
     return (
-      <RNTextInput
-        testID="mock-form-nombre"
-        value={form.nombre ?? ''}
-        onChangeText={(v: string) => onChange({ ...form, nombre: v, categoria: 'Lacteos', stock: 1 })}
-      />
+      <>
+        <RNText testID="mock-form-json">{JSON.stringify(form)}</RNText>
+        <RNTextInput
+          testID="mock-form-nombre"
+          value={form.nombre ?? ''}
+          onChangeText={(v: string) => onChange({ ...form, nombre: v, categoria: 'Lacteos', stock: 1 })}
+        />
+        <RNTextInput
+          testID="mock-form-codigo-barras"
+          value={form.codigo_barras ?? ''}
+          onChangeText={(v: string) => onChange({ ...form, codigo_barras: v })}
+        />
+      </>
     );
   };
 });
 
 jest.mock('@/components/ScanModal', () => {
   const { View: RNView, Text: RNText, TouchableOpacity } = require('react-native');
-  return function MockScanModal({ visible, onSuccess, onClose }: any) {
+  return function MockScanModal({ visible, onSuccess, onClose, onApplyToForm }: any) {
     if (!visible) return null;
     return (
       <RNView testID="mock-scan-modal">
+        <TouchableOpacity testID="mock-apply-barcode" onPress={() => onApplyToForm((f: any) => ({ ...f, codigo_barras: '7791234567898' }))}>
+          <RNText>apply barcode</RNText>
+        </TouchableOpacity>
+        <TouchableOpacity testID="mock-apply-expiry" onPress={() => onApplyToForm((f: any) => ({ ...f, vencimiento: '2027-01-01' }))}>
+          <RNText>apply expiry</RNText>
+        </TouchableOpacity>
         <TouchableOpacity testID="mock-scan-success-created" onPress={() => onSuccess('created')}>
           <RNText>created</RNText>
         </TouchableOpacity>
@@ -172,6 +187,22 @@ describe('CargarScreen - entrada (manual)', () => {
     fireEvent.press(screen.getByText('Cargar otro'));
     expect(screen.getByTestId('mock-form-nombre').props.value).toBe('');
   });
+
+  it('does not preselect the previous categoria and ubicacion when loading another product', async () => {
+    mockedProducts.getDefaults.mockResolvedValue({ last_categoria: 'Lacteos', last_ubicacion: 'Heladera' });
+    mockedProducts.createProduct.mockResolvedValue({ id: 1, merged: false } as any);
+    render(<CargarScreen />);
+    await waitFor(() => expect(mockedProducts.getDefaults).toHaveBeenCalledTimes(1));
+    fireEvent.changeText(screen.getByTestId('mock-form-nombre'), 'Leche');
+    await act(async () => {
+      fireEvent.press(screen.getByText('Guardar producto'));
+    });
+    mockedProducts.getDefaults.mockClear();
+    await act(async () => {
+      fireEvent.press(screen.getByText('Cargar otro'));
+    });
+    expect(mockedProducts.getDefaults).not.toHaveBeenCalled();
+  });
 });
 
 describe('CargarScreen - salida', () => {
@@ -189,7 +220,7 @@ describe('CargarScreen - salida', () => {
     mockedProducts.suggestProducts.mockResolvedValue([{ id: 1, nombre: 'Leche', categoria: 'Lacteos', stock: 3 } as any]);
     render(<CargarScreen />);
     fireEvent.press(screen.getByText('Salida'));
-    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tengas cargado'), 'lech');
+    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado'), 'lech');
     await act(async () => {
       await jest.advanceTimersByTimeAsync(300);
     });
@@ -209,7 +240,7 @@ describe('CargarScreen - salida', () => {
     mockedProducts.registerEvent.mockResolvedValue({ event_type: 'consumed', quantity: 1, remaining_stock: 2 });
     render(<CargarScreen />);
     fireEvent.press(screen.getByText('Salida'));
-    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tengas cargado'), 'lech');
+    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado'), 'lech');
     await act(async () => {
       await jest.advanceTimersByTimeAsync(300);
     });
@@ -234,7 +265,7 @@ describe('CargarScreen - salida', () => {
     mockedProducts.registerEvent.mockRejectedValue({ response: { data: { detail: 'sin stock' } } });
     render(<CargarScreen />);
     fireEvent.press(screen.getByText('Salida'));
-    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tengas cargado'), 'lech');
+    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado'), 'lech');
     await act(async () => {
       await jest.advanceTimersByTimeAsync(300);
     });
@@ -251,7 +282,7 @@ describe('CargarScreen - salida', () => {
   it('clears the suggestions when the query is cleared', async () => {
     render(<CargarScreen />);
     fireEvent.press(screen.getByText('Salida'));
-    const input = screen.getByPlaceholderText('Buscá un producto que ya tengas cargado');
+    const input = screen.getByPlaceholderText('Buscá un producto que ya tenés cargado');
     fireEvent.changeText(input, 'a');
     expect(mockedProducts.suggestProducts).not.toHaveBeenCalled();
   });
@@ -261,7 +292,7 @@ describe('CargarScreen - salida', () => {
     mockedProducts.registerEvent.mockResolvedValue({ event_type: 'consumed', quantity: 1, remaining_stock: 2 });
     render(<CargarScreen />);
     fireEvent.press(screen.getByText('Salida'));
-    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tengas cargado'), 'lech');
+    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado'), 'lech');
     await waitFor(() => expect(mockedProducts.suggestProducts).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
     fireEvent.press(screen.getByText('Leche'));
@@ -309,5 +340,135 @@ describe('CargarScreen - scan integration', () => {
     fireEvent.press(screen.getByTestId('open-scan-modal'));
     fireEvent.press(screen.getByTestId('mock-scan-close'));
     expect(screen.queryByTestId('mock-scan-modal')).toBeNull();
+  });
+});
+
+describe('CargarScreen - salida labels', () => {
+  it('labels the exit fields as requested', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByText('Salida'));
+    expect(screen.getByText('Producto *')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado')).toBeTruthy();
+    expect(screen.getByText('Motivo *')).toBeTruthy();
+    expect(screen.getByText('Motivo (Opcional)')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Descripción de salida (ej. vencido en heladera)')).toBeTruthy();
+  });
+});
+
+describe('CargarScreen - salida limits and reason format', () => {
+  const goToSalida = () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByText('Salida'));
+  };
+
+  it('limits the quantity to six digits', () => {
+    goToSalida();
+    const quantity = screen.getAllByPlaceholderText('0')[0];
+    expect(quantity.props.maxLength).toBe(6);
+  });
+
+  it('gives the reason the same multiline format as a product description, limited to 50 characters, with a counter', () => {
+    goToSalida();
+    const input = screen.getByTestId('input-salida-nota');
+    expect(input.props.multiline).toBe(true);
+    expect(input.props.maxLength).toBe(50);
+    expect(StyleSheet.flatten(input.props.style).height).toBe(72);
+    expect(screen.getByTestId('salida-nota-counter').props.children.join('')).toBe('0/50');
+    fireEvent.changeText(input, 'vencido en heladera');
+    expect(screen.getByTestId('salida-nota-counter').props.children.join('')).toBe('19/50');
+  });
+});
+
+describe('CargarScreen - shared header', () => {
+  it('puts the Entrada/Salida switch inside the banner, on the right of the title, keeping the banner height', () => {
+    render(<CargarScreen />);
+    const { within } = require('@testing-library/react-native');
+    const header = screen.getByTestId('screen-header');
+    expect(within(header).getByText('Flujo de producto')).toBeTruthy();
+    expect(within(header).getByText('Entrada')).toBeTruthy();
+    expect(within(header).getByText('Salida')).toBeTruthy();
+    expect(StyleSheet.flatten(header.props.style).height).toBe(92);
+    // el título va primero y el selector después: queda a la derecha
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('Flujo de producto')).toBeLessThan(tree.indexOf('Entrada'));
+  });
+
+  it('keeps the switch working from the banner', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByText('Salida'));
+    expect(screen.getByText('Registrar salida')).toBeTruthy();
+    fireEvent.press(screen.getByText('Entrada'));
+    expect(screen.getByText('Guardar producto')).toBeTruthy();
+  });
+});
+
+describe('CargarScreen - big Entrada/Salida buttons', () => {
+  it('writes the buttons a bit smaller than the title and keeps the banner height', () => {
+    render(<CargarScreen />);
+    const flat = (node: any) => StyleSheet.flatten(node.props.style);
+    const title = screen.getByText('Flujo de producto');
+    const entrada = screen.getByText('Entrada');
+    expect(flat(entrada).fontSize).toBe(18);
+    expect(flat(entrada).fontSize).toBeLessThan(flat(title).fontSize);
+    expect(flat(screen.getByTestId('screen-header')).height).toBe(92);
+    // el botón entra en el renglón del banner (28 px)
+    expect(StyleSheet.flatten(screen.getByTestId('direction-entrada').props.style).height).toBe(28);
+  });
+
+  it('shrinks the button text before cutting the title, and sits a bit away from the right edge', () => {
+    render(<CargarScreen />);
+    const entrada = screen.getByText('Entrada');
+    expect(entrada.props.adjustsFontSizeToFit).toBe(true);
+    expect(entrada.props.numberOfLines).toBe(1);
+    expect(StyleSheet.flatten(screen.getByText('Flujo de producto').props.style).flexShrink).toBe(0);
+    expect(StyleSheet.flatten(screen.getByTestId('direction-row').props.style).marginRight).toBeGreaterThan(0);
+    expect(StyleSheet.flatten(screen.getByTestId('direction-row').props.style).gap).toBe(12);
+  });
+});
+
+describe('CargarScreen - código de barras', () => {
+  it('shows "El código de barras es inválido" when the barcode does not validate', async () => {
+    render(<CargarScreen />);
+    fireEvent.changeText(screen.getByTestId('mock-form-nombre'), 'Leche');
+    fireEvent.changeText(screen.getByTestId('mock-form-codigo-barras'), '123');
+    await act(async () => {
+      fireEvent.press(screen.getByText('Guardar producto'));
+    });
+    expect(screen.getByText('El código de barras es inválido')).toBeTruthy();
+    expect(mockedProducts.createProduct).not.toHaveBeenCalled();
+  });
+});
+
+describe('CargarScreen - scanning feeds the form', () => {
+  const formNow = () => JSON.parse(screen.getByTestId('mock-form-json').props.children);
+
+  it('calls the button "Escanear imágenes"', () => {
+    render(<CargarScreen />);
+    expect(screen.getByText('Escanear imágenes')).toBeTruthy();
+  });
+
+  it('puts the scanned barcode in the form without losing what was already typed', () => {
+    render(<CargarScreen />);
+    fireEvent.changeText(screen.getByTestId('mock-form-nombre'), 'Leche');
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-apply-barcode'));
+    expect(formNow()).toMatchObject({ nombre: 'Leche', categoria: 'Lacteos', stock: 1, codigo_barras: '7791234567898' });
+  });
+
+  it('keeps a scanned barcode when an expiry date is scanned afterwards, and vice versa', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-apply-barcode'));
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-apply-expiry'));
+    expect(formNow()).toMatchObject({ codigo_barras: '7791234567898', vencimiento: '2027-01-01' });
+  });
+
+  it('does not create or finish anything when the form is fed by a scan', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-apply-expiry'));
+    expect(mockedProducts.createProduct).not.toHaveBeenCalled();
+    expect(screen.queryByText('Ver inventario')).toBeNull();
   });
 });

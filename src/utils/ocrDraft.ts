@@ -1,4 +1,5 @@
-import { ProductCreate } from '../types/product';
+import { ProductCreate, ProductSuggestion } from '../types/product';
+import { isValidBarcode } from './barcode';
 import { CONFIDENCE_THRESHOLD, ProductDraft, ProductMatch } from '../types/ocr';
 
 /**
@@ -40,6 +41,33 @@ export function applyMatchToForm(
   };
 }
 
+/**
+ * Deja en el formulario los datos de un producto que ya existe (elegido por nombre o por código de barras):
+ * código de barras, stock mínimo, días de anticipación, descripción e imagen incluidos.
+ *
+ * El formulario pasa a ser ese producto: lo que el producto no tiene se borra, aunque el usuario lo
+ * hubiera completado antes (p. ej. un código de barras). La única excepción es el stock, que no es un
+ * dato del producto sino la cantidad de esta entrada y por eso nunca se copia ni se borra.
+ */
+export function applySuggestionToForm(
+  form: Partial<ProductCreate>,
+  s: ProductSuggestion,
+): Partial<ProductCreate> {
+  return {
+    nombre: s.nombre,
+    categoria: s.categoria,
+    stock: form.stock,
+    marca: s.marca ?? undefined,
+    ubicacion: s.ubicacion ?? undefined,
+    vencimiento: s.vencimiento ?? undefined,
+    stock_minimo: s.stock_minimo ?? undefined,
+    dias_alerta_vencimiento: s.dias_alerta_vencimiento ?? undefined,
+    descripcion: s.descripcion ?? undefined,
+    imagen_url: s.imagen_url ?? undefined,
+    codigo_barras: s.codigo_barras ?? undefined,
+  };
+}
+
 export function isLowConfidence(confianzas: Record<string, number> | undefined, field: string): boolean {
   if (!confianzas || !(field in confianzas)) return false;
   return confianzas[field] < CONFIDENCE_THRESHOLD;
@@ -71,13 +99,14 @@ export function buildSalidaItems(lines: ReceiptLineState[]): { product_id: numbe
     .map(line => ({ product_id: line.productId as number, quantity: line.quantity }));
 }
 
-export type ProductFormError = 'nombre' | 'categoria' | 'stock' | 'vencimiento' | null;
+export type ProductFormError = 'nombre' | 'categoria' | 'stock' | 'vencimiento' | 'codigoBarras' | null;
 
 export function validateProductForm(form: Partial<ProductCreate>): ProductFormError {
   if (!form.nombre?.trim()) return 'nombre';
   if (!form.categoria?.trim()) return 'categoria';
   if (form.stock === undefined || isNaN(form.stock) || form.stock <= 0) return 'stock';
   if (form.vencimiento && !isValidIsoDate(form.vencimiento)) return 'vencimiento';
+  if (form.codigo_barras && !isValidBarcode(form.codigo_barras)) return 'codigoBarras';
   return null;
 }
 
