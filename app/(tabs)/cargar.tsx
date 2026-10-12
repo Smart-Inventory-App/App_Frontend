@@ -17,6 +17,11 @@ import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
 import ProductFormFields from '@/components/ProductFormFields';
+import ScreenHeader from '@/components/ScreenHeader';
+import { isValidBarcode } from '@/utils/barcode';
+import ScanModal, { ScanSuccessKind } from '@/components/ScanModal';
+
+const SALIDA_NOTA_MAX = 50;
 
 const EMPTY_FORM = (): Partial<ProductCreate> => ({});
 
@@ -33,6 +38,8 @@ export default function CargarScreen() {
   const [categoriaOptions, setCategoriaOptions] = useState<string[]>([]);
   const [marcaOptions, setMarcaOptions] = useState<string[]>([]);
   const [merged, setMerged] = useState(false);
+  const [scanVisible, setScanVisible] = useState(false);
+  const [scanSuccessKind, setScanSuccessKind] = useState<ScanSuccessKind | null>(null);
 
   const [salidaQuery, setSalidaQuery] = useState('');
   const [salidaSuggestions, setSalidaSuggestions] = useState<ProductSuggestion[]>([]);
@@ -87,6 +94,7 @@ export default function CargarScreen() {
         return t('product.validationVencimiento');
       }
     }
+    if (form.codigo_barras && !isValidBarcode(form.codigo_barras)) return t('product.validationCodigoBarras');
     return null;
   };
 
@@ -160,8 +168,23 @@ export default function CargarScreen() {
     setSalidaNota('');
     setSuccess(false);
     setMerged(false);
+    setScanSuccessKind(null);
     setError(null);
-    applyDefaults();
+  };
+
+  const handleScanSuccess = (kind: ScanSuccessKind) => {
+    setScanSuccessKind(kind);
+    setMerged(kind === 'merged');
+    setSuccess(true);
+  };
+
+  const scanSuccessMessage = (): string => {
+    switch (scanSuccessKind) {
+      case 'merged': return t('product.successMsgMerged');
+      case 'updated': return t('scan.successUpdated');
+      case 'salida': return t('product.successMsgSalida');
+      default: return t('scan.successCreated');
+    }
   };
 
   const handleSelectDirection = (d: Direction) => {
@@ -198,9 +221,11 @@ export default function CargarScreen() {
         <Ionicons name="checkmark-circle" size={72} color={Colors.primary} />
         <Text style={styles.successTitle}>{t('product.successTitle')}</Text>
         <Text style={styles.successMsg}>
-          {direction === 'salida'
-            ? t('product.successMsgSalida')
-            : merged ? t('product.successMsgMerged') : t('product.successMsg')}
+          {scanSuccessKind
+            ? scanSuccessMessage()
+            : direction === 'salida'
+              ? t('product.successMsgSalida')
+              : merged ? t('product.successMsgMerged') : t('product.successMsg')}
         </Text>
         <TouchableOpacity
           style={styles.submitBtn}
@@ -222,29 +247,38 @@ export default function CargarScreen() {
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('product.loadTitle')}</Text>
-        <View style={styles.directionRow}>
-          <TouchableOpacity
+      <ScreenHeader
+        title={t('product.loadTitle')}
+        keepTitleWhole
+        right={
+          <View testID="direction-row" style={styles.directionRow}>
+            <TouchableOpacity
+              testID="direction-entrada"
             style={[styles.directionBtn, direction === 'entrada' && styles.directionBtnActive]}
-            onPress={() => handleSelectDirection('entrada')}
-          >
-            <Text style={[styles.directionBtnText, direction === 'entrada' && styles.directionBtnTextActive]}>
-              {t('product.entrada')}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.directionBtn, direction === 'salida' && styles.directionBtnActiveSalida]}
-            onPress={() => handleSelectDirection('salida')}
-          >
-            <Text style={[styles.directionBtnText, direction === 'salida' && styles.directionBtnTextActive]}>
-              {t('product.salida')}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+              onPress={() => handleSelectDirection('entrada')}
+            >
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.directionBtnText, direction === 'entrada' && styles.directionBtnTextActive]}>
+                {t('product.entrada')}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.directionBtn, direction === 'salida' && styles.directionBtnActiveSalida]}
+              onPress={() => handleSelectDirection('salida')}
+            >
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.directionBtnText, direction === 'salida' && styles.directionBtnTextActive]}>
+                {t('product.salida')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        }
+      />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         {direction === 'entrada' ? (
+          <>
+          <TouchableOpacity style={styles.scanBtn} onPress={() => setScanVisible(true)} testID="open-scan-modal">
+            <Ionicons name="camera-outline" size={18} color={Colors.primary} />
+            <Text style={styles.scanBtnText}>{t('scan.openButton')}</Text>
+          </TouchableOpacity>
           <ProductFormFields
             form={form}
             onChange={setForm}
@@ -256,6 +290,7 @@ export default function CargarScreen() {
             onAddMarca={handleAddMarca}
             suggestNombre={productService.suggestProducts}
           />
+          </>
         ) : (
           <View style={styles.container}>
             <Text style={styles.label}>{t('product.salidaProducto')} *</Text>
@@ -294,11 +329,12 @@ export default function CargarScreen() {
               placeholder="0"
               placeholderTextColor={Colors.placeholder}
               keyboardType="numeric"
+              maxLength={6}
               value={salidaCantidad}
               onChangeText={v => setSalidaCantidad(v.replace(/[^0-9]/g, ''))}
             />
 
-            <Text style={styles.label}>{t('product.salidaMotivo')}</Text>
+            <Text style={styles.label}>{t('product.salidaMotivo')} *</Text>
             <View style={styles.chipsContent}>
               <TouchableOpacity
                 style={[styles.chip, salidaMotivo === 'consumed' && styles.chipActive]}
@@ -318,11 +354,18 @@ export default function CargarScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.label}>{t('product.historialNotaPlaceholder')}</Text>
+            <View style={styles.labelRow}>
+              <Text style={styles.labelInRow}>{t('product.historialNotaPlaceholder')}</Text>
+              <Text testID="salida-nota-counter" style={styles.counter}>{salidaNota.length}/{SALIDA_NOTA_MAX}</Text>
+            </View>
             <TextInput
-              style={styles.input}
+              testID="input-salida-nota"
+              style={[styles.input, styles.multiline]}
               placeholder={t('product.salidaNotaPlaceholder')}
               placeholderTextColor={Colors.placeholder}
+              multiline
+              numberOfLines={3}
+              maxLength={SALIDA_NOTA_MAX}
               value={salidaNota}
               onChangeText={setSalidaNota}
             />
@@ -343,27 +386,58 @@ export default function CargarScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+      <ScanModal
+        visible={scanVisible}
+        onClose={() => setScanVisible(false)}
+        onSuccess={handleScanSuccess}
+        categoriaOptions={categoriaOptions}
+        onAddCategoria={handleAddCategoria}
+        ubicacionOptions={ubicacionOptions}
+        onAddUbicacion={handleAddUbicacion}
+        marcaOptions={marcaOptions}
+        onAddMarca={handleAddMarca}
+        onApplyToForm={updater => setForm(updater)}
+      />
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { backgroundColor: '#fff', padding: 16, paddingTop: 48 },
-  title: { fontSize: 22, fontWeight: 'bold', color: Colors.textPrimary },
-  directionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  // Un poco corridos hacia la izquierda; si no entran, los textos se achican antes que el título
+  directionRow: { flexShrink: 1, flexDirection: 'row', gap: 12, marginRight: 10 },
+  // Texto un poco más chico que el título (22) y botón que no supera el renglón del banner (28 px)
   directionBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    flexShrink: 1,
+    height: 28,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRadius: 14,
     backgroundColor: '#f2f3f6',
   },
   directionBtnActive: { backgroundColor: Colors.primary },
   directionBtnActiveSalida: { backgroundColor: Colors.error },
-  directionBtnText: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
+  directionBtnText: { fontSize: 18, lineHeight: 24, fontWeight: '600', color: Colors.textSecondary },
   directionBtnTextActive: { color: '#fff' },
   container: { flex: 1, backgroundColor: '#f2f3f6' },
+  scanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 10,
+    padding: 12,
+    backgroundColor: '#fff',
+    marginBottom: 16,
+  },
+  scanBtnText: { color: Colors.primary, fontWeight: '600', fontSize: 14 },
   content: { padding: 16, paddingBottom: 40 },
   label: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginTop: 12 },
+  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 12 },
+  labelInRow: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
+  counter: { fontSize: 12, color: Colors.textSecondary },
+  multiline: { textAlignVertical: 'top', height: 72 },
   input: {
     borderWidth: 1,
     borderColor: Colors.inputBorder,

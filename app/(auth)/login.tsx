@@ -16,7 +16,9 @@ import { GoogleSignin, isErrorWithCode, statusCodes } from '@react-native-google
 import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import TopBanner from '../../src/components/TopBanner';
 import { getAuthError } from '../../src/utils/authError';
+import { clearFlashMessage, peekFlashMessage } from '../../src/utils/flashMessage';
 
 type Step = 'email' | 'password';
 
@@ -74,6 +76,12 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [flashKey, setFlashKey] = useState<string | null>(peekFlashMessage);
+
+  const dismissFlash = () => {
+    clearFlashMessage();
+    setFlashKey(null);
+  };
 
   const handleEmailContinue = () => {
     if (!email.trim()) return;
@@ -181,6 +189,7 @@ export default function LoginScreen() {
           </>
         )}
       </ScrollView>
+      {!!flashKey && <TopBanner message={t(flashKey as any)} onDismiss={dismissFlash} autoDismissMs={5000} />}
     </KeyboardAvoidingView>
   );
 }

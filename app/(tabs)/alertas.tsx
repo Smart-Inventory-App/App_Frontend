@@ -3,6 +3,7 @@ import { Figtree_400Regular, useFonts } from '@expo-google-fonts/figtree'
 import { Roboto_500Medium } from '@expo-google-fonts/roboto'
 import { useCallback, useEffect, useState } from 'react';
 import DynamicList from '@/components/DynamicAlert';
+import ScreenHeader from '@/components/ScreenHeader';
 import { Alert, alertService } from '@/services/alertService';
 import { useFocusEffect } from 'expo-router';
 
@@ -66,9 +67,7 @@ export default function AlertasScreen() {
   }
   return (
     <>
-      <View style={styles.header}>
-        <Text style={styles.headerText}>Centro de Alertas</Text>
-      </View>
+      <ScreenHeader title="Centro de Alertas" />
       <ScrollView style={{margin: 16}}>
         <View style={styles.alertSummary}>
           {Object.entries(alertsSummary).map(([key, value]) => (
@@ -108,8 +107,6 @@ export default function AlertasScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { backgroundColor: '#fff', padding: 16 },
-  headerText: { fontSize: 20, margin: 12, fontFamily: 'Roboto_500Medium' },
   alertSummary: {
     flexDirection: 'row',
     justifyContent: 'space-around',

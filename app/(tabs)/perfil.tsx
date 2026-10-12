@@ -12,6 +12,7 @@ import { router } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import ConfirmModal from '@/components/ConfirmModal';
 import { Colors } from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
 import { changeLanguage, type Language } from '@/i18n';
@@ -29,6 +30,7 @@ export default function PerfilScreen() {
   const [lastName, setLastName] = useState('');
   const [username, setUsername] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmLogoutVisible, setConfirmLogoutVisible] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'error'; msg: string } | null>(null);
 
   const [coverageDaysInput, setCoverageDaysInput] = useState('7');
@@ -63,6 +65,7 @@ export default function PerfilScreen() {
   }, [utcToLocal]));
 
   const handleLogout = async () => {
+    setConfirmLogoutVisible(false);
     await logout();
     router.replace('/(auth)/login');
   };
@@ -343,10 +346,19 @@ export default function PerfilScreen() {
       </TouchableOpacity>
 
       {/* Logout */}
-      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+      <TouchableOpacity style={styles.logoutBtn} onPress={() => setConfirmLogoutVisible(true)}>
         <Ionicons name="log-out-outline" size={20} color={Colors.error} />
         <Text style={styles.logoutText}>{t('profile.logout')}</Text>
       </TouchableOpacity>
+
+      <ConfirmModal
+        visible={confirmLogoutVisible}
+        message={t('profile.logoutConfirm')}
+        confirmLabel={t('profile.logoutConfirmAction')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={handleLogout}
+        onCancel={() => setConfirmLogoutVisible(false)}
+      />
     </ScrollView>
   );
 }

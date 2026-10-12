@@ -31,6 +31,11 @@ export const productService = {
     return data;
   },
 
+  async getProductsByBarcode(codigo: string): Promise<ProductSuggestion[]> {
+    const { data } = await api.get<ProductSuggestion[]>(`/products/by-barcode/${encodeURIComponent(codigo)}/all`);
+    return data;
+  },
+
   async getDefaults(): Promise<ProductDefaults> {
     const { data } = await api.get<ProductDefaults>('/products/defaults');
     return data;

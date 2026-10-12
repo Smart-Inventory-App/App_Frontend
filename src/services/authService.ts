@@ -45,6 +45,11 @@ export const authService = {
     await api.post('/auth/reset-password', { reset_token, new_password });
   },
 
+  async checkNewPassword(reset_token: string, new_password: string): Promise<boolean> {
+    const { data } = await api.post<{ different: boolean }>('/auth/check-new-password', { reset_token, new_password });
+    return data.different;
+  },
+
   async googleLogin(accessToken: string): Promise<LoginResponse> {
     const { data } = await api.post<LoginResponse>('/auth/google', { access_token: accessToken });
     return data;

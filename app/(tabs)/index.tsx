@@ -4,6 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import StatCard from '@/components/StatCard';
+import ScreenHeader from '@/components/ScreenHeader';
 import ProductItem from '@/components/ProductItem';
 import { Figtree_400Regular, useFonts } from '@expo-google-fonts/figtree';
 import { Roboto_500Medium } from '@expo-google-fonts/roboto';
@@ -54,12 +55,10 @@ export default function HomeScreen() {
 
   return (
     <>
-      <View style={styles.headerContainer}>
-        <Text style={styles.appName}>{t('common.appName')}</Text>
-        <Text style={styles.header} numberOfLines={1} ellipsizeMode="tail">
-          {displayName ? `${t('home.welcome')}, ${displayName}` : t('home.welcome')}
-        </Text>
-      </View>
+      <ScreenHeader
+        title={displayName ? `${t('home.welcome')}, ${displayName}` : t('home.welcome')}
+        left={<Text style={styles.appName}>{t('common.appName')}</Text>}
+      />
       <ScrollView style={styles.container}>
         {loading ? (
           <ActivityIndicator style={{ marginTop: 40 }} />
@@ -112,16 +111,7 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f2f3f6', padding: 16 },
-  headerContainer: {
-    backgroundColor: '#fff',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    paddingTop: 48,
-  },
-  appName: { fontSize: 13, color: Colors.textSecondary, marginLeft: 12, marginTop: 4, fontFamily: 'Figtree_400Regular', letterSpacing: 0.5 },
-  header: { fontSize: 22, marginLeft: 12, marginBottom: 8, fontFamily: 'Roboto_500Medium', flexShrink: 1 },
+  appName: { fontSize: 13, color: Colors.textSecondary, fontFamily: 'Figtree_400Regular', letterSpacing: 0.5 },
   statsRow: { flexDirection: 'row' },
   actionsRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
   actionBtn: {
