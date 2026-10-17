@@ -65,6 +65,11 @@ describe('LoginScreen', () => {
     jest.useRealTimers();
   });
 
+  it('hides the Google sign-in button by default', () => {
+    render(<LoginScreen />);
+    expect(screen.queryByText('Continuar con Google')).toBeNull();
+  });
+
   it('does not show the banner when there is no pending message', () => {
     render(<LoginScreen />);
     expect(screen.queryByText('La cuenta ha sido creada exitosamente')).toBeNull();
