@@ -187,7 +187,7 @@ export default function LoginScreen() {
               <Text style={styles.buttonText}>{loading ? t('login.signingIn') : t('common.continue')}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')}>
+            <TouchableOpacity onPress={() => router.push({ pathname: '/(auth)/forgot-password', params: { email: email.trim() } })}>
               <Text style={styles.forgotLink}>{t('login.forgotPassword')}</Text>
             </TouchableOpacity>
           </>

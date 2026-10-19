@@ -41,7 +41,7 @@ export default {
     },
   },
   forgotPassword: {
-    description: 'Please enter your email address again.\nIf the given email corresponds to a registered account, you will receive an email with a 6-digit code.',
+    description: 'Enter the email address of your account.\nIf the given email corresponds to a registered account, you will receive a 6-digit recovery code.',
     sending: 'Sending...',
     backToLogin: 'Back to login',
   },

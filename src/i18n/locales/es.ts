@@ -41,7 +41,7 @@ export default {
     },
   },
   forgotPassword: {
-    description: 'Por favor ingresa tu dirección de email nuevamente.\nSi el email indicado corresponde a una cuenta registrada, recibirás un correo con un código de 6 dígitos.',
+    description: 'Ingresa la dirección de mail de tu cuenta.\nSi el mail indicado corresponde a una cuenta registrada, recibirás un código de recuperación de 6 dígitos.',
     sending: 'Enviando...',
     backToLogin: 'Volver al inicio de sesión',
   },

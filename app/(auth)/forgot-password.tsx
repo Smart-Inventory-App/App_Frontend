@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import {
   Image,
@@ -18,7 +18,9 @@ import { authService } from '../../src/services/authService';
 export default function ForgotPasswordScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const [email, setEmail] = useState('');
+  // El mail que se escribió en el inicio de sesión llega ya completado
+  const params = useLocalSearchParams<{ email?: string }>();
+  const [email, setEmail] = useState(params.email ?? '');
   const [loading, setLoading] = useState(false);
 
   const handleContinue = async () => {
