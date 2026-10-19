@@ -151,6 +151,6 @@ describe('LoginScreen', () => {
     fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b.com');
     fireEvent.press(screen.getByText('Continuar'));
     fireEvent.press(screen.getByText('Olvidé mi contraseña'));
-    expect(mockPush).toHaveBeenCalledWith('/(auth)/forgot-password');
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/(auth)/forgot-password', params: { email: 'a@b.com' } });
   });
 });

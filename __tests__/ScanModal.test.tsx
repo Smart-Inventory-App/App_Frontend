@@ -20,6 +20,7 @@ jest.mock('@/services/ocrService', () => ({
     scan: jest.fn(),
     pollJob: jest.fn(),
     submitSalida: jest.fn(),
+    submitEntrada: jest.fn(),
   },
   getScanErrorMessage: jest.fn((err: unknown, fallback: string) => {
     const detail = (err as any)?.response?.data?.detail;
@@ -93,12 +94,12 @@ beforeEach(() => {
 });
 
 describe('ScanModal - doc type & source selection', () => {
-  it('renders the four supported doc types', () => {
+  it('offers only the product label and the receipt or invoice', () => {
     setup();
     expect(screen.getByTestId('doc-type-product_label')).toBeTruthy();
-    expect(screen.getByTestId('doc-type-expiry_date')).toBeTruthy();
     expect(screen.getByTestId('doc-type-receipt')).toBeTruthy();
-    expect(screen.getByTestId('doc-type-barcode')).toBeTruthy();
+    expect(screen.queryByTestId('doc-type-expiry_date')).toBeNull();
+    expect(screen.queryByTestId('doc-type-barcode')).toBeNull();
   });
 
   it('closes the modal via the close button', () => {
@@ -431,7 +432,30 @@ describe('ScanModal - receipt review flow', () => {
       fireEvent.press(screen.getByTestId('confirm-receipt'));
     });
 
-    expect(mockedOcr.submitSalida).toHaveBeenCalledWith([{ product_id: 5, quantity: 3 }], 'Kiosco Don Juan');
+    expect(mockedOcr.submitSalida).toHaveBeenCalledWith([{ product_id: 5, quantity: 3 }], 'Kiosco Don Juan', 'consumed');
+  });
+
+  it('shows the chosen match first and sends it back to its place when the line is excluded', async () => {
+    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
+    const result = receiptResult();
+    result.items[0].coincidencias.push({ id: 6, nombre: 'Yogur Descremado', score: 0.6, por_codigo: false, stock: 4 });
+    mockedOcr.scan.mockResolvedValue({ status: 'done', doc_type: 'receipt', result } as ScanState);
+
+    setup();
+    fireEvent.press(screen.getByTestId('doc-type-receipt'));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('scan-source-camera'));
+    });
+
+    const firstIs = (a: string, b: string) => {
+      const tree = JSON.stringify(screen.toJSON());
+      return tree.indexOf(a) < tree.indexOf(b);
+    };
+    expect(firstIs('Yogur Ser', 'Yogur Descremado')).toBe(true);
+    fireEvent.press(screen.getByText('Yogur Descremado (60%)'));
+    expect(firstIs('Yogur Descremado', 'Yogur Ser')).toBe(true);
+    fireEvent.press(screen.getByTestId('receipt-toggle-0'));
+    expect(firstIs('Yogur Ser', 'Yogur Descremado')).toBe(true);
   });
 
   it('selects a match chip for a line with several candidates', async () => {
@@ -455,6 +479,7 @@ describe('ScanModal - receipt review flow', () => {
     expect(mockedOcr.submitSalida).toHaveBeenCalledWith(
       expect.arrayContaining([{ product_id: 6, quantity: 2 }]),
       'Kiosco Don Juan',
+      'consumed',
     );
   });
 
@@ -490,6 +515,7 @@ describe('ScanModal - receipt review flow', () => {
     expect(mockedOcr.submitSalida).toHaveBeenCalledWith(
       expect.arrayContaining([{ product_id: 8, quantity: 1 }]),
       'Kiosco Don Juan',
+      'consumed',
     );
   });
 
@@ -556,8 +582,7 @@ const scanBarcode = async (code: string | undefined, found: any[] = []) => {
   } as ScanState);
   mockedProducts.getProductsByBarcode.mockResolvedValue(found);
   const onApplyToForm = jest.fn();
-  const handlers = setup({ onApplyToForm });
-  fireEvent.press(screen.getByTestId('doc-type-barcode'));
+  const handlers = setup({ onApplyToForm, fixedDocType: 'barcode' });
   await act(async () => {
     fireEvent.press(screen.getByTestId('scan-source-camera'));
   });
@@ -606,6 +631,20 @@ describe('ScanModal - barcode review flow', () => {
       codigo_barras: '7791234567898', stock: 12,
     });
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('shows the picked product first, and puts it back in its place when it is unpicked', async () => {
+    await scanBarcode('7791234567898', [YOGUR, { ...YOGUR, id: 10 }]);
+    await waitFor(() => expect(screen.getByTestId('barcode-product-9')).toBeTruthy());
+    const firstIs = (id: number, other: number) => {
+      const tree = JSON.stringify(screen.toJSON());
+      return tree.indexOf(`barcode-product-${id}`) < tree.indexOf(`barcode-product-${other}`);
+    };
+    expect(firstIs(9, 10)).toBe(true);
+    fireEvent.press(screen.getByTestId('barcode-product-10'));
+    expect(firstIs(10, 9)).toBe(true);
+    fireEvent.press(screen.getByTestId('barcode-product-10'));
+    expect(firstIs(9, 10)).toBe(true);
   });
 
   it('lets the user unpick a product, and then only the barcode is loaded', async () => {
@@ -670,8 +709,7 @@ describe('ScanModal - barcode review flow', () => {
       result: baseResult({ doc_type: 'barcode', draft: baseDraft({ codigo_barras: '7791234567898' }) }),
     } as ScanState);
     mockedProducts.getProductsByBarcode.mockRejectedValue(new Error('boom'));
-    setup({ onApplyToForm: jest.fn() });
-    fireEvent.press(screen.getByTestId('doc-type-barcode'));
+    setup({ onApplyToForm: jest.fn(), fixedDocType: 'barcode' });
     await act(async () => {
       fireEvent.press(screen.getByTestId('scan-source-camera'));
     });
@@ -688,8 +726,7 @@ const scanExpiry = async (iso: string | undefined) => {
     result: baseResult({ doc_type: 'expiry_date', draft: baseDraft(iso ? { vencimiento: iso } : {}) }),
   } as ScanState);
   const onApplyToForm = jest.fn();
-  const handlers = setup({ onApplyToForm });
-  fireEvent.press(screen.getByTestId('doc-type-expiry_date'));
+  const handlers = setup({ onApplyToForm, fixedDocType: 'expiry_date' });
   await act(async () => {
     fireEvent.press(screen.getByTestId('scan-source-camera'));
   });
@@ -734,9 +771,11 @@ describe('ScanModal - expiry_date review flow', () => {
     const { onApplyToForm } = await scanExpiry('2026-05-01');
     fireEvent.changeText(screen.getByTestId('expiry-input'), '3102');
     fireEvent.press(screen.getByTestId('expiry-confirm'));
-    expect(screen.getByText('Fecha inválida, usá el formato DD/MM/AAAA')).toBeTruthy();
+    expect(screen.getByText('Fecha de vencimiento inválida. Ingresa el día y el mes con 2 dígitos y el año con 4 dígitos. Por ejemplo: 05/03/2027')).toBeTruthy();
+    expect(screen.getByTestId('expiry-input').props.value).toBe('');
     fireEvent.changeText(screen.getByTestId('expiry-input'), '31022027');
     fireEvent.press(screen.getByTestId('expiry-confirm'));
+    expect(screen.getByTestId('expiry-input').props.value).toBe('');
     expect(onApplyToForm).not.toHaveBeenCalled();
   });
 
@@ -774,8 +813,7 @@ describe('ScanModal - the window itself', () => {
       status: 'done', doc_type: 'expiry_date',
       result: baseResult({ doc_type: 'expiry_date', draft: baseDraft({ vencimiento: '2026-05-01' }) }),
     } as ScanState);
-    const { onClose } = setup();
-    fireEvent.press(screen.getByTestId('doc-type-expiry_date'));
+    const { onClose } = setup({ fixedDocType: 'expiry_date' });
     await act(async () => {
       fireEvent.press(screen.getByTestId('scan-source-camera'));
     });
@@ -827,5 +865,156 @@ describe('ScanModal - barcode product list', () => {
     expect(result.marca).toBeUndefined();
     expect(result.descripcion).toBeUndefined();
     expect(result.stock).toBe(9);
+  });
+});
+
+describe('ScanModal - scanning a single field (expiry date or barcode)', () => {
+  it('opens straight on "how to load the photo", titled after the field, with no document type or back link', () => {
+    setup({ fixedDocType: 'expiry_date' });
+    expect(screen.getByText('Escanear fecha de vencimiento')).toBeTruthy();
+    expect(screen.getByText('Elegí cómo cargar la foto')).toBeTruthy();
+    expect(screen.getByTestId('scan-source-camera')).toBeTruthy();
+    expect(screen.getByTestId('scan-source-gallery')).toBeTruthy();
+    expect(screen.queryByTestId('doc-type-product_label')).toBeNull();
+    expect(screen.queryByText('Atrás')).toBeNull();
+  });
+
+  it('titles the barcode scan after the barcode', () => {
+    setup({ fixedDocType: 'barcode' });
+    expect(screen.getByText('Escanear código de barras')).toBeTruthy();
+  });
+
+  it('keeps the general title and the back link for the general scan', () => {
+    setup();
+    expect(screen.getByText('Escanear imagen')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('doc-type-receipt'));
+    expect(screen.getByText('Atrás')).toBeTruthy();
+  });
+
+  it('comes back to the photo options, with the error, when the scan fails', async () => {
+    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
+    mockedOcr.scan.mockResolvedValue({ status: 'failed', error: 'boom' } as ScanState);
+    setup({ fixedDocType: 'expiry_date' });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('scan-source-camera'));
+    });
+    expect(screen.getByText(/boom/)).toBeTruthy();
+    expect(screen.getByTestId('scan-source-camera')).toBeTruthy();
+    expect(screen.queryByTestId('doc-type-product_label')).toBeNull();
+  });
+
+  it('shows the picker error on the photo options and clears it on the next try', async () => {
+    mockedOcr.pickImage.mockRejectedValueOnce(new Error('Se necesita permiso para usar la cámara.'));
+    setup({ fixedDocType: 'barcode' });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('scan-source-camera'));
+    });
+    expect(screen.getByText('Se necesita permiso para usar la cámara.')).toBeTruthy();
+    mockedOcr.pickImage.mockResolvedValueOnce(null);
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('scan-source-gallery'));
+    });
+    expect(screen.queryByText('Se necesita permiso para usar la cámara.')).toBeNull();
+  });
+});
+
+describe('ScanModal - receipts: exits and entries are separate', () => {
+  const receiptState = () => ({
+    status: 'done',
+    doc_type: 'receipt',
+    result: baseResult({
+      doc_type: 'receipt',
+      draft: null,
+      comprobante: { comercio: 'Kiosco Don Juan', fecha_compra: '2026-01-01', total: 100 },
+      items: [
+        baseDraft({
+          nombre: 'Yogur',
+          stock: 2,
+          coincidencia_id: 5,
+          coincidencias: [{ id: 5, nombre: 'Yogur Ser', score: 0.9, por_codigo: false, stock: 1 }],
+        }),
+      ],
+    }),
+  } as ScanState);
+
+  const scanReceipt = async (props: Partial<React.ComponentProps<typeof ScanModal>> = {}) => {
+    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
+    mockedOcr.scan.mockResolvedValue(receiptState());
+    const handlers = setup(props);
+    if (!props.fixedDocType) fireEvent.press(screen.getByTestId('doc-type-receipt'));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('scan-source-camera'));
+    });
+    return handlers;
+  };
+
+  it('opens a fixed receipt scan straight on the photo options, titled after the invoice or receipt', () => {
+    setup({ fixedDocType: 'receipt' });
+    expect(screen.getByText('Escanear factura o remito')).toBeTruthy();
+    expect(screen.getByTestId('scan-source-camera')).toBeTruthy();
+    expect(screen.queryByTestId('doc-type-receipt')).toBeNull();
+  });
+
+  it('on an exit receipt, offers the exit reasons, starting with "Consumido", and sends the chosen one', async () => {
+    mockedOcr.submitSalida.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
+    await scanReceipt({ fixedDocType: 'receipt', receiptDirection: 'salida' });
+    expect(screen.getByText('Motivo')).toBeTruthy();
+    ['consumed', 'expired', 'sold', 'rented'].forEach(r => expect(screen.getByTestId(`receipt-motivo-${r}`)).toBeTruthy());
+    fireEvent.press(screen.getByTestId('receipt-motivo-sold'));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('confirm-receipt'));
+    });
+    expect(mockedOcr.submitSalida).toHaveBeenCalledWith([{ product_id: 5, quantity: 2 }], 'Kiosco Don Juan', 'sold');
+    expect(mockedOcr.submitEntrada).not.toHaveBeenCalled();
+  });
+
+  it('on an entry receipt, only adds stock: no exit reasons, entry wording and the entry endpoint', async () => {
+    mockedOcr.submitEntrada.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
+    const { onSuccess, onClose } = await scanReceipt({ receiptDirection: 'entrada' });
+    expect(screen.queryByTestId('receipt-motivo-sold')).toBeNull();
+    expect(screen.getByText('No ingresar este renglón')).toBeTruthy();
+    expect(screen.getByText('Registrar entrada')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('confirm-receipt'));
+    });
+    expect(mockedOcr.submitEntrada).toHaveBeenCalledWith([{ product_id: 5, quantity: 2 }], 'Kiosco Don Juan');
+    expect(mockedOcr.submitSalida).not.toHaveBeenCalled();
+    expect(screen.getByText('Entrada registrada')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('receipt-result-done'));
+    expect(onSuccess).toHaveBeenCalledWith('restocked');
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('on an entry receipt, asks to choose at least one line to add', async () => {
+    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
+    const state = receiptState();
+    (state.result as any).items[0].coincidencia_id = undefined;
+    mockedOcr.scan.mockResolvedValue(state);
+    setup({ receiptDirection: 'entrada' });
+    fireEvent.press(screen.getByTestId('doc-type-receipt'));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('scan-source-camera'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('confirm-receipt'));
+    });
+    expect(screen.getByText('Elegí al menos un renglón para ingresar')).toBeTruthy();
+    expect(mockedOcr.submitEntrada).not.toHaveBeenCalled();
+  });
+
+  it('on an entry receipt, toggles a line between "No ingresar" and "Ingresar"', async () => {
+    await scanReceipt({ receiptDirection: 'entrada' });
+    fireEvent.press(screen.getByTestId('receipt-toggle-0'));
+    expect(screen.getByText('Ingresar este renglón')).toBeTruthy();
+  });
+
+  it('on an exit receipt, reports a success of kind "salida"', async () => {
+    mockedOcr.submitSalida.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
+    const { onSuccess } = await scanReceipt({ fixedDocType: 'receipt', receiptDirection: 'salida' });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('confirm-receipt'));
+    });
+    fireEvent.press(screen.getByTestId('receipt-result-done'));
+    expect(onSuccess).toHaveBeenCalledWith('salida');
   });
 });

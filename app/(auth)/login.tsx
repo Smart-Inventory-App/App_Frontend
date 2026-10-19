@@ -4,13 +4,14 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AppTextInput from '@/components/AppTextInput';
+import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import { Ionicons } from '@expo/vector-icons';
 import { GoogleSignin, isErrorWithCode, statusCodes } from '@react-native-google-signin/google-signin';
 import { useTranslation } from 'react-i18next';
@@ -68,6 +69,7 @@ function GoogleButton({ onError }: { onError: (msg: string) => void }) {
 }
 
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { login } = useAuth();
   const [step, setStep] = useState<Step>('email');
@@ -105,17 +107,17 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.flex}
+      style={[styles.flex, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={styles.container}>
         <Image source={require('../../assets/icon.png')} style={styles.logo} />
         <Text style={styles.titleSmart}>Smart</Text>
         <Text style={styles.titleInventory}>Inventory</Text>
 
         {step === 'email' ? (
           <>
-            <TextInput
+            <AppTextInput
               style={styles.input}
               placeholder={t('login.emailPlaceholder')}
               placeholderTextColor={Colors.placeholder}
@@ -161,7 +163,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <View style={styles.inputWrapper}>
-              <TextInput
+              <AppTextInput
                 style={[styles.input, styles.inputWithIcon, !!error && styles.inputError]}
                 placeholder={t('login.passwordPlaceholder')}
                 placeholderTextColor={Colors.placeholder}
@@ -185,12 +187,12 @@ export default function LoginScreen() {
               <Text style={styles.buttonText}>{loading ? t('login.signingIn') : t('common.continue')}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')}>
+            <TouchableOpacity onPress={() => router.push({ pathname: '/(auth)/forgot-password', params: { email: email.trim() } })}>
               <Text style={styles.forgotLink}>{t('login.forgotPassword')}</Text>
             </TouchableOpacity>
           </>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
       {!!flashKey && <TopBanner message={t(flashKey as any)} onDismiss={dismissFlash} autoDismissMs={5000} />}
     </KeyboardAvoidingView>
   );

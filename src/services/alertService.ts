@@ -12,6 +12,8 @@ export interface Alert {
     product_name?: string;
     product_stock?: number;
     product_expiry?: string;
+    product_category?: string;
+    product_brand?: string;
 }
 
 export const alertService = {
