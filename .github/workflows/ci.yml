@@ -59,6 +59,9 @@ jobs:
     if: github.ref == 'refs/heads/production'
     permissions:
       contents: write
+    concurrency:
+      group: eas-build-production
+      cancel-in-progress: false
 
     steps:
       - name: Checkout
@@ -106,14 +109,26 @@ jobs:
         run: eas build --platform android --profile production --non-interactive --json > build.json
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_BUILD_NO_EXPO_GO_WARNING: "true"
 
       - name: Publish GitHub Release with the APK
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           url=$(jq -r '.[0].artifacts.buildUrl' build.json)
-          curl -fsSL "$url" -o "smart-inventory-v${VERSION}.apk"
-          gh release create "v${VERSION}" "smart-inventory-v${VERSION}.apk" \
-            --target "$GITHUB_SHA" \
-            --title "Smart Inventory v${VERSION}" \
-            --notes "$(git log -1 --pretty=%B)"
+          if [ -z "$url" ] || [ "$url" = "null" ]; then
+            echo "::error::build.json no trae artifacts.buildUrl"
+            cat build.json
+            exit 1
+          fi
+          apk="smart-inventory-v${VERSION}.apk"
+          curl -fsSL "$url" -o "$apk"
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            gh release upload "v${VERSION}" "$apk" --clobber
+          else
+            gh release create "v${VERSION}" "$apk" \
+              --target "$GITHUB_SHA" \
+              --title "Smart Inventory v${VERSION}" \
+              --notes "$(git log -1 --pretty=%B)"
+          fi
+          echo "Release: v${VERSION}" >> "$GITHUB_STEP_SUMMARY"
