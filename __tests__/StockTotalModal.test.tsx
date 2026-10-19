@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, StyleSheet } from 'react-native';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import StockTotalModal from '../src/components/StockTotalModal';
 import { productService } from '@/services/productService';
 import { Product, ProductGroupDetail } from '@/types/product';
@@ -184,6 +184,27 @@ describe('StockTotalModal - search by name', () => {
     const heights = ['lot-row-1', 'lot-row-2', 'lot-row-3'].map(id => StyleSheet.flatten(screen.getByTestId(id).props.style).height);
     expect(heights[0]).toBeGreaterThan(0);
     expect(new Set(heights).size).toBe(1);
+  });
+
+  it('scrolls only the list of found products: the name and the summary stay fixed', async () => {
+    open();
+    await pick();
+    const scroll = within(screen.getByTestId('stock-total-lots-scroll'));
+    ['lot-row-1', 'lot-row-2', 'lot-row-3'].forEach(id => expect(scroll.getByTestId(id)).toBeTruthy());
+    expect(scroll.queryByTestId('stock-total-summary')).toBeNull();
+    expect(scroll.queryByTestId('stock-total-input')).toBeNull();
+    expect(scroll.queryByText('Productos encontrados')).toBeNull();
+    expect(screen.getByTestId('stock-total-summary')).toBeTruthy();
+    expect(screen.getByTestId('stock-total-input')).toBeTruthy();
+  });
+
+  it('keeps the search field in place while the user types after choosing a product', async () => {
+    open();
+    await pick();
+    const input = screen.getByTestId('stock-total-input');
+    fireEvent.changeText(input, 'Yog');
+    expect(screen.getByTestId('stock-total-input')).toBe(input);
+    expect(screen.queryByTestId('stock-total-lots-scroll')).toBeNull();
   });
 
   it('lists every product found below the summary, under the title "Productos encontrados"', async () => {
