@@ -17,6 +17,8 @@ import { ExitReason, ProductCreate, ProductSuggestion } from '@/types/product';
 import { isoToDisplay } from '@/utils/dateInput';
 import { EXIT_REASONS, EXIT_REASON_LABEL_KEY } from '@/utils/exitReasons';
 import { selectedFirst } from '@/utils/selectedFirst';
+import { skipNextTabAnimation } from '@/utils/tabTransition';
+import SuccessCheck from '@/components/SuccessCheck';
 import AppTextInput from '@/components/AppTextInput';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import ProductFormFields from '@/components/ProductFormFields';
@@ -241,7 +243,7 @@ export default function CargarScreen() {
   if (success) {
     return (
       <View style={styles.successContainer}>
-        <Ionicons name="checkmark-circle" size={72} color={Colors.primary} />
+        <SuccessCheck />
         <Text style={styles.successTitle}>{t('product.successTitle')}</Text>
         <Text style={styles.successMsg}>
           {scanSuccessKind
@@ -254,6 +256,8 @@ export default function CargarScreen() {
           style={styles.submitBtn}
           onPress={() => {
             handleLoadAnother();
+            // Se pasa a Inventario de golpe, sin deslizar la pantalla
+            skipNextTabAnimation();
             router.replace('/(tabs)/inventario');
           }}
         >

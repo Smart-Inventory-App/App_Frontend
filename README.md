@@ -143,6 +143,8 @@ La suite tiene **965 tests**, con ~96 % de cobertura de líneas y ~95 % de state
 
 ## Pantallas
 
+**Cambio de pestaña.** Al tocar una pestaña de la barra inferior, el ícono de inicio del banner o una de las tarjetas del home, la pantalla se desliza hacia el lado en el que está la pestaña elegida (si queda a la derecha, la pantalla nueva entra por la derecha; si queda a la izquierda, por la izquierda). La animación está en `src/utils/tabTransition.ts` y se aplica en `app/(tabs)/_layout.tsx`. El banner de Inventario, Cargar, Alertas y Perfil queda fijo al cambiar entre ellas (el título cambia sin animación); solo se desliza junto con su pantalla cuando el cambio es desde o hacia Inicio. «Ver inventario», en la pantalla de producto cargado, cambia de pestaña sin deslizar (`skipNextTabAnimation`), y el tilde de esa pantalla aparece con una animación de «pop» (`src/components/SuccessCheck.tsx`). Las ventanas de Historial de Cambios y de Stock total de producto no usan esta animación.
+
 **Home.** Banner con el logo y un saludo en dos renglones («Bienvenido, <nombre>» y «Tu estado»; el nombre se corta a 20 caracteres). Debajo, las tarjetas del inventario (cada una lleva a su pantalla), **Últimos Cambios** (los 5 más recientes, con el motivo arriba de cada entrada, stock antes y después, y fecha y hora argentinas) y **Productos Recientes** (los 3 últimos cargados, con su fecha de carga arriba y un alto que se ajusta a los campos que tiene cada uno). Los números usan puntos de miles y se achican para entrar en su tarjeta. «Ver más» abre el **Historial de Cambios**, paginado con «Cargar más».
 
 **Inventario.**

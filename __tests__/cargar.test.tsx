@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 
 import { Colors } from '@/constants/colors';
 import CargarScreen from '../app/(tabs)/cargar';
+import { slideTransition } from '../src/utils/tabTransition';
 import { productService } from '@/services/productService';
 
 const mockReplace = jest.fn();
@@ -1100,6 +1101,45 @@ describe('CargarScreen - the success window does not stay', () => {
     reachEntrySuccess();
     fireEvent.press(screen.getByText('Cargar otro'));
     expect(screen.queryByText('¡Listo!')).toBeNull();
+    expect(screen.getByText('Guardar producto')).toBeTruthy();
+  });
+});
+
+describe('CargarScreen - success screen buttons and check mark', () => {
+  const duration = () => (slideTransition.transitionSpec as { config: { duration: number } }).config.duration;
+
+  const reachSuccess = () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-existing-modal'));
+    fireEvent.press(screen.getByTestId('mock-existing-success'));
+  };
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('pops the check mark up when the success screen appears', () => {
+    reachSuccess();
+    expect(screen.getByText('¡Listo!')).toBeTruthy();
+    expect(screen.getByTestId('success-check')).toBeTruthy();
+  });
+
+  it('opens the inventory without sliding the screen when "Ver inventario" is pressed', () => {
+    jest.useFakeTimers();
+    reachSuccess();
+    expect(duration()).toBe(280);
+    fireEvent.press(screen.getByText('Ver inventario'));
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/inventario');
+    expect(duration()).toBe(0);
+    jest.advanceTimersByTime(1000);
+    expect(duration()).toBe(280);
+  });
+
+  it('does not slide anything when "Cargar otro" is pressed: it only gets the form ready again', () => {
+    reachSuccess();
+    fireEvent.press(screen.getByText('Cargar otro'));
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(duration()).toBe(280);
     expect(screen.getByText('Guardar producto')).toBeTruthy();
   });
 });
