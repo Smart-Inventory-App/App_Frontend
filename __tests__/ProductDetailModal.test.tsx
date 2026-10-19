@@ -122,6 +122,15 @@ describe('ProductDetailModal - details', () => {
     expect(screen.getByTestId('product-detail-scroll').props.showsVerticalScrollIndicator).toBe(false);
   });
 
+  it('shows the category above the brand, and the brand above the stock', () => {
+    render(<ProductDetailModal product={FULL} onClose={jest.fn()} />);
+    const tree = JSON.stringify(screen.toJSON());
+    const at = (id: string) => tree.indexOf(`"${id}"`);
+    expect(at('detail-nombre')).toBeLessThan(at('detail-categoria'));
+    expect(at('detail-categoria')).toBeLessThan(at('detail-marca'));
+    expect(at('detail-marca')).toBeLessThan(at('detail-stock'));
+  });
+
   it('shows the stock above the description, and the description above the location', () => {
     render(<ProductDetailModal product={FULL} onClose={jest.fn()} />);
     const tree = JSON.stringify(screen.toJSON());
@@ -139,12 +148,12 @@ describe('ProductDetailModal - details', () => {
     expect(at('detail-stock')).toBeLessThan(at('detail-ubicacion'));
   });
 
-  it('highlights the brand and the stock, titles and values, with the main color of the app', () => {
+  it('highlights the category and the stock, titles and values, with the main color of the app', () => {
     const { StyleSheet } = require('react-native');
     const { Colors } = require('../src/constants/colors');
     render(<ProductDetailModal product={FULL} onClose={jest.fn()} />);
     const color = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style).color;
-    ['detail-marca', 'detail-marca-label', 'detail-stock', 'detail-stock-label'].forEach(id => {
+    ['detail-categoria', 'detail-categoria-label', 'detail-stock', 'detail-stock-label'].forEach(id => {
       expect(color(id)).toBe(Colors.primary);
     });
   });
@@ -154,19 +163,19 @@ describe('ProductDetailModal - details', () => {
     const { Colors } = require('../src/constants/colors');
     render(<ProductDetailModal product={FULL} onClose={jest.fn()} />);
     const color = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style).color;
-    ['detail-categoria', 'detail-ubicacion', 'detail-descripcion', 'detail-vencimiento'].forEach(id => {
+    ['detail-marca', 'detail-ubicacion', 'detail-descripcion', 'detail-vencimiento'].forEach(id => {
       expect(color(id)).not.toBe(Colors.primary);
     });
-    ['detail-categoria-label', 'detail-ubicacion-label'].forEach(id => {
+    ['detail-marca-label', 'detail-ubicacion-label'].forEach(id => {
       expect(color(id)).not.toBe(Colors.primary);
     });
   });
 
-  it('keeps the title highlighted, and the dash gray, when the brand is missing', () => {
+  it('does not highlight the brand, not even its dash when it is missing', () => {
     const { StyleSheet } = require('react-native');
     const { Colors } = require('../src/constants/colors');
     render(<ProductDetailModal product={BARE} onClose={jest.fn()} />);
-    expect(StyleSheet.flatten(screen.getByTestId('detail-marca-label').props.style).color).toBe(Colors.primary);
+    expect(StyleSheet.flatten(screen.getByTestId('detail-marca-label').props.style).color).not.toBe(Colors.primary);
     expect(StyleSheet.flatten(screen.getByTestId('detail-marca').props.style).color).toBe(Colors.placeholder);
   });
 
@@ -220,5 +229,27 @@ describe('ProductDetailModal - details', () => {
     render(<ProductDetailModal product={FULL} onClose={jest.fn()} />);
     expect(screen.getByText('Fecha de carga')).toBeTruthy();
     expect(screen.queryByText('Cargado el')).toBeNull();
+  });
+});
+
+describe('ProductDetailModal - "Stock total" button', () => {
+  it('is not shown unless the screen can open the total stock', () => {
+    render(<ProductDetailModal product={FULL} onClose={jest.fn()} />);
+    expect(screen.queryByTestId('detail-total-button')).toBeNull();
+  });
+
+  it('is shown right below the product name when it can', () => {
+    render(<ProductDetailModal product={FULL} onClose={jest.fn()} onShowTotal={jest.fn()} />);
+    expect(screen.getByText('Stock total')).toBeTruthy();
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('detail-nombre')).toBeLessThan(tree.indexOf('detail-total-button'));
+    expect(tree.indexOf('detail-total-button')).toBeLessThan(tree.indexOf('"detail-categoria"'));
+  });
+
+  it('hands the product over when it is pressed', () => {
+    const onShowTotal = jest.fn();
+    render(<ProductDetailModal product={FULL} onClose={jest.fn()} onShowTotal={onShowTotal} />);
+    fireEvent.press(screen.getByTestId('detail-total-button'));
+    expect(onShowTotal).toHaveBeenCalledWith(FULL);
   });
 });

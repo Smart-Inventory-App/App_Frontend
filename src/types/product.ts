@@ -64,3 +64,20 @@ export interface ConsumptionEvent {
   reverses_event_id?: number;
   reversed: boolean;
 }
+
+// Los productos con el mismo nombre y categoría (la marca puede variar) se suman para ver el stock total:
+// pueden tener distinta marca, vencimiento, ubicación, imagen o stock.
+export interface ProductGroupKey {
+  nombre: string;
+  categoria: string;
+}
+
+export interface ProductGroupSummary extends ProductGroupKey {
+  stock_total: number;
+  lotes: number;
+  proximo_vencimiento?: string | null;
+}
+
+export interface ProductGroupDetail extends ProductGroupSummary {
+  productos: Product[];
+}

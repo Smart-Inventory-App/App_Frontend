@@ -16,12 +16,13 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { profileService } from '@/services/profileService';
-import { Product, ProductCreate } from '@/types/product';
+import { Product, ProductCreate, ProductGroupKey } from '@/types/product';
 import { isValidBarcode } from '@/utils/barcode';
 import { truncateLabel } from '@/utils/text';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import ProductDetailModal, { GeneralAlertRules } from '@/components/ProductDetailModal';
 import ProductImage from '@/components/ProductImage';
+import StockTotalModal from '@/components/StockTotalModal';
 import { selectedFirst } from '@/utils/selectedFirst';
 import ProductFormFields from '@/components/ProductFormFields';
 import BottomSheetModal from '@/components/BottomSheetModal';
@@ -45,6 +46,9 @@ export default function InventarioScreen() {
   const [historialProduct, setHistorialProduct] = useState<Product | null>(null);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [generalRules, setGeneralRules] = useState<GeneralAlertRules | null>(null);
+  const [stockTotalVisible, setStockTotalVisible] = useState(false);
+  // Producto con el que se abre "Stock total" cuando se llega desde su ventana de información
+  const [stockTotalInitial, setStockTotalInitial] = useState<ProductGroupKey | null>(null);
   const [editForm, setEditForm] = useState<Partial<ProductCreate>>({});
   const [saving, setSaving] = useState(false);
   const [filterOptions, setFilterOptions] = useState<{ categorias: string[]; ubicaciones: string[]; marcas: string[] }>({
@@ -254,6 +258,15 @@ export default function InventarioScreen() {
     <View style={styles.container}>
       <ScreenHeader title={t('inventory.title')} />
 
+      <TouchableOpacity
+        testID="open-stock-total"
+        style={styles.stockTotalBtn}
+        onPress={() => { setStockTotalInitial(null); setStockTotalVisible(true); }}
+      >
+        <Ionicons name="layers-outline" size={18} color={Colors.primary} />
+        <Text style={styles.stockTotalBtnText}>{t('stockTotal.openButton')}</Text>
+      </TouchableOpacity>
+
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={16} color={Colors.placeholder} style={styles.searchIcon} />
         <TextInput
@@ -377,7 +390,23 @@ export default function InventarioScreen() {
       </BottomSheetModal>
 
       {/* Solo muestra los datos del producto: tocar su información abre esta ventana, sin edición */}
-      <ProductDetailModal product={detailProduct} generalRules={generalRules} onClose={() => setDetailProduct(null)} />
+      <ProductDetailModal
+        product={detailProduct}
+        generalRules={generalRules}
+        onClose={() => setDetailProduct(null)}
+        onShowTotal={product => {
+          setDetailProduct(null);
+          setStockTotalInitial({ nombre: product.nombre, categoria: product.categoria });
+          setStockTotalVisible(true);
+        }}
+      />
+
+      <StockTotalModal
+        visible={stockTotalVisible}
+        initial={stockTotalInitial}
+        generalRules={generalRules}
+        onClose={() => setStockTotalVisible(false)}
+      />
 
       <ConfirmModal
         visible={!!productToDelete}
@@ -404,6 +433,20 @@ export default function InventarioScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f2f3f6' },
+  stockTotalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 10,
+    padding: 12,
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 16,
+  },
+  stockTotalBtnText: { color: Colors.primary, fontWeight: '600', fontSize: 14 },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',

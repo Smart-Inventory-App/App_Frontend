@@ -1,5 +1,15 @@
 import api from './api';
-import { ConsumptionEvent, ExitReason, Product, ProductCreate, ProductDefaults, ProductSuggestion } from '../types/product';
+import {
+  ConsumptionEvent,
+  ExitReason,
+  Product,
+  ProductCreate,
+  ProductDefaults,
+  ProductGroupDetail,
+  ProductGroupKey,
+  ProductGroupSummary,
+  ProductSuggestion,
+} from '../types/product';
 
 export interface ProductFilters {
   search?: string;
@@ -28,6 +38,20 @@ export const productService = {
 
   async suggestProducts(q: string): Promise<ProductSuggestion[]> {
     const { data } = await api.get<ProductSuggestion[]>('/products/suggest', { params: { q } });
+    return data;
+  },
+
+  /** Productos agrupados por nombre y categoría cuyo nombre contiene `q`, con su stock total. */
+  async suggestGroups(q: string): Promise<ProductGroupSummary[]> {
+    const { data } = await api.get<ProductGroupSummary[]>('/products/groups', { params: { q } });
+    return data;
+  },
+
+  /** Todos los productos con ese nombre y categoría (de cualquier marca) y su stock total. */
+  async getProductGroup(key: ProductGroupKey): Promise<ProductGroupDetail> {
+    const { data } = await api.get<ProductGroupDetail>('/products/group', {
+      params: { nombre: key.nombre, categoria: key.categoria },
+    });
     return data;
   },
 

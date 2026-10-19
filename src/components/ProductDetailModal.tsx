@@ -18,6 +18,8 @@ interface Props {
   product: Product | null;
   onClose: () => void;
   generalRules?: GeneralAlertRules | null;
+  /** Si se indica, aparece el botón "Stock total" debajo del nombre (solo cuando se llega desde Inventario). */
+  onShowTotal?: (product: Product) => void;
 }
 
 const NO_VALUE = '—';
@@ -46,7 +48,7 @@ function Row({ testID, label, value, note, highlight }: RowProps) {
 }
 
 // Ventana centrada con todos los datos del producto tal como se cargaron. Solo muestra: no se edita nada acá.
-export default function ProductDetailModal({ product, onClose, generalRules }: Props) {
+export default function ProductDetailModal({ product, onClose, generalRules, onShowTotal }: Props) {
   const { t } = useTranslation();
 
   const units = (n: number) => t(n === 1 ? 'detail.unitOne' : 'detail.unitMany', { count: n });
@@ -92,9 +94,15 @@ export default function ProductDetailModal({ product, onClose, generalRules }: P
                   <ProductImage uri={product.imagen_url} style={styles.image} resizeMode="cover" />
                 </View>
                 <Text testID="detail-nombre" style={styles.name}>{product.nombre}</Text>
+                {onShowTotal && (
+                  <TouchableOpacity testID="detail-total-button" style={styles.totalBtn} onPress={() => onShowTotal(product)}>
+                    <Ionicons name="layers-outline" size={16} color={Colors.primary} />
+                    <Text style={styles.totalBtnText}>{t('detail.totalButton')}</Text>
+                  </TouchableOpacity>
+                )}
 
-                <Row testID="detail-marca" label={t('product.marca')} value={product.marca} highlight />
-                <Row testID="detail-categoria" label={t('product.categoria')} value={product.categoria} />
+                <Row testID="detail-categoria" label={t('product.categoria')} value={product.categoria} highlight />
+                <Row testID="detail-marca" label={t('product.marca')} value={product.marca} />
                 <Row testID="detail-stock" label={t('product.stock')} value={product.stock} highlight />
                 {product.descripcion?.trim() ? (
                   <Row testID="detail-descripcion" label={t('product.descripcion')} value={product.descripcion} />
@@ -147,6 +155,21 @@ const styles = StyleSheet.create({
   imageBox: { alignItems: 'center', marginVertical: 8 },
   image: { width: 140, height: 140, borderRadius: 12 },
   name: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center', marginBottom: 8 },
+  totalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    marginBottom: 8,
+    backgroundColor: '#fff',
+  },
+  totalBtnText: { color: Colors.primary, fontWeight: '600', fontSize: 14 },
   sectionTitle: {
     fontSize: 12,
     fontWeight: '700',
@@ -165,6 +188,6 @@ const styles = StyleSheet.create({
   rowValue: { fontSize: 15, color: Colors.textPrimary, marginTop: 2 },
   rowValueEmpty: { color: Colors.placeholder },
   rowNote: { fontSize: 11, color: Colors.textSecondary, marginTop: 2 },
-  // Marca y stock se destacan con el color principal de la app
+  // Categoría y stock se destacan con el color principal de la app
   rowHighlight: { color: Colors.primary },
 });

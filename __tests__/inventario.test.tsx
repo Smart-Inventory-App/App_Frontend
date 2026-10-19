@@ -43,6 +43,19 @@ jest.mock('@/components/ProductFormFields', () => {
   };
 });
 
+jest.mock('@/components/StockTotalModal', () => {
+  const { View, Text, TouchableOpacity } = require('react-native');
+  return function MockStockTotalModal({ visible, initial, onClose }: any) {
+    if (!visible) return null;
+    return (
+      <View testID="mock-stock-total">
+        <Text testID="mock-stock-total-initial">{initial ? `${initial.nombre}|${initial.categoria}` : 'none'}</Text>
+        <TouchableOpacity testID="mock-stock-total-close" onPress={onClose}><Text>close</Text></TouchableOpacity>
+      </View>
+    );
+  };
+});
+
 jest.mock('@/components/HistorialModal', () => {
   const { View, Text, TouchableOpacity } = require('react-native');
   return function MockHistorialModal({ visible, onClose }: any) {
@@ -516,5 +529,58 @@ describe('InventarioScreen - product details', () => {
     expect(names).toEqual(expect.arrayContaining(['pencil', 'time-outline', 'trash']));
     fireEvent.press(screen.UNSAFE_getAllByType(Ionicons).find((n: any) => n.props.name === 'time-outline'));
     expect(screen.queryByTestId('product-detail-card')).toBeNull();
+  });
+});
+
+describe('InventarioScreen - stock total', () => {
+  const full = () => product({ id: 5, nombre: 'Yogur', marca: 'Ser', categoria: 'Lacteos', stock: 8 });
+
+  it('shows the "Stock total de producto" button above the search field', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    expect(screen.getByText('Stock total de producto')).toBeTruthy();
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('open-stock-total')).toBeLessThan(tree.indexOf('Buscar por nombre o marca...'));
+  });
+
+  it('opens the total stock window from the button, with no product chosen, and closes it', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    expect(screen.queryByTestId('mock-stock-total')).toBeNull();
+    fireEvent.press(screen.getByTestId('open-stock-total'));
+    expect(screen.getByTestId('mock-stock-total-initial').props.children).toBe('none');
+    fireEvent.press(screen.getByTestId('mock-stock-total-close'));
+    expect(screen.queryByTestId('mock-stock-total')).toBeNull();
+  });
+
+  it('offers the "Stock total" button in the product information window', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('product-info-5'));
+    expect(screen.getByTestId('detail-total-button')).toBeTruthy();
+  });
+
+  it('goes from the information window to the total stock of that product, closing the information', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('product-info-5'));
+    fireEvent.press(screen.getByTestId('detail-total-button'));
+    expect(screen.queryByTestId('product-detail-card')).toBeNull();
+    expect(screen.getByTestId('mock-stock-total-initial').props.children).toBe('Yogur|Lacteos');
+  });
+
+  it('starts from scratch when opened again from the button after coming from a product', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('product-info-5'));
+    fireEvent.press(screen.getByTestId('detail-total-button'));
+    fireEvent.press(screen.getByTestId('mock-stock-total-close'));
+    fireEvent.press(screen.getByTestId('open-stock-total'));
+    expect(screen.getByTestId('mock-stock-total-initial').props.children).toBe('none');
   });
 });

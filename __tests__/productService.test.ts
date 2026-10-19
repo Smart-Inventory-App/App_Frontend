@@ -96,6 +96,21 @@ describe('productService', () => {
     expect(mockedApi.post).toHaveBeenCalledWith('/products/3/restock', { quantity: 5 });
   });
 
+  it('suggestGroups searches the products grouped by name and category', async () => {
+    mockedApi.get.mockResolvedValue({ data: [{ nombre: 'Leche', stock_total: 12 }] });
+    await expect(productService.suggestGroups('lec')).resolves.toEqual([{ nombre: 'Leche', stock_total: 12 }]);
+    expect(mockedApi.get).toHaveBeenCalledWith('/products/groups', { params: { q: 'lec' } });
+  });
+
+  it('getProductGroup asks for every product with that name and category, whatever its brand', async () => {
+    mockedApi.get.mockResolvedValue({ data: { stock_total: 12, productos: [] } });
+    await expect(productService.getProductGroup({ nombre: 'Leche', categoria: 'Lacteos' }))
+      .resolves.toEqual({ stock_total: 12, productos: [] });
+    expect(mockedApi.get).toHaveBeenCalledWith('/products/group', {
+      params: { nombre: 'Leche', categoria: 'Lacteos' },
+    });
+  });
+
   it('registerEvent forwards a given note', async () => {
     mockedApi.post.mockResolvedValue({ data: {} });
     await productService.registerEvent(1, 2, 'expired', 'vencido en heladera');
