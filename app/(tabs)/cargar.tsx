@@ -14,11 +14,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { ExitReason, ProductCreate, ProductSuggestion } from '@/types/product';
-import { isoToDisplay } from '@/utils/dateInput';
 import { EXIT_REASONS, EXIT_REASON_LABEL_KEY } from '@/utils/exitReasons';
 import { selectedFirst } from '@/utils/selectedFirst';
 import { skipNextTabAnimation } from '@/utils/tabTransition';
 import SuccessCheck from '@/components/SuccessCheck';
+import ProductInfoCard from '@/components/ProductInfoCard';
 import AppTextInput from '@/components/AppTextInput';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import ProductFormFields from '@/components/ProductFormFields';
@@ -337,33 +337,7 @@ export default function CargarScreen() {
               value={salidaQuery}
               onChangeText={onSalidaQueryChange}
             />
-            {salidaSelected && (
-              <View testID="salida-selected-info" style={styles.selectedInfo}>
-                <View style={styles.infoCell}>
-                  <Text style={styles.infoLabel}>{t('product.categoria')}</Text>
-                  <Text testID="salida-selected-categoria" style={styles.infoValue}>{salidaSelected.categoria}</Text>
-                </View>
-                {salidaSelected.marca ? (
-                  <View style={styles.infoCell}>
-                    <Text style={styles.infoLabel}>{t('product.marca')}</Text>
-                    <Text testID="salida-selected-marca" style={styles.infoValue}>{salidaSelected.marca}</Text>
-                  </View>
-                ) : null}
-                <View style={styles.infoCell}>
-                  <Text style={styles.infoLabel}>{t('product.salidaStockActual')}</Text>
-                  <Text testID="salida-selected-stock" style={[styles.infoValue, styles.infoValueStrong]}>{String(salidaSelected.stock)}</Text>
-                </View>
-                <View style={styles.infoCell}>
-                  <Text style={styles.infoLabel}>{t('product.vencimiento')}</Text>
-                  <Text
-                    testID="salida-selected-vencimiento"
-                    style={[styles.infoValue, !salidaSelected.vencimiento && styles.infoValueEmpty]}
-                  >
-                    {salidaSelected.vencimiento ? isoToDisplay(salidaSelected.vencimiento) : t('scan.productNoExpiry')}
-                  </Text>
-                </View>
-              </View>
-            )}
+            {salidaSelected && <ProductInfoCard product={salidaSelected} testIDPrefix="salida-selected" />}
             {!salidaSelected && salidaSuggestions.length > 0 && (
               <View style={styles.suggestionsBox}>
                 {salidaSuggestions.map(s => (
@@ -560,23 +534,6 @@ const styles = StyleSheet.create({
   },
   suggestionText: { fontSize: 14, color: Colors.textPrimary },
   suggestionSubtext: { fontSize: 11, color: Colors.textSecondary, marginTop: 1 },
-  // Datos del producto elegido: una tarjeta breve con dos columnas
-  selectedInfo: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#e8e8ee',
-  },
-  infoCell: { width: '50%', paddingVertical: 4 },
-  infoLabel: { fontSize: 11, fontWeight: '600', color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4 },
-  infoValue: { fontSize: 14, color: Colors.textPrimary, marginTop: 1 },
-  infoValueStrong: { fontWeight: '700', color: Colors.primary },
-  infoValueEmpty: { color: Colors.placeholder },
   chipsContent: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
   // Motivos de salida en una sola fila que se desliza hacia los costados
   motivoScroll: { flexGrow: 0, marginTop: 6 },

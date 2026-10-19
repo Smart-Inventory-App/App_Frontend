@@ -992,9 +992,11 @@ describe('CargarScreen - salida: datos informativos del producto elegido', () =>
     expect(screen.getByTestId('salida-selected-vencimiento').props.children).toBe('05/03/2027');
   });
 
-  it('says "Sin vencimiento" when the product does not expire', async () => {
+  it('leaves the expiry out, like the brand, when the product does not expire', async () => {
     await pickByName({ id: 4, nombre: 'Sal', categoria: 'Almacen', stock: 9 });
-    expect(screen.getByTestId('salida-selected-vencimiento').props.children).toBe('Sin vencimiento');
+    expect(screen.queryByTestId('salida-selected-vencimiento')).toBeNull();
+    expect(screen.queryByText('Sin vencimiento')).toBeNull();
+    expect(screen.queryByText('Vencimiento')).toBeNull();
   });
 
   it('shows the four data in order, category, brand, current stock and expiry, as a short card', async () => {
