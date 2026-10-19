@@ -4,6 +4,7 @@ import { Roboto_500Medium } from '@expo-google-fonts/roboto'
 import { useCallback, useEffect, useState } from 'react';
 import DynamicList from '@/components/DynamicAlert';
 import ScreenHeader from '@/components/ScreenHeader';
+import AlertDetailModal from '@/components/AlertDetailModal';
 import { Alert, alertService } from '@/services/alertService';
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '@/constants/colors';
@@ -15,6 +16,7 @@ export default function AlertasScreen() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [alertsSummary, setAlertsSummary] = useState({critical: 0, warning: 0, info: 0});
   const [loading, setLoading] = useState(false);
+  const [detailAlert, setDetailAlert] = useState<Alert | null>(null);
   const alertContainer = {
     critical: styles.criticalContainer,
     warning: styles.warningContainer,
@@ -41,6 +43,8 @@ export default function AlertasScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // Al volver a la pantalla siempre se ve el filtro "Todas" con todas las alertas
+      setSelected('Todas');
       load();
     }, [load])
   );
@@ -101,9 +105,10 @@ export default function AlertasScreen() {
             <Text style={{fontFamily: 'Figtree_400Regular', color: '#828282'}}>No hay alertas para mostrar.</Text>
           </View>
         ) : (
-          <DynamicList alertsData={alerts} />
+          <DynamicList alertsData={alerts} onPressAlert={setDetailAlert} />
         )}
       </ScrollView>
+      <AlertDetailModal alert={detailAlert} onClose={() => setDetailAlert(null)} />
     </>
   );
 }

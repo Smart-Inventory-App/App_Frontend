@@ -1,17 +1,21 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import AlertasScreen from '../app/(tabs)/alertas';
 import { alertService, Alert } from '@/services/alertService';
 
 const mockNavigate = jest.fn();
+let mockFocusCallback: () => void = () => {};
 
 jest.mock('expo-router', () => {
   const ReactActual = require('react');
   return {
     router: { navigate: (...args: any[]) => mockNavigate(...args) },
-    useFocusEffect: (cb: () => void) => ReactActual.useEffect(cb, [cb]),
+    useFocusEffect: (cb: () => void) => {
+      mockFocusCallback = cb;
+      ReactActual.useEffect(cb, [cb]);
+    },
   };
 });
 
@@ -138,5 +142,48 @@ describe('AlertasScreen - summary and filters look', () => {
     expect(button.backgroundColor).toBe('#fff');
     fireEvent.press(screen.getByTestId('alert-filter-Stocks'));
     expect(StyleSheet.flatten(screen.getByTestId('alert-filter-Stocks').props.style).backgroundColor).toBe(Colors.primary);
+  });
+});
+
+describe('AlertasScreen - alert detail window', () => {
+  beforeEach(() => {
+    mockedAlerts.getAlerts.mockResolvedValue([
+      alert(1, { product_category: 'Lacteos', product_brand: 'Sancor', product_stock: 4 }),
+    ]);
+  });
+
+  it('opens the detail of the alert that was tapped, and closes it', async () => {
+    render(<AlertasScreen />);
+    await waitFor(() => expect(screen.getByTestId('alert-item-1')).toBeTruthy());
+    expect(screen.queryByTestId('alert-detail-card')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('alert-item-1'));
+
+    expect(screen.getByTestId('alert-detail-nombre').props.children).toBe('P1');
+    expect(screen.getByTestId('alert-detail-categoria').props.children).toBe('Lacteos');
+    expect(screen.getByTestId('alert-detail-marca').props.children).toBe('Sancor');
+
+    fireEvent.press(screen.getByTestId('alert-detail-close'));
+    expect(screen.queryByTestId('alert-detail-card')).toBeNull();
+  });
+});
+
+describe('AlertasScreen - coming back to the screen', () => {
+  it('shows the filter "Todas" and every alert again after leaving the screen with another filter', async () => {
+    const { Colors } = require('../src/constants/colors');
+    mockedAlerts.getAlerts.mockResolvedValue([alert(1), alert(2)]);
+    mockedAlerts.getStockAlerts.mockResolvedValue([alert(2)]);
+    render(<AlertasScreen />);
+    await waitFor(() => expect(screen.getByText('P1 - Información')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('alert-filter-Stocks'));
+    await waitFor(() => expect(screen.queryByText('P1 - Información')).toBeNull());
+
+    // Salir de la pantalla y volver a entrar: la pestaña sigue montada y se dispara el foco otra vez
+    act(() => { mockFocusCallback(); });
+
+    await waitFor(() => expect(screen.getByText('P1 - Información')).toBeTruthy());
+    expect(screen.getByText('P2 - Información')).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId('alert-filter-Todas').props.style).backgroundColor).toBe(Colors.primary);
+    expect(StyleSheet.flatten(screen.getByTestId('alert-filter-Stocks').props.style).backgroundColor).toBe('#fff');
   });
 });

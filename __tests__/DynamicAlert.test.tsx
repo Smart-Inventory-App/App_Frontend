@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import DynamicAlert from '../src/components/DynamicAlert';
 import { Alert } from '../src/services/alertService';
-import { Image } from 'react-native';
+import { Image, StyleSheet } from 'react-native';
 
 const baseAlert = (overrides: Partial<Alert> = {}): Alert => ({
   id: 1,
@@ -79,5 +79,46 @@ describe('DynamicAlert', () => {
 
   it('renders an empty list without crashing', () => {
     render(<DynamicAlert alertsData={[]} />);
+  });
+});
+
+describe('DynamicAlert - row size', () => {
+  const stockAlert = baseAlert({ type: 'stock_low_coverage', level: 'critical', product_stock: 2, days_until_stockout: 3 });
+
+  it('gives every entry the same, taller height', () => {
+    render(<DynamicAlert alertsData={[stockAlert, baseAlert({ id: 2, product_name: 'Un nombre larguísimo '.repeat(6) })]} />);
+    const height = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style).height;
+    expect(height('alert-row-1')).toBeGreaterThanOrEqual(90);
+    expect(height('alert-row-1')).toBe(height('alert-row-2'));
+  });
+
+  it('cuts the long messages after two lines', () => {
+    render(<DynamicAlert alertsData={[stockAlert]} />);
+    expect(screen.getByText('Leche - Stock crítico').props.numberOfLines).toBe(2);
+    expect(screen.getByText('El stock actual alcanza para 3 días').props.numberOfLines).toBe(2);
+  });
+
+  it('centers the message in the space it has inside the entry', () => {
+    render(<DynamicAlert alertsData={[stockAlert]} />);
+    const text = StyleSheet.flatten(screen.getByTestId('alert-text-1').props.style);
+    expect(text.justifyContent).toBe('center');
+    expect(text.flex).toBe(1);
+    expect(StyleSheet.flatten(screen.getByTestId('alert-row-1').props.style).alignItems).toBe('center');
+  });
+});
+
+describe('DynamicAlert - tapping an entry', () => {
+  it('tells which alert was tapped', () => {
+    const onPressAlert = jest.fn();
+    const first = baseAlert({ id: 1 });
+    const second = baseAlert({ id: 2, product_name: 'Pan' });
+    render(<DynamicAlert alertsData={[first, second]} onPressAlert={onPressAlert} />);
+    fireEvent.press(screen.getByTestId('alert-item-2'));
+    expect(onPressAlert).toHaveBeenCalledWith(second);
+  });
+
+  it('can be tapped even when nobody listens', () => {
+    render(<DynamicAlert alertsData={[baseAlert()]} />);
+    fireEvent.press(screen.getByTestId('alert-item-1'));
   });
 });
