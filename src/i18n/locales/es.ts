@@ -189,6 +189,8 @@ export default {
     optional: 'Opcional',
     imageOpen: 'Ver imagen',
     imageClose: 'Cerrar imagen',
+    scanExpiry: 'Escanear fecha de vencimiento',
+    scanBarcode: 'Escanear código de barras',
     saveProduct: 'Guardar producto',
     loadTitle: 'Flujo de producto',
     entrada: 'Entrada',
@@ -239,6 +241,8 @@ export default {
   scan: {
     openButton: 'Escanear imágenes',
     title: 'Escanear imagen',
+    titleExpiry: 'Escanear fecha de vencimiento',
+    titleBarcode: 'Escanear código de barras',
     close: 'Cerrar',
     back: 'Atrás',
     docTypeTitle: '¿Qué estás por escanear?',

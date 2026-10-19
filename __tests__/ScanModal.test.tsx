@@ -93,12 +93,12 @@ beforeEach(() => {
 });
 
 describe('ScanModal - doc type & source selection', () => {
-  it('renders the four supported doc types', () => {
+  it('offers only the product label and the receipt or invoice', () => {
     setup();
     expect(screen.getByTestId('doc-type-product_label')).toBeTruthy();
-    expect(screen.getByTestId('doc-type-expiry_date')).toBeTruthy();
     expect(screen.getByTestId('doc-type-receipt')).toBeTruthy();
-    expect(screen.getByTestId('doc-type-barcode')).toBeTruthy();
+    expect(screen.queryByTestId('doc-type-expiry_date')).toBeNull();
+    expect(screen.queryByTestId('doc-type-barcode')).toBeNull();
   });
 
   it('closes the modal via the close button', () => {
@@ -579,8 +579,7 @@ const scanBarcode = async (code: string | undefined, found: any[] = []) => {
   } as ScanState);
   mockedProducts.getProductsByBarcode.mockResolvedValue(found);
   const onApplyToForm = jest.fn();
-  const handlers = setup({ onApplyToForm });
-  fireEvent.press(screen.getByTestId('doc-type-barcode'));
+  const handlers = setup({ onApplyToForm, fixedDocType: 'barcode' });
   await act(async () => {
     fireEvent.press(screen.getByTestId('scan-source-camera'));
   });
@@ -707,8 +706,7 @@ describe('ScanModal - barcode review flow', () => {
       result: baseResult({ doc_type: 'barcode', draft: baseDraft({ codigo_barras: '7791234567898' }) }),
     } as ScanState);
     mockedProducts.getProductsByBarcode.mockRejectedValue(new Error('boom'));
-    setup({ onApplyToForm: jest.fn() });
-    fireEvent.press(screen.getByTestId('doc-type-barcode'));
+    setup({ onApplyToForm: jest.fn(), fixedDocType: 'barcode' });
     await act(async () => {
       fireEvent.press(screen.getByTestId('scan-source-camera'));
     });
@@ -725,8 +723,7 @@ const scanExpiry = async (iso: string | undefined) => {
     result: baseResult({ doc_type: 'expiry_date', draft: baseDraft(iso ? { vencimiento: iso } : {}) }),
   } as ScanState);
   const onApplyToForm = jest.fn();
-  const handlers = setup({ onApplyToForm });
-  fireEvent.press(screen.getByTestId('doc-type-expiry_date'));
+  const handlers = setup({ onApplyToForm, fixedDocType: 'expiry_date' });
   await act(async () => {
     fireEvent.press(screen.getByTestId('scan-source-camera'));
   });
@@ -813,8 +810,7 @@ describe('ScanModal - the window itself', () => {
       status: 'done', doc_type: 'expiry_date',
       result: baseResult({ doc_type: 'expiry_date', draft: baseDraft({ vencimiento: '2026-05-01' }) }),
     } as ScanState);
-    const { onClose } = setup();
-    fireEvent.press(screen.getByTestId('doc-type-expiry_date'));
+    const { onClose } = setup({ fixedDocType: 'expiry_date' });
     await act(async () => {
       fireEvent.press(screen.getByTestId('scan-source-camera'));
     });
@@ -866,5 +862,55 @@ describe('ScanModal - barcode product list', () => {
     expect(result.marca).toBeUndefined();
     expect(result.descripcion).toBeUndefined();
     expect(result.stock).toBe(9);
+  });
+});
+
+describe('ScanModal - scanning a single field (expiry date or barcode)', () => {
+  it('opens straight on "how to load the photo", titled after the field, with no document type or back link', () => {
+    setup({ fixedDocType: 'expiry_date' });
+    expect(screen.getByText('Escanear fecha de vencimiento')).toBeTruthy();
+    expect(screen.getByText('Elegí cómo cargar la foto')).toBeTruthy();
+    expect(screen.getByTestId('scan-source-camera')).toBeTruthy();
+    expect(screen.getByTestId('scan-source-gallery')).toBeTruthy();
+    expect(screen.queryByTestId('doc-type-product_label')).toBeNull();
+    expect(screen.queryByText('Atrás')).toBeNull();
+  });
+
+  it('titles the barcode scan after the barcode', () => {
+    setup({ fixedDocType: 'barcode' });
+    expect(screen.getByText('Escanear código de barras')).toBeTruthy();
+  });
+
+  it('keeps the general title and the back link for the general scan', () => {
+    setup();
+    expect(screen.getByText('Escanear imagen')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('doc-type-receipt'));
+    expect(screen.getByText('Atrás')).toBeTruthy();
+  });
+
+  it('comes back to the photo options, with the error, when the scan fails', async () => {
+    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
+    mockedOcr.scan.mockResolvedValue({ status: 'failed', error: 'boom' } as ScanState);
+    setup({ fixedDocType: 'expiry_date' });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('scan-source-camera'));
+    });
+    expect(screen.getByText(/boom/)).toBeTruthy();
+    expect(screen.getByTestId('scan-source-camera')).toBeTruthy();
+    expect(screen.queryByTestId('doc-type-product_label')).toBeNull();
+  });
+
+  it('shows the picker error on the photo options and clears it on the next try', async () => {
+    mockedOcr.pickImage.mockRejectedValueOnce(new Error('Se necesita permiso para usar la cámara.'));
+    setup({ fixedDocType: 'barcode' });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('scan-source-camera'));
+    });
+    expect(screen.getByText('Se necesita permiso para usar la cámara.')).toBeTruthy();
+    mockedOcr.pickImage.mockResolvedValueOnce(null);
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('scan-source-gallery'));
+    });
+    expect(screen.queryByText('Se necesita permiso para usar la cámara.')).toBeNull();
   });
 });

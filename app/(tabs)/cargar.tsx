@@ -19,6 +19,7 @@ import ProductFormFields from '@/components/ProductFormFields';
 import ScreenHeader from '@/components/ScreenHeader';
 import { isValidBarcode } from '@/utils/barcode';
 import ScanModal, { ScanSuccessKind } from '@/components/ScanModal';
+import { FieldScanDocType } from '@/types/ocr';
 
 const SALIDA_NOTA_MAX = 50;
 
@@ -38,6 +39,8 @@ export default function CargarScreen() {
   const [marcaOptions, setMarcaOptions] = useState<string[]>([]);
   const [merged, setMerged] = useState(false);
   const [scanVisible, setScanVisible] = useState(false);
+  // null: escaneo general (etiqueta o remito); si no, el campo que se escanea (fecha de vencimiento o código de barras)
+  const [scanField, setScanField] = useState<FieldScanDocType | null>(null);
   const [scanSuccessKind, setScanSuccessKind] = useState<ScanSuccessKind | null>(null);
 
   const [salidaQuery, setSalidaQuery] = useState('');
@@ -278,7 +281,7 @@ export default function CargarScreen() {
       <KeyboardAwareScrollView style={styles.container} contentContainerStyle={styles.content}>
         {direction === 'entrada' ? (
           <>
-          <TouchableOpacity style={styles.scanBtn} onPress={() => setScanVisible(true)} testID="open-scan-modal">
+          <TouchableOpacity style={styles.scanBtn} onPress={() => { setScanField(null); setScanVisible(true); }} testID="open-scan-modal">
             <Ionicons name="camera-outline" size={18} color={Colors.primary} />
             <Text style={styles.scanBtnText}>{t('scan.openButton')}</Text>
           </TouchableOpacity>
@@ -292,6 +295,7 @@ export default function CargarScreen() {
             marcaOptions={marcaOptions}
             onAddMarca={handleAddMarca}
             suggestNombre={productService.suggestProducts}
+            onScanField={field => { setScanField(field); setScanVisible(true); }}
           />
           </>
         ) : (
@@ -400,6 +404,7 @@ export default function CargarScreen() {
         marcaOptions={marcaOptions}
         onAddMarca={handleAddMarca}
         onApplyToForm={updater => setForm(updater)}
+        fixedDocType={scanField}
       />
     </KeyboardAvoidingView>
   );

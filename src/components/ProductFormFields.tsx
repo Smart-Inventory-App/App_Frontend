@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
+import { FieldScanDocType } from '@/types/ocr';
 import { pickFromGallery, pickFromCamera } from '@/services/imageService';
 import BottomSheetModal from '@/components/BottomSheetModal';
 import { useFieldFocus } from '@/components/KeyboardAwareScrollView';
@@ -34,6 +35,8 @@ interface Props {
   marcaOptions?: string[];
   onAddMarca?: (marca: string) => void;
   suggestNombre?: (q: string) => Promise<ProductSuggestion[]>;
+  /** Si se indica, la fecha de vencimiento y el código de barras muestran un botón de cámara para escanearlos. */
+  onScanField?: (type: FieldScanDocType) => void;
 }
 
 const normalizeToExisting = (value: string, options: string[]): string => {
@@ -177,6 +180,7 @@ export default function ProductFormFields({
   marcaOptions = [],
   onAddMarca,
   suggestNombre,
+  onScanField,
 }: Props) {
   const { t } = useTranslation();
   // Dentro de un KeyboardAwareScrollView, avisa qué campo se está completando para mostrarlo sobre el teclado
@@ -246,6 +250,21 @@ export default function ProductFormFields({
   };
 
   const vencInvalid = vencText.length === 10 && displayToIso(vencText) === null;
+
+  // Con el botón de cámara el campo comparte renglón con el botón, igual que el de vencimiento
+  const barcodeInput = (
+    <TextInput
+      testID="input-codigo-barras"
+      style={onScanField ? [styles.input, styles.dateInput] : styles.input}
+      placeholder={t('product.codigoBarrasPlaceholder', { lengths: describeBarcodeLengths(t('product.codigoBarrasOr')) })}
+      placeholderTextColor={Colors.placeholder}
+      keyboardType="number-pad"
+      maxLength={BARCODE_MAX_DIGITS}
+      onFocus={onFieldFocus}
+      value={form.codigo_barras ?? ''}
+      onChangeText={v => set('codigo_barras', onlyDigits(v) || undefined)}
+    />
+  );
 
   return (
     <View style={styles.container}>
@@ -339,6 +358,16 @@ export default function ProductFormFields({
         <TouchableOpacity testID="open-calendar" style={[styles.squareBtn, styles.calendarBtn]} onPress={() => setShowCalendar(true)}>
           <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
         </TouchableOpacity>
+        {onScanField && (
+          <TouchableOpacity
+            testID="scan-expiry"
+            accessibilityLabel={t('product.scanExpiry')}
+            style={[styles.squareBtn, styles.calendarBtn]}
+            onPress={() => onScanField('expiry_date')}
+          >
+            <Ionicons name="camera-outline" size={20} color={Colors.primary} />
+          </TouchableOpacity>
+        )}
       </View>
       <DatePickerModal
         visible={showCalendar}
@@ -348,17 +377,19 @@ export default function ProductFormFields({
       />
 
       <Text style={styles.label}>{t('product.codigoBarras')}</Text>
-      <TextInput
-        testID="input-codigo-barras"
-        style={styles.input}
-        placeholder={t('product.codigoBarrasPlaceholder', { lengths: describeBarcodeLengths(t('product.codigoBarrasOr')) })}
-        placeholderTextColor={Colors.placeholder}
-        keyboardType="number-pad"
-        maxLength={BARCODE_MAX_DIGITS}
-        onFocus={onFieldFocus}
-        value={form.codigo_barras ?? ''}
-        onChangeText={v => set('codigo_barras', onlyDigits(v) || undefined)}
-      />
+      {onScanField ? (
+        <View style={styles.dateRow}>
+          {barcodeInput}
+          <TouchableOpacity
+            testID="scan-barcode"
+            accessibilityLabel={t('product.scanBarcode')}
+            style={[styles.squareBtn, styles.calendarBtn]}
+            onPress={() => onScanField('barcode')}
+          >
+            <Ionicons name="camera-outline" size={20} color={Colors.primary} />
+          </TouchableOpacity>
+        </View>
+      ) : barcodeInput}
 
       <Text style={styles.sectionLabel}>{t('product.alertasTitle')}</Text>
       <View style={styles.alertRow}>

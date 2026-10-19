@@ -185,6 +185,8 @@ export default {
     optional: 'Optional',
     imageOpen: 'View image',
     imageClose: 'Close image',
+    scanExpiry: 'Scan expiry date',
+    scanBarcode: 'Scan barcode',
     saveProduct: 'Save product',
     loadTitle: 'Product flow',
     entrada: 'Stock in',
@@ -235,6 +237,8 @@ export default {
   scan: {
     openButton: 'Scan images',
     title: 'Scan image',
+    titleExpiry: 'Scan expiry date',
+    titleBarcode: 'Scan barcode',
     close: 'Close',
     back: 'Back',
     docTypeTitle: 'What are you about to scan?',

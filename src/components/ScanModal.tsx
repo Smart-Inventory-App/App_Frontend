@@ -15,7 +15,7 @@ import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { ocrService, getScanErrorMessage } from '@/services/ocrService';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
-import { ProductMatch, SalidaOCRResult, ScanDocType, ScanState, SCAN_DOC_TYPES } from '@/types/ocr';
+import { FieldScanDocType, GENERAL_SCAN_DOC_TYPES, ProductMatch, SalidaOCRResult, ScanDocType, ScanState } from '@/types/ocr';
 import {
   applyMatchToForm,
   applySuggestionToForm,
@@ -57,6 +57,11 @@ interface Props {
    * "Flujo de producto" conservando lo que el usuario ya había completado.
    */
   onApplyToForm?: (updater: (form: Partial<ProductCreate>) => Partial<ProductCreate>) => void;
+  /**
+   * Si se indica (fecha de vencimiento o código de barras), el modal no pregunta qué se va a escanear:
+   * arranca directamente en "elegí cómo cargar la foto" con el título de ese campo.
+   */
+  fixedDocType?: FieldScanDocType | null;
 }
 
 const DOC_TYPE_ICONS: Record<ScanDocType, keyof typeof Ionicons.glyphMap> = {
@@ -77,11 +82,14 @@ export default function ScanModal({
   marcaOptions = [],
   onAddMarca,
   onApplyToForm,
+  fixedDocType = null,
 }: Props) {
   const { t } = useTranslation();
+  // Primer paso del modal: elegir el tipo de documento, o directamente la foto si el tipo ya está definido
+  const firstStep: Step = fixedDocType ? 'source' : 'doc-type';
 
-  const [step, setStep] = useState<Step>('doc-type');
-  const [docType, setDocType] = useState<ScanDocType | null>(null);
+  const [step, setStep] = useState<Step>(firstStep);
+  const [docType, setDocType] = useState<ScanDocType | null>(fixedDocType);
   const [error, setError] = useState<string | null>(null);
   const [queueInfo, setQueueInfo] = useState<{ position?: number | null; wait?: number | null }>({});
   const [scanResult, setScanResult] = useState<ScanState['result']>(null);
@@ -152,8 +160,8 @@ export default function ScanModal({
   }, [lineSearchQuery, activeSearchIndex]);
 
   function resetAll() {
-    setStep('doc-type');
-    setDocType(null);
+    setStep(firstStep);
+    setDocType(fixedDocType);
     setError(null);
     setQueueInfo({});
     setScanResult(null);
@@ -186,6 +194,7 @@ export default function ScanModal({
 
   const handlePickSource = async (source: 'camera' | 'gallery') => {
     if (!docType) return;
+    setError(null);
     try {
       const asset = await ocrService.pickImage(source);
       if (!asset) return;
@@ -193,7 +202,7 @@ export default function ScanModal({
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('scan.errorUpload');
       setError(message);
-      setStep('doc-type');
+      setStep(firstStep);
     }
   };
 
@@ -218,7 +227,7 @@ export default function ScanModal({
 
       if (finalState.status === 'failed' || !finalState.result) {
         setError(t('scan.errorFailed', { reason: finalState.error ?? '' }));
-        setStep('doc-type');
+        setStep(firstStep);
         return;
       }
 
@@ -231,7 +240,7 @@ export default function ScanModal({
           ? null
           : getScanErrorMessage(err, stage === 'upload' ? t('scan.errorUpload') : t('scan.errorPoll'));
       if (message) setError(message);
-      setStep('doc-type');
+      setStep(firstStep);
     }
   };
 
@@ -357,7 +366,7 @@ export default function ScanModal({
       {error && <Text style={styles.errorBanner}>{error}</Text>}
       <Text style={styles.sectionTitle}>{t('scan.docTypeTitle')}</Text>
       <View style={styles.docTypeGrid}>
-        {SCAN_DOC_TYPES.map(type => (
+        {GENERAL_SCAN_DOC_TYPES.map(type => (
           <TouchableOpacity key={type} style={styles.docTypeCard} onPress={() => handlePickDocType(type)} testID={`doc-type-${type}`}>
             <Ionicons name={DOC_TYPE_ICONS[type]} size={28} color={Colors.primary} />
             <Text style={styles.docTypeCardText}>{t(`scan.docType.${type}`)}</Text>
@@ -369,6 +378,7 @@ export default function ScanModal({
 
   const renderSourceStep = () => (
     <View>
+      {error && <Text style={styles.errorBanner}>{error}</Text>}
       <Text style={styles.sectionTitle}>{t('scan.sourceTitle')}</Text>
       <TouchableOpacity style={styles.bigButton} onPress={() => handlePickSource('camera')} testID="scan-source-camera">
         <Ionicons name="camera-outline" size={22} color="#fff" />
@@ -378,9 +388,11 @@ export default function ScanModal({
         <Ionicons name="images-outline" size={22} color={Colors.primary} />
         <Text style={styles.bigButtonSecondaryText}>{t('scan.sourceGallery')}</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.backLink} onPress={() => setStep('doc-type')}>
-        <Text style={styles.backLinkText}>{t('scan.back')}</Text>
-      </TouchableOpacity>
+      {!fixedDocType && (
+        <TouchableOpacity style={styles.backLink} onPress={() => setStep('doc-type')}>
+          <Text style={styles.backLinkText}>{t('scan.back')}</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -681,7 +693,7 @@ export default function ScanModal({
       sheetTestID="scan-sheet"
     >
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>{t('scan.title')}</Text>
+        <Text style={styles.headerTitle}>{fixedDocType === 'expiry_date' ? t('scan.titleExpiry') : fixedDocType === 'barcode' ? t('scan.titleBarcode') : t('scan.title')}</Text>
         <TouchableOpacity onPress={handleClose} testID="scan-modal-close">
           <Ionicons name="close" size={24} color={Colors.textPrimary} />
         </TouchableOpacity>

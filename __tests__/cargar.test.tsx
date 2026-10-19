@@ -26,9 +26,9 @@ jest.mock('@/services/productService', () => ({
 }));
 
 jest.mock('@/components/ProductFormFields', () => {
-  const { TextInput: RNTextInput, Text: RNText } = require('react-native');
+  const { TextInput: RNTextInput, Text: RNText, TouchableOpacity: RNTouchable } = require('react-native');
   const { useFieldFocus } = require('@/components/KeyboardAwareScrollView');
-  return function MockProductFormFields({ form, onChange }: any) {
+  return function MockProductFormFields({ form, onChange, onScanField }: any) {
     const onFieldFocus = useFieldFocus();
     return (
       <>
@@ -39,6 +39,12 @@ jest.mock('@/components/ProductFormFields', () => {
           onFocus={onFieldFocus}
           onChangeText={(v: string) => onChange({ ...form, nombre: v, categoria: 'Lacteos', stock: 1 })}
         />
+        <RNTouchable testID="mock-scan-expiry" onPress={() => onScanField('expiry_date')}>
+          <RNText>scan expiry</RNText>
+        </RNTouchable>
+        <RNTouchable testID="mock-scan-barcode" onPress={() => onScanField('barcode')}>
+          <RNText>scan barcode</RNText>
+        </RNTouchable>
         <RNTextInput
           testID="mock-form-vencimiento"
           value={form.vencimiento ?? ''}
@@ -56,10 +62,11 @@ jest.mock('@/components/ProductFormFields', () => {
 
 jest.mock('@/components/ScanModal', () => {
   const { View: RNView, Text: RNText, TouchableOpacity } = require('react-native');
-  return function MockScanModal({ visible, onSuccess, onClose, onApplyToForm }: any) {
+  return function MockScanModal({ visible, onSuccess, onClose, onApplyToForm, fixedDocType }: any) {
     if (!visible) return null;
     return (
       <RNView testID="mock-scan-modal">
+        <RNText testID="mock-scan-target">{String(fixedDocType)}</RNText>
         <TouchableOpacity testID="mock-apply-barcode" onPress={() => onApplyToForm((f: any) => ({ ...f, codigo_barras: '7791234567898' }))}>
           <RNText>apply barcode</RNText>
         </TouchableOpacity>
@@ -517,6 +524,37 @@ describe('CargarScreen - fecha de vencimiento inválida', () => {
     expect(screen.getByTestId('mock-form-vencimiento').props.value).toBe('');
     expect(screen.getByTestId('mock-form-nombre').props.value).toBe('Leche');
     expect(mockedProducts.createProduct).not.toHaveBeenCalled();
+  });
+});
+
+describe('CargarScreen - escaneo de fecha de vencimiento y código de barras', () => {
+  it('opens the scan for the expiry date from its camera button', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('mock-scan-expiry'));
+    expect(screen.getByTestId('mock-scan-target').props.children).toBe('expiry_date');
+  });
+
+  it('opens the scan for the barcode from its camera button', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('mock-scan-barcode'));
+    expect(screen.getByTestId('mock-scan-target').props.children).toBe('barcode');
+  });
+
+  it('opens the general scan (label or receipt) from "Escanear imágenes", even after scanning a field', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('mock-scan-barcode'));
+    fireEvent.press(screen.getByTestId('mock-scan-close'));
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    expect(screen.getByTestId('mock-scan-target').props.children).toBe('null');
+  });
+
+  it('loads the scanned expiry date into the form keeping what was already filled in', () => {
+    render(<CargarScreen />);
+    fireEvent.changeText(screen.getByTestId('mock-form-nombre'), 'Leche');
+    fireEvent.press(screen.getByTestId('mock-scan-expiry'));
+    fireEvent.press(screen.getByTestId('mock-apply-expiry'));
+    const form = JSON.parse(screen.getByTestId('mock-form-json').props.children);
+    expect(form).toMatchObject({ nombre: 'Leche', categoria: 'Lacteos', vencimiento: '2027-01-01' });
   });
 });
 

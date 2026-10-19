@@ -13,6 +13,12 @@ export const SCAN_DOC_TYPES: ScanDocType[] = [
   'barcode',
 ];
 
+// El escaneo general ("Escanear imágenes") ofrece solo estos dos; la fecha de vencimiento y el código
+// de barras se escanean desde el botón de cámara de su propio campo del formulario.
+export const GENERAL_SCAN_DOC_TYPES: ScanDocType[] = ['product_label', 'receipt'];
+
+export type FieldScanDocType = 'expiry_date' | 'barcode';
+
 export type ScanJobStatus = 'queued' | 'processing' | 'done' | 'failed';
 
 export interface ProductMatch {

@@ -511,6 +511,33 @@ describe('ProductFormFields - labels and placeholders', () => {
     expect(onFieldFocus).toHaveBeenCalledTimes(ids.length + 2 + 2 + 1);
   });
 
+  it('does not show the camera buttons unless the screen can scan', () => {
+    render(<Wrapper />);
+    expect(screen.queryByTestId('scan-expiry')).toBeNull();
+    expect(screen.queryByTestId('scan-barcode')).toBeNull();
+  });
+
+  it('shows a camera button to the right of the calendar and one to the right of the barcode, in the same format', () => {
+    render(<Wrapper onScanField={jest.fn()} />);
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('open-calendar')).toBeLessThan(tree.indexOf('scan-expiry'));
+    expect(tree.indexOf('input-codigo-barras')).toBeLessThan(tree.indexOf('scan-barcode'));
+    const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
+    expect(flat('scan-expiry')).toMatchObject({ width: 40, height: 40, borderRadius: 8, backgroundColor: '#fff' });
+    expect(flat('scan-barcode')).toMatchObject(flat('open-calendar'));
+    expect(flat('scan-expiry')).toMatchObject(flat('open-calendar'));
+    expect(flat('input-codigo-barras').flex).toBe(1);
+  });
+
+  it('asks to scan the expiry date or the barcode when its camera button is pressed', () => {
+    const onScanField = jest.fn();
+    render(<Wrapper onScanField={onScanField} />);
+    fireEvent.press(screen.getByTestId('scan-expiry'));
+    expect(onScanField).toHaveBeenLastCalledWith('expiry_date');
+    fireEvent.press(screen.getByTestId('scan-barcode'));
+    expect(onScanField).toHaveBeenLastCalledWith('barcode');
+  });
+
   it('shows "Default" in the alert rule fields', () => {
     render(<Wrapper />);
     expect(screen.getAllByPlaceholderText('Default')).toHaveLength(2);
