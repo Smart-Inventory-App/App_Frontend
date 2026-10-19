@@ -51,6 +51,12 @@ export const productService = {
     return data;
   },
 
+  /** Suma stock a un producto que el usuario ya tiene cargado. */
+  async restockProduct(id: number, quantity: number): Promise<Product> {
+    const { data } = await api.post<Product>(`/products/${id}/restock`, { quantity });
+    return data;
+  },
+
   async updateProduct(id: number, payload: Partial<ProductCreate>): Promise<Product> {
     const { data } = await api.put<Product>(`/products/${id}`, payload);
     return data;

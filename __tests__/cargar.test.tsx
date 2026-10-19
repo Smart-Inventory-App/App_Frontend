@@ -60,6 +60,23 @@ jest.mock('@/components/ProductFormFields', () => {
   };
 });
 
+jest.mock('@/components/ExistingProductModal', () => {
+  const { View: RNView, Text: RNText, TouchableOpacity } = require('react-native');
+  return function MockExistingProductModal({ visible, onSuccess, onClose }: any) {
+    if (!visible) return null;
+    return (
+      <RNView testID="mock-existing-modal">
+        <TouchableOpacity testID="mock-existing-success" onPress={onSuccess}>
+          <RNText>success</RNText>
+        </TouchableOpacity>
+        <TouchableOpacity testID="mock-existing-close" onPress={onClose}>
+          <RNText>close</RNText>
+        </TouchableOpacity>
+      </RNView>
+    );
+  };
+});
+
 jest.mock('@/components/ScanModal', () => {
   const { View: RNView, Text: RNText, TouchableOpacity } = require('react-native');
   return function MockScanModal({ visible, onSuccess, onClose, onApplyToForm, fixedDocType }: any) {
@@ -524,6 +541,40 @@ describe('CargarScreen - fecha de vencimiento inválida', () => {
     expect(screen.getByTestId('mock-form-vencimiento').props.value).toBe('');
     expect(screen.getByTestId('mock-form-nombre').props.value).toBe('Leche');
     expect(mockedProducts.createProduct).not.toHaveBeenCalled();
+  });
+});
+
+describe('CargarScreen - ingresar producto existente', () => {
+  it('shows the button above "Escanear imágenes", with the same format', () => {
+    render(<CargarScreen />);
+    expect(screen.getByText('Ingresar producto existente')).toBeTruthy();
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('open-existing-modal')).toBeLessThan(tree.indexOf('open-scan-modal'));
+    expect(StyleSheet.flatten(screen.getByTestId('open-existing-modal').props.style))
+      .toEqual(StyleSheet.flatten(screen.getByTestId('open-scan-modal').props.style));
+  });
+
+  it('opens the window from the button and closes it', () => {
+    render(<CargarScreen />);
+    expect(screen.queryByTestId('mock-existing-modal')).toBeNull();
+    fireEvent.press(screen.getByTestId('open-existing-modal'));
+    expect(screen.getByTestId('mock-existing-modal')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('mock-existing-close'));
+    expect(screen.queryByTestId('mock-existing-modal')).toBeNull();
+  });
+
+  it('shows the usual success screen once the stock was added', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-existing-modal'));
+    fireEvent.press(screen.getByTestId('mock-existing-success'));
+    expect(screen.getByText('¡Listo!')).toBeTruthy();
+    expect(screen.getByText('Se sumó el stock a un producto que ya tenías cargado')).toBeTruthy();
+  });
+
+  it('does not show the button in the exit tab', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByText('Salida'));
+    expect(screen.queryByTestId('open-existing-modal')).toBeNull();
   });
 });
 

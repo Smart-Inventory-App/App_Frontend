@@ -1,5 +1,5 @@
 import React from 'react';
-import { Animated, KeyboardAvoidingView, Modal, StyleSheet, Text } from 'react-native';
+import { Animated, Keyboard, KeyboardAvoidingView, Modal, StyleSheet, Text } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import BottomSheetModal from '../src/components/BottomSheetModal';
@@ -79,6 +79,25 @@ describe('BottomSheetModal - botones del sistema de Android', () => {
   it('adds the height of the system buttons below the sheet content', () => {
     render(withInsets());
     expect(StyleSheet.flatten(screen.getByTestId('sheet').props.style).paddingBottom).toBe(24);
+  });
+
+  it('does not leave room for the system buttons while the keyboard covers them', () => {
+    const handlers: Record<string, () => void> = {};
+    const remove = jest.fn();
+    jest.spyOn(Keyboard, 'addListener').mockImplementation(((event: string, cb: () => void) => {
+      handlers[event] = cb;
+      return { remove };
+    }) as any);
+    const { unmount } = render(withInsets());
+    const padding = () => StyleSheet.flatten(screen.getByTestId('sheet').props.style).paddingBottom;
+    expect(padding()).toBe(24);
+    act(() => { handlers.keyboardDidShow(); });
+    expect(padding()).toBe(0);
+    act(() => { handlers.keyboardDidHide(); });
+    expect(padding()).toBe(24);
+    unmount();
+    expect(remove).toHaveBeenCalledTimes(2);
+    jest.restoreAllMocks();
   });
 
   it('adds it on top of the padding the sheet already has', () => {

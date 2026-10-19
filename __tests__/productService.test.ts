@@ -90,6 +90,12 @@ describe('productService', () => {
     });
   });
 
+  it('restockProduct posts the quantity to add to an existing product', async () => {
+    mockedApi.post.mockResolvedValue({ data: { id: 3, stock: 9, merged: true } });
+    await expect(productService.restockProduct(3, 5)).resolves.toEqual({ id: 3, stock: 9, merged: true });
+    expect(mockedApi.post).toHaveBeenCalledWith('/products/3/restock', { quantity: 5 });
+  });
+
   it('registerEvent forwards a given note', async () => {
     mockedApi.post.mockResolvedValue({ data: {} });
     await productService.registerEvent(1, 2, 'expired', 'vencido en heladera');

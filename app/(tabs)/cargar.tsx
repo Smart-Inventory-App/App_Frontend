@@ -18,6 +18,7 @@ import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import ProductFormFields from '@/components/ProductFormFields';
 import ScreenHeader from '@/components/ScreenHeader';
 import { isValidBarcode } from '@/utils/barcode';
+import ExistingProductModal from '@/components/ExistingProductModal';
 import ScanModal, { ScanSuccessKind } from '@/components/ScanModal';
 import { FieldScanDocType } from '@/types/ocr';
 
@@ -39,6 +40,7 @@ export default function CargarScreen() {
   const [marcaOptions, setMarcaOptions] = useState<string[]>([]);
   const [merged, setMerged] = useState(false);
   const [scanVisible, setScanVisible] = useState(false);
+  const [existingVisible, setExistingVisible] = useState(false);
   // null: escaneo general (etiqueta o remito); si no, el campo que se escanea (fecha de vencimiento o código de barras)
   const [scanField, setScanField] = useState<FieldScanDocType | null>(null);
   const [scanSuccessKind, setScanSuccessKind] = useState<ScanSuccessKind | null>(null);
@@ -184,6 +186,13 @@ export default function CargarScreen() {
     setSuccess(true);
   };
 
+  // Se sumó stock a un producto que ya estaba cargado
+  const handleExistingSuccess = () => {
+    setScanSuccessKind(null);
+    setMerged(true);
+    setSuccess(true);
+  };
+
   const scanSuccessMessage = (): string => {
     switch (scanSuccessKind) {
       case 'merged': return t('product.successMsgMerged');
@@ -281,6 +290,10 @@ export default function CargarScreen() {
       <KeyboardAwareScrollView style={styles.container} contentContainerStyle={styles.content}>
         {direction === 'entrada' ? (
           <>
+          <TouchableOpacity style={styles.scanBtn} onPress={() => setExistingVisible(true)} testID="open-existing-modal">
+            <Ionicons name="cube-outline" size={18} color={Colors.primary} />
+            <Text style={styles.scanBtnText}>{t('existing.openButton')}</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.scanBtn} onPress={() => { setScanField(null); setScanVisible(true); }} testID="open-scan-modal">
             <Ionicons name="camera-outline" size={18} color={Colors.primary} />
             <Text style={styles.scanBtnText}>{t('scan.openButton')}</Text>
@@ -393,6 +406,11 @@ export default function CargarScreen() {
           </Text>
         </TouchableOpacity>
       </KeyboardAwareScrollView>
+      <ExistingProductModal
+        visible={existingVisible}
+        onClose={() => setExistingVisible(false)}
+        onSuccess={handleExistingSuccess}
+      />
       <ScanModal
         visible={scanVisible}
         onClose={() => setScanVisible(false)}

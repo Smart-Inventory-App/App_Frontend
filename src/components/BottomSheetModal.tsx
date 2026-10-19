@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, KeyboardAvoidingView, Modal, Platform, Pressable, StyleProp, StyleSheet, ViewStyle } from 'react-native';
+import { Animated, Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleProp, StyleSheet, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Props {
@@ -23,6 +23,7 @@ export default function BottomSheetModal({
 }: Props) {
   const insets = useSafeAreaInsets();
   const [mounted, setMounted] = useState(visible);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const fade = useRef(new Animated.Value(visible ? 1 : 0)).current;
   const slide = useRef(new Animated.Value(visible ? 1 : 0)).current;
 
@@ -43,6 +44,16 @@ export default function BottomSheetModal({
     }
   }, [visible, fade, slide]);
 
+  // Con el teclado abierto los botones del sistema quedan detrás de él: no hace falta dejarles lugar
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => setKeyboardOpen(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   const translateY = slide.interpolate({
     inputRange: [0, 1],
     outputRange: [Dimensions.get('window').height, 0],
@@ -59,7 +70,7 @@ export default function BottomSheetModal({
       <KeyboardAvoidingView behavior="padding" style={styles.container}>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: fade }]} />
         <Pressable testID={overlayTestID} style={StyleSheet.absoluteFill} onPress={onRequestClose} />
-        <Animated.View testID={sheetTestID} style={[sheetStyle, { paddingBottom: basePaddingBottom + insets.bottom, transform: [{ translateY }] }]}>
+        <Animated.View testID={sheetTestID} style={[sheetStyle, { paddingBottom: basePaddingBottom + (keyboardOpen ? 0 : insets.bottom), transform: [{ translateY }] }]}>
           {children}
         </Animated.View>
       </KeyboardAvoidingView>
