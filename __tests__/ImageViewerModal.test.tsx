@@ -22,9 +22,10 @@ const open = (onClose = jest.fn()) => {
   fireEvent(surface(), 'layout', { nativeEvent: { layout: { width: 400, height: 800 } } });
   return { ...utils, onClose };
 };
+// La pantalla de las pruebas mide 400 x 800: su centro es (200, 400). El pellizco se hace alrededor del centro
 const pinch = (from: number, to: number) => {
-  fireEvent(surface(), 'responderGrant', event(touch(100), touch(100 + from)));
-  fireEvent(surface(), 'responderMove', event(touch(100), touch(100 + to)));
+  fireEvent(surface(), 'responderGrant', event(touch(200 - from / 2, 400), touch(200 + from / 2, 400)));
+  fireEvent(surface(), 'responderMove', event(touch(200 - to / 2, 400), touch(200 + to / 2, 400)));
 };
 const tap = () => {
   fireEvent(surface(), 'responderGrant', event(touch(50, 50)));
@@ -106,15 +107,14 @@ describe('ImageViewerModal', () => {
     expect(transform()).toMatchObject({ scale: 2, x: 30 });
   });
 
-  it('zooms in on a double tap and goes back on the next one', () => {
+  it('does not zoom with a double tap, quick or slow', () => {
     let now = 10_000;
     jest.spyOn(Date, 'now').mockImplementation(() => now);
     open();
     tap();
-    expect(transform().scale).toBe(1);
     now += 100;
     tap();
-    expect(transform().scale).toBe(2.5);
+    expect(transform()).toEqual({ scale: 1, x: 0, y: 0 });
     now += 5000;
     tap();
     now += 100;
@@ -122,22 +122,47 @@ describe('ImageViewerModal', () => {
     expect(transform()).toEqual({ scale: 1, x: 0, y: 0 });
   });
 
-  it('does not count two slow taps as a double tap', () => {
-    let now = 10_000;
-    jest.spyOn(Date, 'now').mockImplementation(() => now);
+  it('does not take away the zoom of a pinch when the fingers are lifted with a tap-like release', () => {
     open();
+    pinch(100, 200);
+    fireEvent(surface(), 'responderRelease', event());
     tap();
-    now += 2000;
     tap();
-    expect(transform().scale).toBe(1);
+    expect(transform().scale).toBe(2);
   });
 
-  it('does not count a drag as a tap', () => {
-    let now = 10_000;
-    jest.spyOn(Date, 'now').mockImplementation(() => now);
+  it('zooms in from the point between the fingers, which stays under them', () => {
+    open();
+    // Los dedos están a la derecha del centro: (300, 400) y (340, 400); se separan al doble sin moverse
+    fireEvent(surface(), 'responderGrant', event(touch(300, 400), touch(340, 400)));
+    fireEvent(surface(), 'responderMove', event(touch(280, 400), touch(360, 400)));
+    expect(transform().scale).toBe(2);
+    // El punto medio estaba 120 a la derecha del centro: para que siga bajo los dedos la imagen se corre 120 a la izquierda
+    expect(transform().x).toBe(-120);
+    expect(transform().y).toBe(0);
+  });
+
+  it('drags the image along with two fingers that move together', () => {
+    open();
+    pinch(100, 200);
+    fireEvent(surface(), 'responderRelease', event());
+    fireEvent(surface(), 'responderGrant', event(touch(150, 400), touch(250, 400)));
+    fireEvent(surface(), 'responderMove', event(touch(180, 380), touch(280, 380)));
+    expect(transform()).toMatchObject({ scale: 2, x: 30, y: -20 });
+  });
+
+  it('does not let two fingers drag the image out of the screen', () => {
+    open();
+    pinch(100, 200);
+    fireEvent(surface(), 'responderRelease', event());
+    fireEvent(surface(), 'responderGrant', event(touch(150, 400), touch(250, 400)));
+    fireEvent(surface(), 'responderMove', event(touch(950, 400), touch(1050, 400)));
+    expect(transform().x).toBe(200);
+  });
+
+  it('does not count a drag as anything but a drag', () => {
     open();
     tap();
-    now += 100;
     fireEvent(surface(), 'responderGrant', event(touch(50, 50)));
     fireEvent(surface(), 'responderMove', event(touch(150, 50)));
     fireEvent(surface(), 'responderRelease', event());

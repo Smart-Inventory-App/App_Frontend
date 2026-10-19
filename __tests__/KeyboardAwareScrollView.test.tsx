@@ -28,14 +28,63 @@ describe('KeyboardAwareScrollView', () => {
     expect(screen.UNSAFE_getByType(ScrollView).props.keyboardShouldPersistTaps).toBe('handled');
   });
 
+  const layout = (height: number) =>
+    act(() => { fireEvent(screen.UNSAFE_getByType(ScrollView), 'layout', { nativeEvent: { layout: { height } } }); });
+  const showKeyboard = (height: number) => act(() => { (handlers.keyboardDidShow as any)({ endCoordinates: { height } }); });
+
   it('keeps the given content style and adds room at the end only while the keyboard is open', () => {
     render(<KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 24, padding: 8 }}><View /></KeyboardAwareScrollView>);
     expect(padding()).toBe(24);
-    act(() => { handlers.keyboardDidShow(); });
-    expect(padding()).toBeGreaterThan(24);
+    showKeyboard(300);
+    expect(padding()).toBe(324);
     expect(StyleSheet.flatten(screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle).padding).toBe(8);
     act(() => { handlers.keyboardDidHide(); });
     expect(padding()).toBe(24);
+  });
+
+  it('adds nothing at the end when the screen already got smaller for the keyboard, so there is no empty space to scroll to', () => {
+    render(<KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 24 }}><View /></KeyboardAwareScrollView>);
+    layout(800);
+    showKeyboard(300);
+    layout(500);
+    expect(padding()).toBe(24);
+  });
+
+  it('adds only the part of the keyboard the screen did not give back', () => {
+    render(<KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 24 }}><View /></KeyboardAwareScrollView>);
+    layout(800);
+    showKeyboard(300);
+    layout(650);
+    expect(padding()).toBe(24 + 150);
+  });
+
+  it('never adds more than the height of the keyboard', () => {
+    render(<KeyboardAwareScrollView><View /></KeyboardAwareScrollView>);
+    layout(800);
+    showKeyboard(300);
+    layout(800);
+    expect(StyleSheet.flatten(screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle).paddingBottom).toBe(300);
+  });
+
+  it('adds nothing if the keyboard does not report its height', () => {
+    render(<KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 24 }}><View /></KeyboardAwareScrollView>);
+    act(() => { handlers.keyboardDidShow(); });
+    expect(padding()).toBe(24);
+  });
+
+  it('uses the layout of the closed screen as the reference, and still calls the given onLayout', () => {
+    const onLayout = jest.fn();
+    render(<KeyboardAwareScrollView onLayout={onLayout}><View /></KeyboardAwareScrollView>);
+    layout(700);
+    showKeyboard(300);
+    layout(400);
+    expect(onLayout).toHaveBeenCalledTimes(2);
+    expect(StyleSheet.flatten(screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle).paddingBottom).toBeUndefined();
+    act(() => { handlers.keyboardDidHide(); });
+    layout(700);
+    showKeyboard(300);
+    layout(700);
+    expect(StyleSheet.flatten(screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle).paddingBottom).toBe(300);
   });
 
   it('scrolls the focused field above the keyboard, waiting for the keyboard if it is still opening', () => {

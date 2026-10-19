@@ -6,11 +6,13 @@ interface Props {
   message: string;
   confirmLabel: string;
   cancelLabel: string;
+  /** Color del botón de confirmar: rojo para lo que borra o cierra algo (por defecto) o el de la app para el resto. */
+  confirmTone?: 'danger' | 'primary';
   onConfirm: () => void;
   onCancel: () => void;
 }
 
-export default function ConfirmModal({ visible, message, confirmLabel, cancelLabel, onConfirm, onCancel }: Props) {
+export default function ConfirmModal({ visible, message, confirmLabel, cancelLabel, confirmTone = 'danger', onConfirm, onCancel }: Props) {
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={onCancel}>
       <Pressable testID="confirm-backdrop" style={styles.overlay} onPress={onCancel}>
@@ -18,10 +20,14 @@ export default function ConfirmModal({ visible, message, confirmLabel, cancelLab
         <Pressable testID="confirm-card" style={styles.card} onPress={() => {}}>
           <Text style={styles.message}>{message}</Text>
           <View style={styles.actions}>
-            <TouchableOpacity style={[styles.button, styles.cancelButton]} onPress={onCancel}>
+            <TouchableOpacity testID="confirm-cancel" style={[styles.button, styles.cancelButton]} onPress={onCancel}>
               <Text style={styles.cancelText}>{cancelLabel}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.button, styles.confirmButton]} onPress={onConfirm}>
+            <TouchableOpacity
+              testID="confirm-accept"
+              style={[styles.button, confirmTone === 'primary' ? styles.confirmButtonPrimary : styles.confirmButton]}
+              onPress={onConfirm}
+            >
               <Text style={styles.confirmText}>{confirmLabel}</Text>
             </TouchableOpacity>
           </View>
@@ -52,5 +58,6 @@ const styles = StyleSheet.create({
   cancelButton: { borderWidth: 1, borderColor: Colors.inputBorder, backgroundColor: Colors.white },
   cancelText: { color: Colors.textSecondary, fontSize: 15, fontWeight: '600' },
   confirmButton: { backgroundColor: Colors.error },
+  confirmButtonPrimary: { backgroundColor: Colors.primary },
   confirmText: { color: Colors.white, fontSize: 15, fontWeight: '600' },
 });

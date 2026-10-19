@@ -2,8 +2,6 @@
 
 export const MIN_SCALE = 1;
 export const MAX_SCALE = 5;
-export const DOUBLE_TAP_SCALE = 2.5;
-export const DOUBLE_TAP_MS = 300;
 // Por debajo de este zoom se considera que la imagen está "sin zoom" y se vuelve al centro
 const RESET_THRESHOLD = 1.02;
 
@@ -30,12 +28,30 @@ export function clampTranslation(value: number, size: number, scale: number): nu
   return Math.min(max, Math.max(-max, value));
 }
 
-export function isDoubleTap(now: number, lastTap: number): boolean {
-  return lastTap > 0 && now - lastTap <= DOUBLE_TAP_MS;
+/** El punto medio entre dos dedos. */
+export function midpoint(a: TouchPoint, b: TouchPoint): TouchPoint {
+  return { pageX: (a.pageX + b.pageX) / 2, pageY: (a.pageY + b.pageY) / 2 };
 }
 
-export function nextDoubleTapScale(current: number): number {
-  return current > RESET_THRESHOLD ? MIN_SCALE : DOUBLE_TAP_SCALE;
+/**
+ * Dónde queda la imagen al pellizcar: el punto de la imagen que estaba entre los dedos al empezar sigue entre los dedos
+ * mientras se separan o se juntan (el zoom se hace "desde los dedos") y, si los dedos se mueven juntos, la imagen los
+ * acompaña (se arrastra con dos dedos). `center` es el centro de la pantalla; `base` y `baseScale`, cómo estaba la
+ * imagen al empezar.
+ */
+export function pinchTranslation(
+  base: { x: number; y: number },
+  baseScale: number,
+  nextScale: number,
+  startMid: TouchPoint,
+  currentMid: TouchPoint,
+  center: TouchPoint,
+): { x: number; y: number } {
+  const ratio = baseScale > 0 ? nextScale / baseScale : 1;
+  return {
+    x: currentMid.pageX - center.pageX - (startMid.pageX - center.pageX - base.x) * ratio,
+    y: currentMid.pageY - center.pageY - (startMid.pageY - center.pageY - base.y) * ratio,
+  };
 }
 
 export function isResetScale(scale: number): boolean {

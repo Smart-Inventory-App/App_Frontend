@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, FlatList, StyleSheet } from 'react-native';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { Ionicons } from '@expo/vector-icons';
 import InventarioScreen from '../app/(tabs)/inventario';
 import { productService } from '@/services/productService';
@@ -70,6 +70,13 @@ jest.mock('@/components/HistorialModal', () => {
     );
   };
 });
+
+// El árbol de la pantalla como texto. Se dejan afuera las partes de la lista que son elementos de React
+// (encabezado, vacío y pie), que tienen referencias circulares y ya aparecen dibujadas en el árbol.
+const treeJson = () =>
+  JSON.stringify(screen.toJSON(), (key, value) =>
+    ['ListHeaderComponent', 'ListEmptyComponent', 'ListFooterComponent', '_owner', '_store'].includes(key) ? undefined : value,
+  );
 
 const mockedProducts = productService as jest.Mocked<typeof productService>;
 const mockedProfile = profileService as jest.Mocked<typeof profileService>;
@@ -379,7 +386,7 @@ describe('InventarioScreen - header, sort row and filters', () => {
     render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
     const before = (a: string, b: string) => {
-      const tree = JSON.stringify(screen.toJSON());
+      const tree = treeJson();
       return tree.indexOf(`"${a}"`) < tree.indexOf(`"${b}"`);
     };
     expect(before('Nombre', 'Stock')).toBe(true);
@@ -400,17 +407,77 @@ describe('InventarioScreen - header, sort row and filters', () => {
     expect(screen.getByText('Inventario')).toBeTruthy();
   });
 
-  it('aligns the sort chips vertically with the "Ordenar:" label (no extra bottom padding)', async () => {
+  it('puts the "Ordenar:" label above the four sort buttons', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    expect(StyleSheet.flatten(screen.getByTestId('sort-row').props.style).flexDirection).toBeUndefined();
+    const whole = treeJson();
+    const tree = whole.slice(whole.indexOf('sort-row'));
+    const at = (text: string) => tree.indexOf(text);
+    expect(at('sort-label')).toBeLessThan(at('Nombre'));
+    expect(at('Nombre')).toBeLessThan(at('Stock'));
+    expect(at('Stock')).toBeLessThan(at('Vencimiento'));
+    expect(at('Vencimiento')).toBeLessThan(at('Categoría'));
+    within(screen.getByTestId('sort-row')).getByText('Ordenar:');
+  });
+
+  it('keeps the four sort buttons in one row, starting at the left margin', async () => {
     mockedProducts.getProducts.mockResolvedValue([product()]);
     const { UNSAFE_getAllByType } = render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
-    const { ScrollView, StyleSheet } = require('react-native');
+    const { ScrollView } = require('react-native');
     const sortScroll = UNSAFE_getAllByType(ScrollView).find(
       (s: any) => StyleSheet.flatten(s.props.contentContainerStyle)?.alignItems === 'center',
     );
     const style = StyleSheet.flatten(sortScroll.props.contentContainerStyle);
-    expect(style.paddingBottom).toBe(0);
+    expect(style.flexDirection).toBe('row');
     expect(style.paddingLeft).toBe(0);
+  });
+
+  it('scrolls the whole screen, leaving only the banner fixed at the top', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const list = within(screen.UNSAFE_getByType(FlatList));
+    // dentro de la lista que se desliza: el botón de stock total, la búsqueda, el orden y los filtros
+    expect(list.getByTestId('open-stock-total')).toBeTruthy();
+    expect(list.getByPlaceholderText('Buscar por nombre o marca...')).toBeTruthy();
+    expect(list.getByTestId('sort-row')).toBeTruthy();
+    expect(list.getByTestId('filter-search-categoria')).toBeTruthy();
+    // el banner, en cambio, queda afuera
+    expect(list.queryByTestId('screen-header')).toBeNull();
+    expect(screen.getByTestId('screen-header')).toBeTruthy();
+  });
+
+  it('leaves a margin below the location filter so the entries do not look stuck to it', async () => {
+    mockedProducts.getFilterOptions.mockResolvedValue({ categorias: ['Lacteos'], ubicaciones: ['Heladera'], marcas: [] });
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const gap = StyleSheet.flatten(screen.getByTestId('list-header-gap').props.style);
+    expect(gap.height).toBeGreaterThanOrEqual(12);
+    const tree = treeJson();
+    expect(tree.indexOf('filter-search-ubicacion')).toBeLessThan(tree.indexOf('list-header-gap'));
+    expect(tree.indexOf('list-header-gap')).toBeLessThan(tree.indexOf('product-item-1'));
+  });
+
+  it('keeps the search field mounted while the products load, so typing is not interrupted', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const input = screen.getByPlaceholderText('Buscar por nombre o marca...');
+    fireEvent.changeText(input, 'lec');
+    expect(screen.getByPlaceholderText('Buscar por nombre o marca...')).toBe(input);
+  });
+
+  it('shows the loading indicator and the empty state under the filters, not instead of them', async () => {
+    mockedProducts.getProducts.mockResolvedValue([]);
+    render(<InventarioScreen />);
+    expect(screen.getByTestId('sort-row')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('No tenés productos cargados')).toBeTruthy());
+    expect(screen.getByTestId('sort-row')).toBeTruthy();
+    expect(screen.getByTestId('open-stock-total')).toBeTruthy();
   });
 
   it('has no horizontal swipe in the category and location filters: a search button comes first instead', async () => {
@@ -426,7 +493,7 @@ describe('InventarioScreen - header, sort row and filters', () => {
     expect(screen.queryByTestId('filter-categorias')).toBeNull();
     expect(screen.queryByTestId('filter-ubicaciones')).toBeNull();
     // la lupa va antes de "Todas"
-    const tree = JSON.stringify(screen.toJSON());
+    const tree = treeJson();
     expect(tree.indexOf('filter-search-categoria')).toBeLessThan(tree.indexOf('Todas'));
   });
 
@@ -543,7 +610,7 @@ describe('InventarioScreen - stock total', () => {
     render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
     expect(screen.getByText('Stock total de producto')).toBeTruthy();
-    const tree = JSON.stringify(screen.toJSON());
+    const tree = treeJson();
     expect(tree.indexOf('open-stock-total')).toBeLessThan(tree.indexOf('Buscar por nombre o marca...'));
   });
 
@@ -593,7 +660,7 @@ describe('InventarioScreen - header', () => {
     mockedProducts.getProducts.mockResolvedValue([product()]);
     render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
-    const tree = JSON.stringify(screen.toJSON());
+    const tree = treeJson();
     expect(tree.indexOf('header-home')).toBeLessThan(tree.indexOf('"Inventario"'));
     fireEvent.press(screen.getByTestId('header-home'));
     expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/');

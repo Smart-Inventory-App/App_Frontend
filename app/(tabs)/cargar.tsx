@@ -1,6 +1,7 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
   KeyboardAvoidingView,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -13,8 +14,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { ExitReason, ProductCreate, ProductSuggestion } from '@/types/product';
-import { isoToDisplay } from '@/utils/dateInput';
 import { EXIT_REASONS, EXIT_REASON_LABEL_KEY } from '@/utils/exitReasons';
+import { selectedFirst } from '@/utils/selectedFirst';
+import { skipNextTabAnimation } from '@/utils/tabTransition';
+import SuccessCheck from '@/components/SuccessCheck';
+import ProductInfoCard from '@/components/ProductInfoCard';
 import AppTextInput from '@/components/AppTextInput';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import ProductFormFields from '@/components/ProductFormFields';
@@ -52,7 +56,9 @@ export default function CargarScreen() {
   const [salidaSuggestions, setSalidaSuggestions] = useState<ProductSuggestion[]>([]);
   const [salidaSelected, setSalidaSelected] = useState<ProductSuggestion | null>(null);
   const [salidaCantidad, setSalidaCantidad] = useState('');
-  const [salidaMotivo, setSalidaMotivo] = useState<ExitReason>('consumed');
+  // Sin motivo elegido al principio: hay que elegir uno (tocar el elegido lo deselecciona)
+  const [salidaMotivo, setSalidaMotivo] = useState<ExitReason | null>(null);
+  const motivoChipsRef = useRef<ScrollView>(null);
   const [salidaNota, setSalidaNota] = useState('');
 
   useFocusEffect(useCallback(() => {
@@ -128,6 +134,7 @@ export default function CargarScreen() {
     if (!salidaSelected) return t('product.validationSalidaProducto');
     const n = Number(salidaCantidad);
     if (!salidaCantidad || isNaN(n) || n <= 0) return t('product.validationSalidaCantidad');
+    if (!salidaMotivo) return t('product.validationSalidaMotivo');
     return null;
   };
 
@@ -140,7 +147,7 @@ export default function CargarScreen() {
     setError(null);
     setSaving(true);
     try {
-      await productService.registerEvent(salidaSelected!.id, Number(salidaCantidad), salidaMotivo, salidaNota);
+      await productService.registerEvent(salidaSelected!.id, Number(salidaCantidad), salidaMotivo!, salidaNota);
       setMerged(false);
       setSuccess(true);
     } catch (err: unknown) {
@@ -163,7 +170,7 @@ export default function CargarScreen() {
     setSalidaQuery('');
     setSalidaSelected(null);
     setSalidaCantidad('');
-    setSalidaMotivo('consumed');
+    setSalidaMotivo(null);
     setSalidaNota('');
     setSuccess(false);
     setMerged(false);
@@ -236,7 +243,7 @@ export default function CargarScreen() {
   if (success) {
     return (
       <View style={styles.successContainer}>
-        <Ionicons name="checkmark-circle" size={72} color={Colors.primary} />
+        <SuccessCheck />
         <Text style={styles.successTitle}>{t('product.successTitle')}</Text>
         <Text style={styles.successMsg}>
           {scanSuccessKind
@@ -249,6 +256,8 @@ export default function CargarScreen() {
           style={styles.submitBtn}
           onPress={() => {
             handleLoadAnother();
+            // Se pasa a Inventario de golpe, sin deslizar la pantalla
+            skipNextTabAnimation();
             router.replace('/(tabs)/inventario');
           }}
         >
@@ -328,33 +337,7 @@ export default function CargarScreen() {
               value={salidaQuery}
               onChangeText={onSalidaQueryChange}
             />
-            {salidaSelected && (
-              <View testID="salida-selected-info" style={styles.selectedInfo}>
-                <View style={styles.infoCell}>
-                  <Text style={styles.infoLabel}>{t('product.categoria')}</Text>
-                  <Text testID="salida-selected-categoria" style={styles.infoValue}>{salidaSelected.categoria}</Text>
-                </View>
-                {salidaSelected.marca ? (
-                  <View style={styles.infoCell}>
-                    <Text style={styles.infoLabel}>{t('product.marca')}</Text>
-                    <Text testID="salida-selected-marca" style={styles.infoValue}>{salidaSelected.marca}</Text>
-                  </View>
-                ) : null}
-                <View style={styles.infoCell}>
-                  <Text style={styles.infoLabel}>{t('product.salidaStockActual')}</Text>
-                  <Text testID="salida-selected-stock" style={[styles.infoValue, styles.infoValueStrong]}>{String(salidaSelected.stock)}</Text>
-                </View>
-                <View style={styles.infoCell}>
-                  <Text style={styles.infoLabel}>{t('product.vencimiento')}</Text>
-                  <Text
-                    testID="salida-selected-vencimiento"
-                    style={[styles.infoValue, !salidaSelected.vencimiento && styles.infoValueEmpty]}
-                  >
-                    {salidaSelected.vencimiento ? isoToDisplay(salidaSelected.vencimiento) : t('scan.productNoExpiry')}
-                  </Text>
-                </View>
-              </View>
-            )}
+            {salidaSelected && <ProductInfoCard product={salidaSelected} testIDPrefix="salida-selected" />}
             {!salidaSelected && salidaSuggestions.length > 0 && (
               <View style={styles.suggestionsBox}>
                 {salidaSuggestions.map(s => (
@@ -389,20 +372,32 @@ export default function CargarScreen() {
             />
 
             <Text style={styles.label}>{t('product.salidaMotivo')} *</Text>
-            <View style={styles.chipsContent}>
-              {EXIT_REASONS.map(reason => (
+            {/* Se desliza hacia los costados si los botones no entran; el elegido pasa al principio */}
+            <ScrollView
+              ref={motivoChipsRef}
+              testID="salida-motivo-scroll"
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              style={styles.motivoScroll}
+              contentContainerStyle={styles.motivoChips}
+            >
+              {selectedFirst(EXIT_REASONS, reason => reason === salidaMotivo).map(reason => (
                 <TouchableOpacity
                   key={reason}
                   testID={`salida-motivo-${reason}`}
-                  style={[styles.chip, salidaMotivo === reason && styles.chipActive]}
-                  onPress={() => setSalidaMotivo(reason)}
+                  style={[styles.chip, styles.motivoChip, salidaMotivo === reason && styles.chipActive]}
+                  onPress={() => {
+                    setSalidaMotivo(salidaMotivo === reason ? null : reason);
+                    motivoChipsRef.current?.scrollTo?.({ x: 0, animated: true });
+                  }}
                 >
                   <Text style={[styles.chipText, salidaMotivo === reason && styles.chipTextActive]}>
                     {t(EXIT_REASON_LABEL_KEY[reason])}
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
 
             <View style={styles.labelRow}>
               <Text style={styles.labelInRow}>{t('product.salidaNotaLabel')}</Text>
@@ -539,24 +534,11 @@ const styles = StyleSheet.create({
   },
   suggestionText: { fontSize: 14, color: Colors.textPrimary },
   suggestionSubtext: { fontSize: 11, color: Colors.textSecondary, marginTop: 1 },
-  // Datos del producto elegido: una tarjeta breve con dos columnas
-  selectedInfo: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#e8e8ee',
-  },
-  infoCell: { width: '50%', paddingVertical: 4 },
-  infoLabel: { fontSize: 11, fontWeight: '600', color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4 },
-  infoValue: { fontSize: 14, color: Colors.textPrimary, marginTop: 1 },
-  infoValueStrong: { fontWeight: '700', color: Colors.primary },
-  infoValueEmpty: { color: Colors.placeholder },
   chipsContent: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
+  // Motivos de salida en una sola fila que se desliza hacia los costados
+  motivoScroll: { flexGrow: 0, marginTop: 6 },
+  motivoChips: { flexDirection: 'row', gap: 8, paddingRight: 4 },
+  motivoChip: { flexShrink: 0 },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 6,

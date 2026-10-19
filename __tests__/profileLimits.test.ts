@@ -1,6 +1,7 @@
 import {
   alertDaysOrDefault,
   checkHourOrDefault,
+  formatHour,
   inRange,
   parseWholeNumber,
   stepValue,
@@ -87,5 +88,13 @@ describe('stepValue', () => {
   it('starts from an end when there is nothing written', () => {
     expect(stepValue('', 1, 2, 90)).toBe(2);
     expect(stepValue('', -1, 2, 90)).toBe(90);
+  });
+});
+
+describe('formatHour', () => {
+  it('writes the hour with two digits and the minutes in zero', () => {
+    expect(formatHour(0)).toBe('00:00');
+    expect(formatHour(5)).toBe('05:00');
+    expect(formatHour(23)).toBe('23:00');
   });
 });

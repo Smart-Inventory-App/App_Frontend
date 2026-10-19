@@ -6,6 +6,7 @@ import { Colors } from '@/constants/colors';
 import AppTextInput from '@/components/AppTextInput';
 import BottomSheetModal from '@/components/BottomSheetModal';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
+import ProductInfoCard from '@/components/ProductInfoCard';
 import { getScanErrorMessage, ocrService } from '@/services/ocrService';
 import { productService } from '@/services/productService';
 import { ProductDraft, ProductMatch, ScanDocType, ScanState } from '@/types/ocr';
@@ -172,7 +173,8 @@ export default function ExistingProductModal({ visible, onClose, mode = 'entry',
     setSelected(option);
     setError(null);
     if (method === 'name') {
-      setQuery(productLabel(option));
+      // En el campo va solo el nombre: la marca y los demás datos se muestran debajo, en la tarjeta del producto
+      setQuery(option.nombre);
       setOptions([]);
     }
   };
@@ -349,9 +351,7 @@ export default function ExistingProductModal({ visible, onClose, mode = 'entry',
             </TouchableOpacity>
           </View>
         )}
-        {method === 'name' && (
-          <Text style={styles.hintText} testID="existing-selected">{t('existing.stockCurrent', { stock: selected.stock })}</Text>
-        )}
+        {method === 'name' && <ProductInfoCard product={selected} testIDPrefix="existing-selected" />}
         <Text style={styles.label}>{t('existing.stockLabel')} *</Text>
         <AppTextInput
           testID="existing-stock-input"

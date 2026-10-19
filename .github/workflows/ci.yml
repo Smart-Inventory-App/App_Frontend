@@ -57,10 +57,17 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint-and-test
     if: github.ref == 'refs/heads/production'
+    permissions:
+      contents: write
+    concurrency:
+      group: eas-build-production
+      cancel-in-progress: false
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -80,7 +87,48 @@ jobs:
       - name: Install EAS CLI
         run: npm install -g eas-cli
 
+      - name: Set app version
+        env:
+          BASELINE_COMMITS: 72
+        run: |
+          count=$(git rev-list --first-parent --count HEAD)
+          patch=$((count - BASELINE_COMMITS))
+          node <<EOF
+          const fs = require('fs');
+          const app = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+          const [major, minor] = app.expo.version.split('.');
+          app.expo.version = [major, minor, $patch].join('.');
+          fs.writeFileSync('app.json', JSON.stringify(app, null, 2) + '\n');
+          console.log('App version: ' + app.expo.version);
+          EOF
+          version=$(node -p "require('./app.json').expo.version")
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "App version: $version" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Build Android production
-        run: eas build --platform android --profile production --non-interactive
+        run: eas build --platform android --profile production --non-interactive --json > build.json
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_BUILD_NO_EXPO_GO_WARNING: "true"
+
+      - name: Publish GitHub Release with the APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          url=$(jq -r '.[0].artifacts.buildUrl' build.json)
+          if [ -z "$url" ] || [ "$url" = "null" ]; then
+            echo "::error::build.json no trae artifacts.buildUrl"
+            cat build.json
+            exit 1
+          fi
+          apk="smart-inventory-v${VERSION}.apk"
+          curl -fsSL "$url" -o "$apk"
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            gh release upload "v${VERSION}" "$apk" --clobber
+          else
+            gh release create "v${VERSION}" "$apk" \
+              --target "$GITHUB_SHA" \
+              --title "Smart Inventory v${VERSION}" \
+              --notes "$(git log -1 --pretty=%B)"
+          fi
+          echo "Release: v${VERSION}" >> "$GITHUB_STEP_SUMMARY"
