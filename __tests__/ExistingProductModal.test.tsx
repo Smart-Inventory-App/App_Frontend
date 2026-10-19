@@ -162,8 +162,8 @@ describe('ExistingProductModal - by name', () => {
     await act(async () => { jest.advanceTimersByTime(350); });
     fireEvent.press(screen.getByTestId('existing-option-product-1'));
     expect(screen.queryByTestId('existing-option-product-2')).toBeNull();
-    expect(screen.getByTestId('existing-name-input').props.value).toBe('Leche · Ser');
-    expect(screen.getByText('Stock actual: 4')).toBeTruthy();
+    expect(screen.getByTestId('existing-name-input').props.value).toBe('Leche');
+    expect(screen.getByTestId('existing-selected-stock').props.children).toBe('4');
     expect(screen.getByTestId('existing-stock-input')).toBeTruthy();
     expect(screen.getByTestId('existing-cancel')).toBeTruthy();
     expect(screen.getByTestId('existing-confirm')).toBeTruthy();
@@ -572,5 +572,63 @@ describe('ExistingProductModal - exit mode (scan for a stock exit)', () => {
     await confirmEdit();
     fireEvent.press(screen.getByTestId('existing-option-product-1'));
     expect(screen.queryByTestId('existing-stock-input')).toBeNull();
+  });
+});
+
+describe('ExistingProductModal - details of the chosen product (by name)', () => {
+  const openByName = () => {
+    setup();
+    fireEvent.press(screen.getByTestId('existing-method-name'));
+  };
+
+  const choose = async (product: any) => {
+    jest.useFakeTimers();
+    mockedProducts.suggestProducts.mockResolvedValue([product]);
+    openByName();
+    fireEvent.changeText(screen.getByTestId('existing-name-input'), 'Le');
+    await act(async () => { jest.advanceTimersByTime(350); });
+    fireEvent.press(screen.getByTestId(`existing-option-product-${product.id}`));
+  };
+
+  it('shows only the name of the product in the field, without the brand', async () => {
+    await choose({ ...LECHE, marca: 'La Serenísima' });
+    expect(screen.getByTestId('existing-name-input').props.value).toBe('Leche');
+  });
+
+  it('shows the category, brand, current stock and expiry date of the product in a card', async () => {
+    await choose({ ...LECHE, marca: 'La Serenísima', categoria: 'Lacteos', stock: 4, vencimiento: '2027-03-05' });
+    expect(screen.getByTestId('existing-selected-info')).toBeTruthy();
+    expect(screen.getByTestId('existing-selected-categoria').props.children).toBe('Lacteos');
+    expect(screen.getByTestId('existing-selected-marca').props.children).toBe('La Serenísima');
+    expect(screen.getByTestId('existing-selected-stock').props.children).toBe('4');
+    expect(screen.getByTestId('existing-selected-vencimiento').props.children).toBe('05/03/2027');
+  });
+
+  it('leaves out the brand when the product has none', async () => {
+    await choose({ ...LECHE, marca: undefined });
+    expect(screen.queryByTestId('existing-selected-marca')).toBeNull();
+    expect(screen.getByTestId('existing-selected-categoria')).toBeTruthy();
+  });
+
+  it('leaves out the expiry date when the product does not expire', async () => {
+    await choose({ ...LECHE, vencimiento: undefined });
+    expect(screen.queryByTestId('existing-selected-vencimiento')).toBeNull();
+    expect(screen.getByTestId('existing-selected-stock')).toBeTruthy();
+  });
+
+  it('puts the card right below the name field and above the stock to add', async () => {
+    await choose({ ...LECHE, marca: 'Ser' });
+    const tree = JSON.stringify(screen.toJSON());
+    const at = (id: string) => tree.indexOf(`"${id}"`);
+    expect(at('existing-name-input')).toBeLessThan(at('existing-selected-info'));
+    expect(at('existing-selected-info')).toBeLessThan(at('existing-stock-input'));
+  });
+
+  it('still adds the stock to the chosen product', async () => {
+    mockedProducts.restockProduct.mockResolvedValue({} as any);
+    await choose({ ...LECHE, marca: 'Ser' });
+    fireEvent.changeText(screen.getByTestId('existing-stock-input'), '3');
+    await act(async () => { fireEvent.press(screen.getByTestId('existing-confirm')); });
+    expect(mockedProducts.restockProduct).toHaveBeenCalledWith(LECHE.id, 3);
   });
 });

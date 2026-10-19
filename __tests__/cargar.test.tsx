@@ -2,7 +2,9 @@ import React from 'react';
 import { Keyboard, KeyboardAvoidingView, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
+import { Colors } from '@/constants/colors';
 import CargarScreen from '../app/(tabs)/cargar';
+import { resetTabTransition, slideTransition } from '../src/utils/tabTransition';
 import { productService } from '@/services/productService';
 
 const mockReplace = jest.fn();
@@ -333,6 +335,7 @@ describe('CargarScreen - salida', () => {
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
     fireEvent.press(screen.getByText('Leche'));
     fireEvent.changeText(screen.getByPlaceholderText('0'), '1');
+    fireEvent.press(screen.getByText('Consumido'));
     await act(async () => {
       fireEvent.press(screen.getByText('Registrar salida'));
     });
@@ -357,6 +360,7 @@ describe('CargarScreen - salida', () => {
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
     fireEvent.press(screen.getByText('Leche'));
     fireEvent.changeText(screen.getByPlaceholderText('0'), '1');
+    fireEvent.press(screen.getByText('Consumido'));
     await act(async () => {
       fireEvent.press(screen.getByText('Registrar salida'));
     });
@@ -545,8 +549,8 @@ describe('CargarScreen - teclado en la entrada', () => {
     render(<CargarScreen />);
     const padding = () => StyleSheet.flatten(screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle).paddingBottom;
     expect(padding()).toBe(40);
-    act(() => { handlers.keyboardDidShow(); });
-    expect(padding()).toBeGreaterThan(40);
+    act(() => { (handlers.keyboardDidShow as any)({ endCoordinates: { height: 300 } }); });
+    expect(padding()).toBe(340);
     act(() => { handlers.keyboardDidHide(); });
     expect(padding()).toBe(40);
   });
@@ -728,12 +732,102 @@ describe('CargarScreen - salida: motivos y escaneo', () => {
     fireEvent.press(screen.getByText('Leche'));
   };
 
-  it('offers four reasons, with "Vendido" and "Alquilado" after "Consumido" and "Vencido"', () => {
-    goToSalida();
+  const motivoOrder = () => {
     const tree = JSON.stringify(screen.toJSON());
-    const order = ['Consumido', 'Vencido', 'Vendido', 'Alquilado'].map(label => tree.indexOf(`"${label}"`));
-    expect(order.every(i => i > 0)).toBe(true);
-    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    return ['sold', 'consumed', 'expired', 'rented']
+      .map(id => ({ id, at: tree.indexOf(`salida-motivo-${id}`) }))
+      .sort((a, b) => a.at - b.at)
+      .map(item => item.id);
+  };
+
+  it('offers four reasons, with "Vendido" first of all the buttons', () => {
+    goToSalida();
+    expect(motivoOrder()).toEqual(['sold', 'consumed', 'expired', 'rented']);
+    ['Vendido', 'Consumido', 'Vencido', 'Alquilado'].forEach(label => expect(screen.getByText(label)).toBeTruthy());
+  });
+
+  it('has no reason chosen at the start', () => {
+    goToSalida();
+    ['sold', 'consumed', 'expired', 'rented'].forEach(id => {
+      const style = StyleSheet.flatten(screen.getByTestId(`salida-motivo-${id}`).props.style);
+      expect(style.backgroundColor).toBe('#fff');
+    });
+  });
+
+  it('shows the reasons in a row that scrolls sideways when they do not fit', () => {
+    goToSalida();
+    const scroll = screen.getByTestId('salida-motivo-scroll');
+    expect(scroll.props.horizontal).toBe(true);
+    expect(scroll.props.showsHorizontalScrollIndicator).toBe(false);
+    const content = StyleSheet.flatten(scroll.props.contentContainerStyle);
+    expect(content.flexDirection).toBe('row');
+    expect(content.flexWrap).toBeUndefined();
+    expect(StyleSheet.flatten(screen.getByTestId('salida-motivo-sold').props.style).flexShrink).toBe(0);
+  });
+
+  it('moves the chosen reason to the start of the list', () => {
+    goToSalida();
+    fireEvent.press(screen.getByTestId('salida-motivo-expired'));
+    expect(motivoOrder()).toEqual(['expired', 'sold', 'consumed', 'rented']);
+    const chosen = StyleSheet.flatten(screen.getByTestId('salida-motivo-expired').props.style);
+    expect(chosen.backgroundColor).toBe(Colors.primary);
+  });
+
+  it('sends the previous reason back to its place when another one is chosen', () => {
+    goToSalida();
+    fireEvent.press(screen.getByTestId('salida-motivo-rented'));
+    expect(motivoOrder()).toEqual(['rented', 'sold', 'consumed', 'expired']);
+    fireEvent.press(screen.getByTestId('salida-motivo-consumed'));
+    expect(motivoOrder()).toEqual(['consumed', 'sold', 'expired', 'rented']);
+  });
+
+  it('puts the reason back in its original place when it is deselected', () => {
+    goToSalida();
+    fireEvent.press(screen.getByTestId('salida-motivo-expired'));
+    expect(motivoOrder()[0]).toBe('expired');
+    fireEvent.press(screen.getByTestId('salida-motivo-expired'));
+    expect(motivoOrder()).toEqual(['sold', 'consumed', 'expired', 'rented']);
+    expect(StyleSheet.flatten(screen.getByTestId('salida-motivo-expired').props.style).backgroundColor).toBe('#fff');
+  });
+
+  it('asks to choose a reason before registering the exit', async () => {
+    mockedProducts.suggestProducts.mockResolvedValue([{ id: 1, nombre: 'Leche', categoria: 'Lacteos', stock: 3 } as any]);
+    goToSalida();
+    await selectProduct();
+    fireEvent.changeText(screen.getByPlaceholderText('0'), '2');
+    await act(async () => {
+      fireEvent.press(screen.getByText('Registrar salida'));
+    });
+    expect(screen.getByText('Elegí el motivo de la salida')).toBeTruthy();
+    expect(mockedProducts.registerEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not register the exit after the reason was deselected', async () => {
+    mockedProducts.suggestProducts.mockResolvedValue([{ id: 1, nombre: 'Leche', categoria: 'Lacteos', stock: 3 } as any]);
+    goToSalida();
+    await selectProduct();
+    fireEvent.changeText(screen.getByPlaceholderText('0'), '2');
+    fireEvent.press(screen.getByTestId('salida-motivo-sold'));
+    fireEvent.press(screen.getByTestId('salida-motivo-sold'));
+    await act(async () => {
+      fireEvent.press(screen.getByText('Registrar salida'));
+    });
+    expect(mockedProducts.registerEvent).not.toHaveBeenCalled();
+  });
+
+  it('starts with no reason again after registering another exit', async () => {
+    mockedProducts.suggestProducts.mockResolvedValue([{ id: 1, nombre: 'Leche', categoria: 'Lacteos', stock: 3 } as any]);
+    mockedProducts.registerEvent.mockResolvedValue({ event_type: 'sold', quantity: 1, remaining_stock: 2 });
+    goToSalida();
+    await selectProduct();
+    fireEvent.changeText(screen.getByPlaceholderText('0'), '1');
+    fireEvent.press(screen.getByTestId('salida-motivo-rented'));
+    await act(async () => {
+      fireEvent.press(screen.getByText('Registrar salida'));
+    });
+    fireEvent.press(screen.getByText('Registrar otra salida'));
+    expect(motivoOrder()).toEqual(['sold', 'consumed', 'expired', 'rented']);
+    expect(StyleSheet.flatten(screen.getByTestId('salida-motivo-rented').props.style).backgroundColor).toBe('#fff');
   });
 
   it('calls the field "Stock a sacar" and the description "Descripción de Motivo", with no "optional"', () => {
@@ -898,9 +992,11 @@ describe('CargarScreen - salida: datos informativos del producto elegido', () =>
     expect(screen.getByTestId('salida-selected-vencimiento').props.children).toBe('05/03/2027');
   });
 
-  it('says "Sin vencimiento" when the product does not expire', async () => {
+  it('leaves the expiry out, like the brand, when the product does not expire', async () => {
     await pickByName({ id: 4, nombre: 'Sal', categoria: 'Almacen', stock: 9 });
-    expect(screen.getByTestId('salida-selected-vencimiento').props.children).toBe('Sin vencimiento');
+    expect(screen.queryByTestId('salida-selected-vencimiento')).toBeNull();
+    expect(screen.queryByText('Sin vencimiento')).toBeNull();
+    expect(screen.queryByText('Vencimiento')).toBeNull();
   });
 
   it('shows the four data in order, category, brand, current stock and expiry, as a short card', async () => {
@@ -963,6 +1059,7 @@ describe('CargarScreen - the success window does not stay', () => {
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
     fireEvent.press(screen.getByText('Leche'));
     fireEvent.changeText(screen.getByPlaceholderText('0'), '1');
+    fireEvent.press(screen.getByText('Consumido'));
     await act(async () => {
       fireEvent.press(screen.getByText('Registrar salida'));
     });
@@ -1006,6 +1103,47 @@ describe('CargarScreen - the success window does not stay', () => {
     reachEntrySuccess();
     fireEvent.press(screen.getByText('Cargar otro'));
     expect(screen.queryByText('¡Listo!')).toBeNull();
+    expect(screen.getByText('Guardar producto')).toBeTruthy();
+  });
+});
+
+describe('CargarScreen - success screen buttons and check mark', () => {
+  const duration = () => (slideTransition.transitionSpec as { config: { duration: number } }).config.duration;
+
+  const reachSuccess = () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-existing-modal'));
+    fireEvent.press(screen.getByTestId('mock-existing-success'));
+  };
+
+  beforeEach(() => resetTabTransition());
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('pops the check mark up when the success screen appears', () => {
+    reachSuccess();
+    expect(screen.getByText('¡Listo!')).toBeTruthy();
+    expect(screen.getByTestId('success-check')).toBeTruthy();
+  });
+
+  it('opens the inventory without sliding the screen when "Ver inventario" is pressed', () => {
+    jest.useFakeTimers();
+    reachSuccess();
+    expect(duration()).toBe(280);
+    fireEvent.press(screen.getByText('Ver inventario'));
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/inventario');
+    expect(duration()).toBe(0);
+    jest.advanceTimersByTime(1000);
+    expect(duration()).toBe(280);
+  });
+
+  it('does not slide anything when "Cargar otro" is pressed: it only gets the form ready again', () => {
+    reachSuccess();
+    fireEvent.press(screen.getByText('Cargar otro'));
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(duration()).toBe(280);
     expect(screen.getByText('Guardar producto')).toBeTruthy();
   });
 });

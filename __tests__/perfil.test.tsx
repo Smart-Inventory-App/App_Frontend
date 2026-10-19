@@ -6,22 +6,30 @@ import { Ionicons } from '@expo/vector-icons';
 import PerfilScreen from '../app/(tabs)/perfil';
 import { profileService, UserProfile } from '@/services/profileService';
 import { changeLanguage } from '@/i18n';
+import { ensureNotificationPermission, getNotificationPermission } from '@/services/notificationPermission';
 
 const mockReplace = jest.fn();
 const mockNavigate = jest.fn();
 const mockLogout = jest.fn();
-let mockFocusCallback: () => void = () => {};
+// Todos los efectos de foco de la pantalla (se disparan juntos al volver a ella)
+const mockFocusCallbacks = new Set<() => void>();
+const mockFocusCallback = () => [...mockFocusCallbacks].forEach(cb => cb());
 
 jest.mock('expo-router', () => {
   const ReactActual = require('react');
   return {
     router: { replace: (...args: any[]) => mockReplace(...args), navigate: (...args: any[]) => mockNavigate(...args) },
     useFocusEffect: (cb: () => void) => {
-      mockFocusCallback = cb;
+      mockFocusCallbacks.add(cb);
       ReactActual.useEffect(cb, [cb]);
     },
   };
 });
+
+jest.mock('@/services/notificationPermission', () => ({
+  getNotificationPermission: jest.fn(),
+  ensureNotificationPermission: jest.fn(),
+}));
 
 jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({ logout: mockLogout }),
@@ -67,8 +75,12 @@ const startEditingIfNeeded = () => {
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  mockFocusCallbacks.clear();
   await AsyncStorage.clear();
   mockedProfileService.getProfile.mockResolvedValue(baseProfile());
+  // Por defecto el teléfono ya dio el permiso de notificaciones
+  (getNotificationPermission as jest.Mock).mockResolvedValue({ granted: true, canAskAgain: true });
+  (ensureNotificationPermission as jest.Mock).mockResolvedValue('granted');
   jest.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -148,7 +160,7 @@ describe('PerfilScreen', () => {
     expect(screen.queryByTestId('user-type-comercio')).toBeNull();
     expect(screen.getByTestId('coverage-days-value').props.children.join('')).toBe('7 días');
     expect(screen.getByTestId('expiry-days-value').props.children.join('')).toBe('7 días');
-    expect(screen.getByTestId('alert-hour-value').props.children.join('')).toBe('5 hs Hora Argentina (UTC -3)');
+    expect(screen.getByTestId('alert-hour-value').props.children).toBe('05:00 hs · Hora de Argentina (UTC-3)');
   });
 
   it('shows the account type in a highlighted box as wide as the screen, which is not a button', async () => {
@@ -254,10 +266,10 @@ describe('PerfilScreen', () => {
     mockedProfileService.getProfile.mockResolvedValue(baseProfile({ alertCheckHour: 11 }));
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByTestId('alert-hour-value')).toBeTruthy());
-    expect(screen.getByTestId('alert-hour-value').props.children.join('')).toBe('8 hs Hora Argentina (UTC -3)');
+    expect(screen.getByTestId('alert-hour-value').props.children).toBe('08:00 hs · Hora de Argentina (UTC-3)');
     startEditing();
     expect(screen.getByTestId('alert-hour-input').props.value).toBe('8');
-    expect(screen.getByText('hs Hora Argentina (UTC -3)')).toBeTruthy();
+    expect(screen.getByText('Hora de Argentina (UTC-3)')).toBeTruthy();
   });
 
   it('asks for confirmation before changing the language, and changes it once confirmed', async () => {
@@ -547,8 +559,188 @@ describe('PerfilScreen - limits of the fields', () => {
     mockedProfileService.getProfile.mockResolvedValue(baseProfile({ alertCheckHour: undefined as any }));
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByTestId('alert-hour-value')).toBeTruthy());
-    expect(screen.getByTestId('alert-hour-value').props.children.join('')).toBe('5 hs Hora Argentina (UTC -3)');
+    expect(screen.getByTestId('alert-hour-value').props.children).toBe('05:00 hs · Hora de Argentina (UTC-3)');
     startEditing();
     expect(screen.getByTestId('alert-hour-input').props.value).toBe('5');
+  });
+});
+
+describe('PerfilScreen - permission of the notifications', () => {
+  const NOTICE = 'Para activar las notificaciones de la aplicación, ve a Ajustes y otorga los permisos';
+  const ungranted = () => (getNotificationPermission as jest.Mock).mockResolvedValue({ granted: false, canAskAgain: true });
+
+  const openWithEnabled = async () => {
+    await AsyncStorage.setItem('notificationsEnabled', JSON.stringify(true));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+  };
+
+  it('does not ask for anything when the button says "Activadas" and the phone already gave the permission', async () => {
+    await openWithEnabled();
+    expect(screen.getByText(/Activadas/)).toBeTruthy();
+    expect(ensureNotificationPermission).not.toHaveBeenCalled();
+  });
+
+  it('does not check the permission when the button says "Desactivadas"', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    expect(getNotificationPermission).not.toHaveBeenCalled();
+  });
+
+  it('shows the request of the system when the button says "Activadas" but the permission was not given', async () => {
+    ungranted();
+    await openWithEnabled();
+    await waitFor(() => expect(ensureNotificationPermission).toHaveBeenCalledTimes(1));
+  });
+
+  it('keeps the notifications on, registering the phone again, when the user gives the permission', async () => {
+    ungranted();
+    mockedProfileService.activateNotifications.mockResolvedValue(true);
+    await openWithEnabled();
+    await waitFor(() => expect(mockedProfileService.activateNotifications).toHaveBeenCalled());
+    expect(screen.getByText(/Activadas/)).toBeTruthy();
+    expect(screen.queryByText(NOTICE)).toBeNull();
+  });
+
+  it('turns the button to "Desactivadas" when the user refuses the request, without any notice', async () => {
+    ungranted();
+    (ensureNotificationPermission as jest.Mock).mockResolvedValue('denied');
+    mockedProfileService.deactivateNotifications.mockResolvedValue(true);
+    await openWithEnabled();
+    await waitFor(() => expect(screen.getByText(/Desactivadas/)).toBeTruthy());
+    await expect(AsyncStorage.getItem('notificationsEnabled')).resolves.toBe('false');
+    expect(mockedProfileService.deactivateNotifications).toHaveBeenCalled();
+    expect(screen.queryByText(NOTICE)).toBeNull();
+  });
+
+  it('tells the user to go to Settings, with a "Continuar" button, when the permission was blocked for good', async () => {
+    ungranted();
+    (ensureNotificationPermission as jest.Mock).mockResolvedValue('blocked');
+    mockedProfileService.deactivateNotifications.mockResolvedValue(true);
+    await openWithEnabled();
+    await waitFor(() => expect(screen.getByText(NOTICE)).toBeTruthy());
+    expect(screen.getByText(/Desactivadas/)).toBeTruthy();
+    fireEvent.press(screen.getByText('Continuar'));
+    expect(screen.queryByText(NOTICE)).toBeNull();
+  });
+
+  it('still turns the button off when the server can not be reached', async () => {
+    ungranted();
+    (ensureNotificationPermission as jest.Mock).mockResolvedValue('denied');
+    mockedProfileService.deactivateNotifications.mockRejectedValue(new Error('down'));
+    await openWithEnabled();
+    await waitFor(() => expect(screen.getByText(/Desactivadas/)).toBeTruthy());
+  });
+
+  it('checks again every time the user comes back to the profile', async () => {
+    await openWithEnabled();
+    expect(getNotificationPermission).toHaveBeenCalledTimes(1);
+    ungranted();
+    (ensureNotificationPermission as jest.Mock).mockResolvedValue('denied');
+    mockedProfileService.deactivateNotifications.mockResolvedValue(true);
+    await act(async () => { mockFocusCallback(); });
+    await waitFor(() => expect(screen.getByText(/Desactivadas/)).toBeTruthy());
+  });
+
+  it('asks for the permission before turning the notifications on, and turns them on when it is given', async () => {
+    mockedProfileService.activateNotifications.mockResolvedValue(true);
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(screen.getByText(/Notificaciones:/));
+    });
+    expect(ensureNotificationPermission).toHaveBeenCalledTimes(1);
+    expect(mockedProfileService.activateNotifications).toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByText(/Activadas/)).toBeTruthy());
+  });
+
+  it('does not turn the notifications on, nor say anything, when the user refuses the request', async () => {
+    (ensureNotificationPermission as jest.Mock).mockResolvedValue('denied');
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(screen.getByText(/Notificaciones:/));
+    });
+    expect(mockedProfileService.activateNotifications).not.toHaveBeenCalled();
+    expect(screen.getByText(/Desactivadas/)).toBeTruthy();
+    expect(screen.queryByText(NOTICE)).toBeNull();
+  });
+
+  it('tells the user to go to Settings when pressing the button and the permission was blocked for good', async () => {
+    (ensureNotificationPermission as jest.Mock).mockResolvedValue('blocked');
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(screen.getByText(/Notificaciones:/));
+    });
+    expect(screen.getByText(NOTICE)).toBeTruthy();
+    expect(mockedProfileService.activateNotifications).not.toHaveBeenCalled();
+    expect(screen.getByText(/Desactivadas/)).toBeTruthy();
+    fireEvent.press(screen.getByText('Continuar'));
+    expect(screen.queryByText(NOTICE)).toBeNull();
+  });
+});
+
+describe('PerfilScreen - the hour of the daily check', () => {
+  it('shows the hour with two digits, saying it is Argentine time, with nothing else under it', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByTestId('alert-hour-value')).toBeTruthy());
+    expect(screen.getByTestId('alert-hour-value').props.children).toBe('05:00 hs · Hora de Argentina (UTC-3)');
+    expect(screen.queryByTestId('alert-hour-utc')).toBeNull();
+    expect(screen.queryByText(/hs UTC/)).toBeNull();
+  });
+
+  it('shows hours past noon too, as saved in UTC and as Argentine time', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ alertCheckHour: 22 }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByTestId('alert-hour-value')).toBeTruthy());
+    expect(screen.getByTestId('alert-hour-value').props.children).toBe('19:00 hs · Hora de Argentina (UTC-3)');
+  });
+
+  it('wraps the hours around midnight', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ alertCheckHour: 1 }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByTestId('alert-hour-value')).toBeTruthy());
+    expect(screen.getByTestId('alert-hour-value').props.children).toBe('22:00 hs · Hora de Argentina (UTC-3)');
+  });
+
+  it('shows only the range hint under the field while editing, with no message about when the alerts are checked', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    startEditing();
+    expect(screen.getByTestId('alert-hour-hint').props.children).toBe('Se aceptan números entre 0 y 23 (inclusive).');
+    expect(screen.queryByTestId('alert-hour-preview')).toBeNull();
+    fireEvent.changeText(screen.getByTestId('alert-hour-input'), '20');
+    expect(screen.queryByTestId('alert-hour-preview')).toBeNull();
+    expect(screen.queryByText(/se van a revisar/)).toBeNull();
+  });
+});
+
+describe('PerfilScreen - color of the confirm buttons', () => {
+  const background = () => StyleSheet.flatten(screen.getByTestId('confirm-accept').props.style).backgroundColor;
+
+  it('is the teal of the app when confirming a change of language', async () => {
+    const { Colors } = require('../src/constants/colors');
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    fireEvent.press(screen.getByText(/Idioma:/));
+    expect(background()).toBe(Colors.primary);
+  });
+
+  it('is the teal of the app when confirming to turn the notifications off', async () => {
+    const { Colors } = require('../src/constants/colors');
+    await AsyncStorage.setItem('notificationsEnabled', JSON.stringify(true));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText(/Activadas/)).toBeTruthy());
+    fireEvent.press(screen.getByText(/Notificaciones:/));
+    expect(background()).toBe(Colors.primary);
+  });
+
+  it('stays red when confirming to log out', async () => {
+    const { Colors } = require('../src/constants/colors');
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    fireEvent.press(screen.getByText('Cerrar sesión'));
+    expect(background()).toBe(Colors.error);
   });
 });

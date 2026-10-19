@@ -1,12 +1,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Dimensions, Keyboard, ScrollView, ScrollViewProps, TextInput } from 'react-native';
+import { Keyboard, LayoutChangeEvent, ScrollView, ScrollViewProps, StyleSheet, TextInput } from 'react-native';
 
 // Cuánto queda visible por encima del campo cuando la pantalla se desplaza para mostrarlo sobre el teclado
 const FIELD_TOP_MARGIN = 120;
 // Espera a que la pantalla se reacomode al abrirse el teclado antes de desplazarla
 const KEYBOARD_SCROLL_DELAY_MS = 100;
-// Espacio extra al final mientras el teclado está abierto, para poder subir hasta los últimos campos
-const KEYBOARD_PADDING_RATIO = 0.45;
 
 // Los campos de texto avisan por acá que fueron tocados (ver AppTextInput).
 export const FieldFocusContext = createContext<(() => void) | null>(null);
@@ -18,9 +16,13 @@ export const useFieldFocus = () => useContext(FieldFocusContext);
  * - Tocar una sugerencia o un botón con el teclado abierto funciona al primer toque.
  * Quien lo use debe reservar el lugar del teclado con un KeyboardAvoidingView (padding).
  */
-export default function KeyboardAwareScrollView({ contentContainerStyle, children, ...rest }: ScrollViewProps) {
+export default function KeyboardAwareScrollView({ contentContainerStyle, children, onLayout, ...rest }: ScrollViewProps) {
   const scrollRef = useRef<ScrollView>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  // Alto visible de la pantalla con el teclado cerrado y ahora: la diferencia es lo que el teclado ya le sacó
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const closedViewportRef = useRef(0);
   const keyboardOpenRef = useRef(false);
   const pendingScrollRef = useRef(false);
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -40,8 +42,9 @@ export default function KeyboardAwareScrollView({ contentContainerStyle, childre
   }, []);
 
   useEffect(() => {
-    const showSub = Keyboard.addListener('keyboardDidShow', () => {
+    const showSub = Keyboard.addListener('keyboardDidShow', (event?: { endCoordinates?: { height?: number } }) => {
       keyboardOpenRef.current = true;
+      setKeyboardHeight(event?.endCoordinates?.height ?? 0);
       setKeyboardOpen(true);
       if (!pendingScrollRef.current) return;
       pendingScrollRef.current = false;
@@ -65,16 +68,29 @@ export default function KeyboardAwareScrollView({ contentContainerStyle, childre
     else pendingScrollRef.current = true;
   }, [scrollFocusedFieldIntoView]);
 
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    const height = event.nativeEvent.layout.height;
+    if (!keyboardOpenRef.current) closedViewportRef.current = height;
+    setViewportHeight(height);
+    onLayout?.(event);
+  }, [onLayout]);
+
+  // Lugar extra al final mientras el teclado está abierto, para poder subir hasta los últimos campos. Es solo lo que
+  // el teclado cubre y la pantalla no se achicó: ese espacio queda detrás del teclado y nunca se ve en blanco. Si la
+  // pantalla ya se achicó sola (KeyboardAvoidingView), no se agrega nada y no se puede bajar a un vacío.
+  const covered = keyboardOpen ? Math.max(0, closedViewportRef.current - viewportHeight) : 0;
+  const extraBottom = keyboardOpen ? Math.max(0, keyboardHeight - covered) : 0;
+  const givenStyle = StyleSheet.flatten(contentContainerStyle) ?? {};
+  const givenBottom = Number(givenStyle.paddingBottom ?? givenStyle.padding ?? 0);
+
   return (
     <FieldFocusContext.Provider value={handleFieldFocus}>
       <ScrollView
         {...rest}
         ref={scrollRef}
+        onLayout={handleLayout}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[
-          contentContainerStyle,
-          keyboardOpen && { paddingBottom: Math.round(Dimensions.get('window').height * KEYBOARD_PADDING_RATIO) },
-        ]}
+        contentContainerStyle={[contentContainerStyle, extraBottom > 0 && { paddingBottom: givenBottom + extraBottom }]}
       >
         {children}
       </ScrollView>

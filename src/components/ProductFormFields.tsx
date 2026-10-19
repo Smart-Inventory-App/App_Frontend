@@ -8,7 +8,8 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
 import { FieldScanDocType } from '@/types/ocr';
-import { pickFromGallery, pickFromCamera } from '@/services/imageService';
+import { pickFromGallery, pickFromCamera, uploadImage, PickedImage } from '@/services/imageService';
+import ImageConfirmModal from '@/components/ImageConfirmModal';
 import BottomSheetModal from '@/components/BottomSheetModal';
 import { useFieldFocus } from '@/components/KeyboardAwareScrollView';
 import DatePickerModal from '@/components/DatePickerModal';
@@ -188,6 +189,8 @@ export default function ProductFormFields({
   const [vencText, setVencText] = useState(() => isoToDisplay(form.vencimiento));
   const [showCalendar, setShowCalendar] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  // Imagen elegida que espera la confirmación del usuario antes de subirse
+  const [pendingImage, setPendingImage] = useState<PickedImage | null>(null);
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [nombreSuggestions, setNombreSuggestions] = useState<ProductSuggestion[]>([]);
   const [nombreFocused, setNombreFocused] = useState(false);
@@ -214,12 +217,25 @@ export default function ProductFormFields({
     setNombreSuggestions([]);
   };
 
-  const doUpload = async (picker: () => Promise<string | null>) => {
+  // Elegir la imagen (galería o cámara) no la sube: primero se pide la confirmación
+  const doPick = async (picker: () => Promise<PickedImage | null>) => {
     setShowImagePicker(false);
     try {
+      const asset = await picker();
+      if (asset) setPendingImage(asset);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al elegir la imagen.';
+      Alert.alert('Error', message);
+    }
+  };
+
+  const confirmImage = async () => {
+    const asset = pendingImage;
+    setPendingImage(null);
+    if (!asset) return;
+    try {
       setUploadingImage(true);
-      const url = await picker();
-      if (url) set('imagen_url', url);
+      set('imagen_url', await uploadImage(asset));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error al subir la imagen.';
       Alert.alert('Error', message);
@@ -495,14 +511,14 @@ export default function ProductFormFields({
         <View style={styles.modalHandle} />
         <Text style={styles.modalTitle}>{t('product.imagenSeleccionar')}</Text>
 
-        <TouchableOpacity style={styles.modalOption} onPress={() => doUpload(pickFromCamera)}>
+        <TouchableOpacity style={styles.modalOption} onPress={() => doPick(pickFromCamera)}>
           <View style={styles.modalOptionIcon}>
             <Ionicons name="camera-outline" size={22} color={Colors.primary} />
           </View>
           <Text style={styles.modalOptionText}>{t('product.imagenCamara')}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.modalOption} onPress={() => doUpload(pickFromGallery)}>
+        <TouchableOpacity style={styles.modalOption} onPress={() => doPick(pickFromGallery)}>
           <View style={styles.modalOptionIcon}>
             <Ionicons name="images-outline" size={22} color={Colors.primary} />
           </View>
@@ -513,6 +529,14 @@ export default function ProductFormFields({
           <Text style={styles.modalCancelText}>Cancelar</Text>
         </TouchableOpacity>
       </BottomSheetModal>
+
+      {/* Antes de cargar la imagen se ve cómo quedó y se confirma; no hay recorte */}
+      <ImageConfirmModal
+        visible={pendingImage !== null}
+        uri={pendingImage?.uri ?? null}
+        onConfirm={confirmImage}
+        onCancel={() => setPendingImage(null)}
+      />
     </View>
   );
 }

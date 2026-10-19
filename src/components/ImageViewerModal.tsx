@@ -7,9 +7,9 @@ import {
   clampScale,
   clampTranslation,
   distanceBetween,
-  isDoubleTap,
   isResetScale,
-  nextDoubleTapScale,
+  midpoint,
+  pinchTranslation,
   TouchPoint,
 } from '@/utils/zoom';
 
@@ -22,7 +22,8 @@ interface Props {
 // Un movimiento menor a esto cuenta como toque (no como arrastre)
 const TAP_SLOP = 8;
 
-// Imagen a pantalla completa con zoom: pellizco con dos dedos, arrastre con zoom y doble toque para acercar o volver.
+// Imagen a pantalla completa con zoom: se acerca y se aleja pellizcando con dos dedos (el zoom se hace desde donde
+// están los dedos) y, ya acercada, se arrastra con uno o con dos dedos para ver cada parte. No hay zoom con doble toque.
 export default function ImageViewerModal({ visible, uri, onClose }: Props) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -35,13 +36,13 @@ export default function ImageViewerModal({ visible, uri, onClose }: Props) {
   const gesture = useRef({
     touches: 0,
     startDistance: 0,
+    startMid: { pageX: 0, pageY: 0 } as TouchPoint,
     baseScale: 1,
     startX: 0,
     startY: 0,
     baseX: 0,
     baseY: 0,
     moved: false,
-    lastTap: 0,
   });
 
   const apply = useCallback((nextScale: number, x: number, y: number) => {
@@ -58,10 +59,7 @@ export default function ImageViewerModal({ visible, uri, onClose }: Props) {
 
   // Cada vez que se abre arranca sin zoom
   useEffect(() => {
-    if (visible) {
-      reset();
-      gesture.current.lastTap = 0;
-    }
+    if (visible) reset();
   }, [visible, reset]);
 
   // Toma como punto de partida lo que hay en pantalla (también cuando se suma o se saca un dedo)
@@ -73,6 +71,7 @@ export default function ImageViewerModal({ visible, uri, onClose }: Props) {
     g.baseY = current.current.y;
     if (touches.length >= 2) {
       g.startDistance = distanceBetween(touches[0], touches[1]);
+      g.startMid = midpoint(touches[0], touches[1]);
     } else if (touches.length === 1) {
       g.startX = touches[0].pageX;
       g.startY = touches[0].pageY;
@@ -92,7 +91,11 @@ export default function ImageViewerModal({ visible, uri, onClose }: Props) {
     if (touches.length >= 2) {
       g.moved = true;
       const ratio = g.startDistance > 0 ? distanceBetween(touches[0], touches[1]) / g.startDistance : 1;
-      apply(g.baseScale * ratio, g.baseX, g.baseY);
+      const nextScale = clampScale(g.baseScale * ratio);
+      // Con los dedos juntos o separados se acerca desde ellos; si además se mueven, la imagen los acompaña
+      const center = { pageX: size.current.width / 2, pageY: size.current.height / 2 };
+      const next = pinchTranslation({ x: g.baseX, y: g.baseY }, g.baseScale, nextScale, g.startMid, midpoint(touches[0], touches[1]), center);
+      apply(nextScale, next.x, next.y);
       return;
     }
     if (touches.length === 1) {
@@ -106,22 +109,9 @@ export default function ImageViewerModal({ visible, uri, onClose }: Props) {
 
   const onRelease = () => {
     const g = gesture.current;
-    if (g.touches >= 2 || g.moved) {
-      // Terminó un pellizco o un arrastre: si quedó casi sin zoom, vuelve al centro
-      if (isResetScale(current.current.scale)) reset();
-      g.touches = 0;
-      return;
-    }
+    // Terminó un pellizco o un arrastre: si quedó casi sin zoom, vuelve al centro. Un toque suelto no hace nada.
+    if ((g.touches >= 2 || g.moved) && isResetScale(current.current.scale)) reset();
     g.touches = 0;
-    const now = Date.now();
-    if (isDoubleTap(now, g.lastTap)) {
-      g.lastTap = 0;
-      const next = nextDoubleTapScale(current.current.scale);
-      if (next === 1) reset();
-      else apply(next, 0, 0);
-      return;
-    }
-    g.lastTap = now;
   };
 
   return (

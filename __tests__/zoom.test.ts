@@ -2,14 +2,12 @@ import {
   clampScale,
   clampTranslation,
   distanceBetween,
-  DOUBLE_TAP_MS,
-  DOUBLE_TAP_SCALE,
-  isDoubleTap,
   isResetScale,
   MAX_SCALE,
   maxTranslation,
+  midpoint,
   MIN_SCALE,
-  nextDoubleTapScale,
+  pinchTranslation,
 } from '../src/utils/zoom';
 
 describe('zoom utils', () => {
@@ -36,16 +34,34 @@ describe('zoom utils', () => {
     expect(clampTranslation(50, 400, 1)).toBe(0);
   });
 
-  it('recognizes a double tap only when the second tap is quick and there was a first one', () => {
-    expect(isDoubleTap(1000, 0)).toBe(false);
-    expect(isDoubleTap(1000, 1000 - DOUBLE_TAP_MS)).toBe(true);
-    expect(isDoubleTap(1000, 1000 - DOUBLE_TAP_MS - 1)).toBe(false);
+  it('finds the point between two fingers', () => {
+    expect(midpoint({ pageX: 0, pageY: 10 }, { pageX: 100, pageY: 30 })).toEqual({ pageX: 50, pageY: 20 });
   });
 
-  it('zooms in on a double tap and goes back to normal if it was already zoomed', () => {
-    expect(nextDoubleTapScale(1)).toBe(DOUBLE_TAP_SCALE);
-    expect(nextDoubleTapScale(1.01)).toBe(DOUBLE_TAP_SCALE);
-    expect(nextDoubleTapScale(2)).toBe(MIN_SCALE);
+  describe('pinchTranslation', () => {
+    const center = { pageX: 200, pageY: 400 };
+    const mid = (x: number, y: number) => ({ pageX: x, pageY: y });
+
+    it('leaves the image where it was if nothing changes', () => {
+      expect(pinchTranslation({ x: 30, y: -10 }, 2, 2, mid(300, 500), mid(300, 500), center)).toEqual({ x: 30, y: -10 });
+    });
+
+    it('zooms around the center without moving the image when the fingers are on the center', () => {
+      expect(pinchTranslation({ x: 0, y: 0 }, 1, 2, mid(200, 400), mid(200, 400), center)).toEqual({ x: 0, y: 0 });
+    });
+
+    it('keeps the point under the fingers in place while zooming', () => {
+      // El punto medio está 100 a la derecha y 50 abajo del centro: al duplicar el zoom la imagen se corre 100 y 50
+      expect(pinchTranslation({ x: 0, y: 0 }, 1, 2, mid(300, 450), mid(300, 450), center)).toEqual({ x: -100, y: -50 });
+    });
+
+    it('accompanies the fingers when they move together', () => {
+      expect(pinchTranslation({ x: 0, y: 0 }, 2, 2, mid(200, 400), mid(230, 380), center)).toEqual({ x: 30, y: -20 });
+    });
+
+    it('does not break when the base zoom is zero', () => {
+      expect(pinchTranslation({ x: 0, y: 0 }, 0, 2, mid(200, 400), mid(200, 400), center)).toEqual({ x: 0, y: 0 });
+    });
   });
 
   it('treats a barely zoomed image as not zoomed', () => {

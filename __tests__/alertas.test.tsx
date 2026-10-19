@@ -190,3 +190,32 @@ describe('AlertasScreen - coming back to the screen', () => {
     expect(StyleSheet.flatten(screen.getByTestId('alert-filter-Stocks').props.style).backgroundColor).toBe('#fff');
   });
 });
+
+describe('AlertasScreen - summary text fits its box', () => {
+  beforeEach(() => {
+    mockedAlerts.getAlerts.mockResolvedValue([]);
+    mockedAlerts.getSummaryAlerts.mockResolvedValue({ critical: 12, warning: 345, info: 6 });
+  });
+
+  it.each(['critical', 'warning', 'info'])('shrinks the word of the %s box instead of overflowing it', async key => {
+    render(<AlertasScreen />);
+    await waitFor(() => expect(mockedAlerts.getSummaryAlerts).toHaveBeenCalled());
+    const word = screen.getByTestId(`alert-summary-text-${key}`);
+    expect(word.props.numberOfLines).toBe(1);
+    expect(word.props.adjustsFontSizeToFit).toBe(true);
+    expect(word.props.minimumFontScale).toBeGreaterThan(0);
+    expect(word.props.minimumFontScale).toBeLessThan(1);
+    const style = StyleSheet.flatten(word.props.style);
+    expect(style.alignSelf).toBe('stretch');
+    expect(style.textAlign).toBe('center');
+  });
+
+  it('shows the three words and keeps the numbers fitting too', async () => {
+    render(<AlertasScreen />);
+    await waitFor(() => expect(screen.getByText('Advertencias')).toBeTruthy());
+    expect(screen.getByTestId('alert-summary-text-critical').props.children).toBe('Críticas');
+    expect(screen.getByTestId('alert-summary-text-info').props.children).toBe('Info');
+    expect(screen.getByTestId('alert-summary-value-warning').props.adjustsFontSizeToFit).toBe(true);
+    expect(screen.getByTestId('alert-summary-value-warning').props.children).toBe(345);
+  });
+});

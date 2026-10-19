@@ -56,7 +56,8 @@ export default function HomeScreen() {
         setChanges(recentChanges);
         setLowStockThreshold(profile.coverageDaysThreshold);
         setExpiryDaysThreshold(profile.expiryDaysThreshold);
-        setDisplayName(profile.username || profile.firstName || '');
+        // Se saluda con el nombre de la persona, nunca con su usuario
+        setDisplayName(profile.firstName?.trim() || '');
       })
       .catch(() => {})
       .finally(() => setLoading(false));
