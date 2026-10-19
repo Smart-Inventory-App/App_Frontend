@@ -243,6 +243,16 @@ export default {
     historialCorregido: 'Corregido',
     salidaNotaPlaceholder: 'Descripción de salida (ej. vencido en heladera)',
   },
+  detail: {
+    title: 'Información del producto',
+    close: 'Cerrar',
+    alertsTitle: 'Reglas de alerta',
+    createdAt: 'Fecha de carga',
+    unitOne: '{{count}} unidad',
+    unitMany: '{{count}} unidades',
+    dayOne: '{{count}} día',
+    dayMany: '{{count}} días',
+  },
   existing: {
     openButton: 'Ingresar producto existente',
     title: 'Ingresar producto existente',

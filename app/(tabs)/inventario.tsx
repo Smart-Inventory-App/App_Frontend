@@ -15,10 +15,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
+import { profileService } from '@/services/profileService';
 import { Product, ProductCreate } from '@/types/product';
 import { isValidBarcode } from '@/utils/barcode';
 import { truncateLabel } from '@/utils/text';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
+import ProductDetailModal, { GeneralAlertRules } from '@/components/ProductDetailModal';
 import ProductImage from '@/components/ProductImage';
 import { selectedFirst } from '@/utils/selectedFirst';
 import ProductFormFields from '@/components/ProductFormFields';
@@ -41,6 +43,8 @@ export default function InventarioScreen() {
   const [selectedUbicacion, setSelectedUbicacion] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [historialProduct, setHistorialProduct] = useState<Product | null>(null);
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null);
+  const [generalRules, setGeneralRules] = useState<GeneralAlertRules | null>(null);
   const [editForm, setEditForm] = useState<Partial<ProductCreate>>({});
   const [saving, setSaving] = useState(false);
   const [filterOptions, setFilterOptions] = useState<{ categorias: string[]; ubicaciones: string[]; marcas: string[] }>({
@@ -90,6 +94,13 @@ export default function InventarioScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
   useFocusEffect(useCallback(() => { loadFilterOptions(); }, [loadFilterOptions]));
+
+  // Las reglas generales (Perfil) se muestran en el detalle de los productos que no tienen una propia
+  useFocusEffect(useCallback(() => {
+    profileService.getProfile()
+      .then(profile => setGeneralRules({ coverageDays: profile.coverageDaysThreshold, expiryDays: profile.expiryDaysThreshold }))
+      .catch(() => {});
+  }, []));
 
   const categories = useMemo(() => {
     return [...new Set([...filterOptions.categorias, ...extraCategorias])];
@@ -200,7 +211,12 @@ export default function InventarioScreen() {
     return (
       <View style={styles.item}>
         <ProductImage uri={item.imagen_url} style={styles.itemImage} />
-        <View style={styles.itemInfo}>
+        <TouchableOpacity
+          testID={`product-info-${item.id}`}
+          style={styles.itemInfo}
+          activeOpacity={0.7}
+          onPress={() => setDetailProduct(item)}
+        >
           <Text style={styles.itemName}>{item.nombre}</Text>
           {item.marca ? <Text style={styles.itemSub}>{truncateLabel(item.marca)}</Text> : null}
           <Text style={styles.itemSub}>{t('inventory.filterCategory')}: {truncateLabel(item.categoria)}</Text>
@@ -216,7 +232,7 @@ export default function InventarioScreen() {
             ) : null}
             <View style={labelStyle} />
           </View>
-        </View>
+        </TouchableOpacity>
         <View style={styles.itemActions}>
           <TouchableOpacity onPress={() => openEdit(item)} style={styles.actionBtn}>
             <Ionicons name="pencil" size={18} color={Colors.primary} />
@@ -359,6 +375,9 @@ export default function InventarioScreen() {
           <Text style={styles.saveBtnText}>{saving ? t('inventory.saving') : t('inventory.saveChanges')}</Text>
         </TouchableOpacity>
       </BottomSheetModal>
+
+      {/* Solo muestra los datos del producto: tocar su información abre esta ventana, sin edición */}
+      <ProductDetailModal product={detailProduct} generalRules={generalRules} onClose={() => setDetailProduct(null)} />
 
       <ConfirmModal
         visible={!!productToDelete}

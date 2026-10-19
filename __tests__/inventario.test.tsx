@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { Ionicons } from '@expo/vector-icons';
 import InventarioScreen from '../app/(tabs)/inventario';
 import { productService } from '@/services/productService';
+import { profileService } from '@/services/profileService';
 import { Product } from '@/types/product';
 
 jest.mock('expo-router', () => {
@@ -20,6 +21,12 @@ jest.mock('@/services/productService', () => ({
     deleteProduct: jest.fn(),
     updateProduct: jest.fn(),
     getConsumptionHistory: jest.fn(),
+  },
+}));
+
+jest.mock('@/services/profileService', () => ({
+  profileService: {
+    getProfile: jest.fn(),
   },
 }));
 
@@ -49,6 +56,7 @@ jest.mock('@/components/HistorialModal', () => {
 });
 
 const mockedProducts = productService as jest.Mocked<typeof productService>;
+const mockedProfile = profileService as jest.Mocked<typeof profileService>;
 
 const product = (overrides: Partial<Product> = {}): Product => ({
   id: 1,
@@ -62,6 +70,7 @@ const product = (overrides: Partial<Product> = {}): Product => ({
 beforeEach(() => {
   jest.clearAllMocks();
   mockedProducts.getFilterOptions.mockResolvedValue({ categorias: ['Lacteos'], ubicaciones: ['Heladera'], marcas: ['LSA'] });
+  mockedProfile.getProfile.mockResolvedValue({ coverageDaysThreshold: 7, expiryDaysThreshold: 10 } as any);
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 });
 
@@ -432,5 +441,80 @@ describe('InventarioScreen - invalid barcode when editing', () => {
     });
     expect(Alert.alert).toHaveBeenCalledWith('Error', 'El código de barras es inválido');
     expect(mockedProducts.updateProduct).not.toHaveBeenCalled();
+  });
+});
+
+describe('InventarioScreen - product details', () => {
+  const full = () => product({
+    id: 5,
+    nombre: 'Yogur',
+    marca: 'Ser',
+    descripcion: 'Natural',
+    ubicacion: 'Heladera',
+    codigo_barras: '7791234567898',
+    vencimiento: '2027-03-05',
+    stock: 8,
+  });
+
+  it('opens a window with the whole product when its information is tapped', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    expect(screen.queryByTestId('product-detail-card')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('product-info-5'));
+
+    expect(screen.getByTestId('product-detail-card')).toBeTruthy();
+    expect(screen.getByTestId('detail-nombre').props.children).toBe('Yogur');
+    expect(screen.getByTestId('detail-descripcion').props.children).toEqual('Natural');
+    expect(screen.getByTestId('detail-codigo-barras').props.children).toEqual('7791234567898');
+  });
+
+  it('shows the general alert rules of the profile for a product without its own rules', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    await waitFor(() => expect(mockedProfile.getProfile).toHaveBeenCalled());
+    fireEvent.press(screen.getByTestId('product-info-5'));
+    await waitFor(() => expect(screen.getByTestId('detail-stock-minimo').props.children).toEqual('7 unidades'));
+    expect(screen.getByTestId('detail-dias-alerta').props.children).toEqual('10 días');
+    expect(screen.getByTestId('detail-dias-alerta-note').props.children).toEqual('Usando tu regla general');
+  });
+
+  it('keeps working when the profile cannot be loaded', async () => {
+    mockedProfile.getProfile.mockRejectedValue(new Error('boom'));
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('product-info-5'));
+    expect(screen.getByTestId('detail-stock-minimo').props.children).toEqual('Usando tu regla general');
+  });
+
+  it('closes the window and goes back to the list', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('product-info-5'));
+    fireEvent.press(screen.getByTestId('product-detail-close'));
+    expect(screen.queryByTestId('product-detail-card')).toBeNull();
+    expect(screen.getByText('Yogur')).toBeTruthy();
+  });
+
+  it('opens the details of the product that was tapped, not of another one', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full(), product({ id: 6, nombre: 'Leche', stock: 2 })]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('product-info-6'));
+    expect(screen.getByTestId('detail-nombre').props.children).toBe('Leche');
+  });
+
+  it('does not open the details when the edit, history or delete buttons are used', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    const names = screen.UNSAFE_getAllByType(Ionicons).map((n: any) => n.props.name);
+    expect(names).toEqual(expect.arrayContaining(['pencil', 'time-outline', 'trash']));
+    fireEvent.press(screen.UNSAFE_getAllByType(Ionicons).find((n: any) => n.props.name === 'time-outline'));
+    expect(screen.queryByTestId('product-detail-card')).toBeNull();
   });
 });

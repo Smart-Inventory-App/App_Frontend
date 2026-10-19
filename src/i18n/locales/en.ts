@@ -239,6 +239,16 @@ export default {
     validationVencimiento: 'Invalid expiration date. Enter the day and month with 2 digits and the year with 4 digits. For example: 05/03/2027',
     validationCodigoBarras: 'The barcode is invalid',
   },
+  detail: {
+    title: 'Product information',
+    close: 'Close',
+    alertsTitle: 'Alert rules',
+    createdAt: 'Date added',
+    unitOne: '{{count}} unit',
+    unitMany: '{{count}} units',
+    dayOne: '{{count}} day',
+    dayMany: '{{count}} days',
+  },
   existing: {
     openButton: 'Add an existing product',
     title: 'Add an existing product',
