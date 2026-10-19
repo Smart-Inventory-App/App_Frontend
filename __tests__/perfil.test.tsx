@@ -384,3 +384,171 @@ describe('PerfilScreen - header', () => {
     expect(tree.indexOf('screen-header')).toBeLessThan(tree.indexOf('ana'));
   });
 });
+
+describe('PerfilScreen - limits of the fields', () => {
+  const LONG = 'Maximiliano Alejandro Rodriguez Gonzalez';
+
+  it('shows the first 20 characters followed by "..." when the name, last name or username are longer', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ firstName: LONG, lastName: LONG, username: LONG }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getAllByText('Maximiliano Alejandr...').length).toBe(3));
+    expect(screen.queryByText(LONG)).toBeNull();
+  });
+
+  it('shows short values untouched, and exactly 20 characters without dots', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ firstName: 'a'.repeat(20), lastName: 'Perez', username: 'ana' }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('a'.repeat(20))).toBeTruthy());
+    expect(screen.getByText('Perez')).toBeTruthy();
+  });
+
+  it('edits a long name with its first 20 characters', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ firstName: LONG }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Maximiliano Alejandr...')).toBeTruthy());
+    startEditing();
+    expect(screen.getByTestId('first-name-input').props.value).toBe('Maximiliano Alejandr');
+    expect(screen.getByTestId('first-name-counter').props.children.join('')).toBe('20/20');
+  });
+
+  it('limits the name, last name and username to 20 characters', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    startEditing();
+    ['first-name-input', 'last-name-input', 'username-input'].forEach(id => {
+      expect(screen.getByTestId(id).props.maxLength).toBe(20);
+    });
+  });
+
+  it('shows a counter under each of the three fields that follows what is typed', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    expect(screen.queryByTestId('first-name-counter')).toBeNull();
+    startEditing();
+    const counter = (id: string) => screen.getByTestId(id).props.children.join('');
+    expect(counter('first-name-counter')).toBe('3/20');
+    expect(counter('last-name-counter')).toBe('5/20');
+    expect(counter('username-counter')).toBe('3/20');
+    fireEvent.changeText(screen.getByTestId('first-name-input'), 'Maria Fernanda Lopez');
+    expect(counter('first-name-counter')).toBe('20/20');
+    fireEvent.changeText(screen.getByTestId('username-input'), '');
+    expect(counter('username-counter')).toBe('0/20');
+  });
+
+  it('says under each number field which numbers are accepted', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    expect(screen.queryByTestId('coverage-days-hint')).toBeNull();
+    startEditing();
+    expect(screen.getByTestId('coverage-days-hint').props.children).toBe('Se aceptan números entre 2 y 90 (inclusive).');
+    expect(screen.getByTestId('expiry-days-hint').props.children).toBe('Se aceptan números entre 2 y 90 (inclusive).');
+    expect(screen.getByTestId('alert-hour-hint').props.children).toBe('Se aceptan números entre 0 y 23 (inclusive).');
+  });
+
+  it('puts the hint right below its own field', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    startEditing();
+    const tree = JSON.stringify(screen.toJSON());
+    const at = (id: string) => tree.indexOf(`"${id}"`);
+    expect(at('coverage-days-input')).toBeLessThan(at('coverage-days-hint'));
+    expect(at('coverage-days-hint')).toBeLessThan(at('expiry-days-input'));
+    expect(at('expiry-days-input')).toBeLessThan(at('expiry-days-hint'));
+    expect(at('expiry-days-hint')).toBeLessThan(at('alert-hour-input'));
+    expect(at('alert-hour-input')).toBeLessThan(at('alert-hour-hint'));
+  });
+
+  it('moves the days and the hour with the up and down buttons, and saves them', async () => {
+    mockedProfileService.updateProfile.mockResolvedValue(baseProfile());
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    startEditing();
+    fireEvent.press(screen.getByTestId('coverage-days-input-up'));
+    fireEvent.press(screen.getByTestId('coverage-days-input-up'));
+    fireEvent.press(screen.getByTestId('expiry-days-input-down'));
+    fireEvent.press(screen.getByTestId('alert-hour-input-up'));
+    expect(screen.getByTestId('coverage-days-input').props.value).toBe('9');
+    expect(screen.getByTestId('expiry-days-input').props.value).toBe('6');
+    expect(screen.getByTestId('alert-hour-input').props.value).toBe('6');
+    await act(async () => {
+      fireEvent.press(screen.getByText('Guardar'));
+    });
+    expect(mockedProfileService.updateProfile).toHaveBeenCalledWith('Ana', 'Perez', 'ana', 9, 6, utcHourOf(6), 'individuo');
+  });
+
+  it('stops at 2 and 90 for the days, and at 0 and 23 for the hour', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    startEditing();
+    fireEvent.changeText(screen.getByTestId('coverage-days-input'), '90');
+    fireEvent.press(screen.getByTestId('coverage-days-input-up'));
+    expect(screen.getByTestId('coverage-days-input').props.value).toBe('90');
+    fireEvent.changeText(screen.getByTestId('expiry-days-input'), '2');
+    fireEvent.press(screen.getByTestId('expiry-days-input-down'));
+    expect(screen.getByTestId('expiry-days-input').props.value).toBe('2');
+    fireEvent.changeText(screen.getByTestId('alert-hour-input'), '23');
+    fireEvent.press(screen.getByTestId('alert-hour-input-up'));
+    expect(screen.getByTestId('alert-hour-input').props.value).toBe('23');
+    fireEvent.changeText(screen.getByTestId('alert-hour-input'), '0');
+    fireEvent.press(screen.getByTestId('alert-hour-input-down'));
+    expect(screen.getByTestId('alert-hour-input').props.value).toBe('0');
+  });
+
+  it.each([
+    ['coverage-days-input', '1'],
+    ['coverage-days-input', '91'],
+    ['expiry-days-input', '0'],
+    ['expiry-days-input', '99'],
+    ['alert-hour-input', '24'],
+  ])('does not save a typed %s of %s, and says so', async (id, value) => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    startEditing();
+    fireEvent.changeText(screen.getByTestId(id), value);
+    await act(async () => {
+      fireEvent.press(screen.getByText('Guardar'));
+    });
+    expect(screen.getByText('Revisá los valores: los días deben estar entre 2 y 90 y la hora entre 0 y 23')).toBeTruthy();
+    expect(mockedProfileService.updateProfile).not.toHaveBeenCalled();
+  });
+
+  it.each(['2', '90'])('saves the day limit %s', async value => {
+    mockedProfileService.updateProfile.mockResolvedValue(baseProfile());
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    startEditing();
+    fireEvent.changeText(screen.getByTestId('coverage-days-input'), value);
+    await act(async () => {
+      fireEvent.press(screen.getByText('Guardar'));
+    });
+    expect(mockedProfileService.updateProfile).toHaveBeenCalled();
+  });
+
+  it('uses 7 days when the saved days are outside 2 to 90, in the view and in the edition', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ coverageDaysThreshold: 1, expiryDaysThreshold: 91 }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByTestId('coverage-days-value')).toBeTruthy());
+    expect(screen.getByTestId('coverage-days-value').props.children.join('')).toBe('7 días');
+    expect(screen.getByTestId('expiry-days-value').props.children.join('')).toBe('7 días');
+    startEditing();
+    expect(screen.getByTestId('coverage-days-input').props.value).toBe('7');
+    expect(screen.getByTestId('expiry-days-input').props.value).toBe('7');
+  });
+
+  it('keeps the saved days when they are inside the range', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ coverageDaysThreshold: 2, expiryDaysThreshold: 90 }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByTestId('coverage-days-value')).toBeTruthy());
+    expect(screen.getByTestId('coverage-days-value').props.children.join('')).toBe('2 días');
+    expect(screen.getByTestId('expiry-days-value').props.children.join('')).toBe('90 días');
+  });
+
+  it('uses the hour 5 when the saved hour is not a valid hour', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ alertCheckHour: undefined as any }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByTestId('alert-hour-value')).toBeTruthy());
+    expect(screen.getByTestId('alert-hour-value').props.children.join('')).toBe('5 hs Hora Argentina (UTC -3)');
+    startEditing();
+    expect(screen.getByTestId('alert-hour-input').props.value).toBe('5');
+  });
+});

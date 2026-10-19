@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import AppTextInput from '@/components/AppTextInput';
+import NumberStepper from '@/components/NumberStepper';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import { router } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
@@ -20,6 +21,18 @@ import { useAuth } from '@/context/AuthContext';
 import { changeLanguage, type Language } from '@/i18n';
 import { profileService, UserProfile, UserType } from '@/services/profileService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { truncateLabel } from '@/utils/text';
+import {
+  ALERT_DAYS_MAX,
+  ALERT_DAYS_MIN,
+  CHECK_HOUR_MAX,
+  CHECK_HOUR_MIN,
+  PROFILE_TEXT_MAX,
+  alertDaysOrDefault,
+  checkHourOrDefault,
+  inRange,
+  parseWholeNumber,
+} from '@/utils/profileLimits';
 
 // La hora del chequeo diario se muestra y se elige en hora de Argentina (UTC-3); el servidor la guarda en UTC
 const ARGENTINA_UTC_OFFSET_HOURS = 3;
@@ -50,12 +63,14 @@ export default function PerfilScreen() {
 
   // Carga en los campos de edición lo que tiene guardado el perfil
   const fillForm = useCallback((p: UserProfile) => {
-    setFirstName(p.firstName ?? '');
-    setLastName(p.lastName ?? '');
-    setUsername(p.username ?? '');
-    setCoverageDaysInput(String(p.coverageDaysThreshold));
-    setExpiryDaysInput(String(p.expiryDaysThreshold));
-    setAlertCheckHourInput(String(Math.round(utcToLocal(p.alertCheckHour))));
+    // Un nombre más largo que el máximo se edita con sus primeros 20 caracteres
+    setFirstName((p.firstName ?? '').slice(0, PROFILE_TEXT_MAX));
+    setLastName((p.lastName ?? '').slice(0, PROFILE_TEXT_MAX));
+    setUsername((p.username ?? '').slice(0, PROFILE_TEXT_MAX));
+    // Un valor fuera de rango se reemplaza por el de siempre: 7 días y las 5 hs
+    setCoverageDaysInput(String(alertDaysOrDefault(p.coverageDaysThreshold)));
+    setExpiryDaysInput(String(alertDaysOrDefault(p.expiryDaysThreshold)));
+    setAlertCheckHourInput(String(checkHourOrDefault(Math.round(utcToLocal(p.alertCheckHour)))));
     setUserType(p.userType);
   }, []);
 
@@ -98,10 +113,10 @@ export default function PerfilScreen() {
   // Guarda de una vez los datos personales, el tipo de cuenta y la configuración de alertas
   const handleSave = async () => {
     setFeedback(null);
-    const coverageDays = parseInt(coverageDaysInput, 10);
-    const expiryDays = parseInt(expiryDaysInput, 10);
-    const hour = parseInt(alertCheckHourInput, 10);
-    if (isNaN(coverageDays) || coverageDays <= 0 || isNaN(expiryDays) || expiryDays <= 0 || isNaN(hour) || hour < 0 || hour > 23) {
+    const coverageDays = inRange(parseWholeNumber(coverageDaysInput), ALERT_DAYS_MIN, ALERT_DAYS_MAX);
+    const expiryDays = inRange(parseWholeNumber(expiryDaysInput), ALERT_DAYS_MIN, ALERT_DAYS_MAX);
+    const hour = inRange(parseWholeNumber(alertCheckHourInput), CHECK_HOUR_MIN, CHECK_HOUR_MAX);
+    if (coverageDays === null || expiryDays === null || hour === null) {
       setFeedback({ type: 'error', msg: t('profile.invalidSettings') });
       return;
     }
@@ -202,28 +217,38 @@ export default function PerfilScreen() {
 
           <Text style={styles.fieldLabel}>{t('profile.firstName')}</Text>
           {editing ? (
-            <AppTextInput
-              style={styles.input}
-              value={firstName}
-              onChangeText={setFirstName}
-              placeholder={t('profile.firstNamePlaceholder')}
-              placeholderTextColor={Colors.placeholder}
-            />
+            <>
+              <AppTextInput
+                testID="first-name-input"
+                style={styles.input}
+                value={firstName}
+                onChangeText={setFirstName}
+                maxLength={PROFILE_TEXT_MAX}
+                placeholder={t('profile.firstNamePlaceholder')}
+                placeholderTextColor={Colors.placeholder}
+              />
+              <Text testID="first-name-counter" style={styles.fieldCounter}>{firstName.length}/{PROFILE_TEXT_MAX}</Text>
+            </>
           ) : (
-            <Text style={styles.fieldValue}>{profile?.firstName || '—'}</Text>
+            <Text style={styles.fieldValue}>{profile?.firstName ? truncateLabel(profile.firstName, PROFILE_TEXT_MAX) : '—'}</Text>
           )}
 
           <Text style={styles.fieldLabel}>{t('profile.lastName')}</Text>
           {editing ? (
-            <AppTextInput
-              style={styles.input}
-              value={lastName}
-              onChangeText={setLastName}
-              placeholder={t('profile.lastNamePlaceholder')}
-              placeholderTextColor={Colors.placeholder}
-            />
+            <>
+              <AppTextInput
+                testID="last-name-input"
+                style={styles.input}
+                value={lastName}
+                onChangeText={setLastName}
+                maxLength={PROFILE_TEXT_MAX}
+                placeholder={t('profile.lastNamePlaceholder')}
+                placeholderTextColor={Colors.placeholder}
+              />
+              <Text testID="last-name-counter" style={styles.fieldCounter}>{lastName.length}/{PROFILE_TEXT_MAX}</Text>
+            </>
           ) : (
-            <Text style={styles.fieldValue}>{profile?.lastName || '—'}</Text>
+            <Text style={styles.fieldValue}>{profile?.lastName ? truncateLabel(profile.lastName, PROFILE_TEXT_MAX) : '—'}</Text>
           )}
 
           <Text style={styles.fieldLabel}>{t('profile.email')}</Text>
@@ -231,16 +256,21 @@ export default function PerfilScreen() {
 
           <Text style={styles.fieldLabel}>{t('profile.username')}</Text>
           {editing ? (
-            <AppTextInput
-              style={styles.input}
-              value={username}
-              onChangeText={setUsername}
-              placeholder={t('profile.username')}
-              placeholderTextColor={Colors.placeholder}
-              autoCapitalize="none"
-            />
+            <>
+              <AppTextInput
+                testID="username-input"
+                style={styles.input}
+                value={username}
+                onChangeText={setUsername}
+                maxLength={PROFILE_TEXT_MAX}
+                placeholder={t('profile.username')}
+                placeholderTextColor={Colors.placeholder}
+                autoCapitalize="none"
+              />
+              <Text testID="username-counter" style={styles.fieldCounter}>{username.length}/{PROFILE_TEXT_MAX}</Text>
+            </>
           ) : (
-            <Text style={styles.fieldValue}>{profile?.username || '—'}</Text>
+            <Text style={styles.fieldValue}>{profile?.username ? truncateLabel(profile.username, PROFILE_TEXT_MAX) : '—'}</Text>
           )}
         </View>
 
@@ -275,58 +305,70 @@ export default function PerfilScreen() {
 
           <Text style={styles.fieldLabel}>{t('profile.coverageDaysThreshold')}</Text>
           {editing ? (
-            <View style={styles.settingRow}>
-              <AppTextInput
-                testID="coverage-days-input"
-                style={[styles.input, styles.settingInput]}
-                value={coverageDaysInput}
-                onChangeText={setCoverageDaysInput}
-                keyboardType="numeric"
-                returnKeyType="done"
-              />
-              <Text style={styles.settingUnit}>{t('profile.days')}</Text>
-            </View>
+            <>
+              <View style={styles.settingRow}>
+                <NumberStepper
+                  testID="coverage-days-input"
+                  value={coverageDaysInput}
+                  onChange={setCoverageDaysInput}
+                  min={ALERT_DAYS_MIN}
+                  max={ALERT_DAYS_MAX}
+                />
+                <Text style={styles.settingUnit}>{t('profile.days')}</Text>
+              </View>
+              <Text testID="coverage-days-hint" style={styles.rangeHint}>
+                {t('profile.rangeHint', { min: ALERT_DAYS_MIN, max: ALERT_DAYS_MAX })}
+              </Text>
+            </>
           ) : (
             <Text testID="coverage-days-value" style={styles.fieldValue}>
-              {profile?.coverageDaysThreshold} {t('profile.days')}
+              {alertDaysOrDefault(profile?.coverageDaysThreshold)} {t('profile.days')}
             </Text>
           )}
 
           <Text style={styles.fieldLabel}>{t('profile.expiryDaysThreshold')}</Text>
           {editing ? (
-            <View style={styles.settingRow}>
-              <AppTextInput
-                testID="expiry-days-input"
-                style={[styles.input, styles.settingInput]}
-                value={expiryDaysInput}
-                onChangeText={setExpiryDaysInput}
-                keyboardType="numeric"
-                returnKeyType="done"
-              />
-              <Text style={styles.settingUnit}>{t('profile.days')}</Text>
-            </View>
+            <>
+              <View style={styles.settingRow}>
+                <NumberStepper
+                  testID="expiry-days-input"
+                  value={expiryDaysInput}
+                  onChange={setExpiryDaysInput}
+                  min={ALERT_DAYS_MIN}
+                  max={ALERT_DAYS_MAX}
+                />
+                <Text style={styles.settingUnit}>{t('profile.days')}</Text>
+              </View>
+              <Text testID="expiry-days-hint" style={styles.rangeHint}>
+                {t('profile.rangeHint', { min: ALERT_DAYS_MIN, max: ALERT_DAYS_MAX })}
+              </Text>
+            </>
           ) : (
             <Text testID="expiry-days-value" style={styles.fieldValue}>
-              {profile?.expiryDaysThreshold} {t('profile.days')}
+              {alertDaysOrDefault(profile?.expiryDaysThreshold)} {t('profile.days')}
             </Text>
           )}
 
           <Text style={styles.fieldLabel}>{t('profile.alertCheckHour')}</Text>
           {editing ? (
-            <View style={styles.settingRow}>
-              <AppTextInput
-                testID="alert-hour-input"
-                style={[styles.input, styles.settingInput]}
-                value={alertCheckHourInput}
-                onChangeText={setAlertCheckHourInput}
-                keyboardType="numeric"
-                returnKeyType="done"
-              />
-              <Text style={styles.settingUnit}>{t('profile.argentinaTime')}</Text>
-            </View>
+            <>
+              <View style={styles.settingRow}>
+                <NumberStepper
+                  testID="alert-hour-input"
+                  value={alertCheckHourInput}
+                  onChange={setAlertCheckHourInput}
+                  min={CHECK_HOUR_MIN}
+                  max={CHECK_HOUR_MAX}
+                />
+                <Text style={styles.settingUnit}>{t('profile.argentinaTime')}</Text>
+              </View>
+              <Text testID="alert-hour-hint" style={styles.rangeHint}>
+                {t('profile.rangeHint', { min: CHECK_HOUR_MIN, max: CHECK_HOUR_MAX })}
+              </Text>
+            </>
           ) : (
             <Text testID="alert-hour-value" style={styles.fieldValue}>
-              {profile ? Math.round(utcToLocal(profile.alertCheckHour)) : ''} {t('profile.argentinaTime')}
+              {profile ? checkHourOrDefault(Math.round(utcToLocal(profile.alertCheckHour))) : ''} {t('profile.argentinaTime')}
             </Text>
           )}
         </View>
@@ -526,5 +568,8 @@ const styles = StyleSheet.create({
   userTypeBoxText: { fontSize: 14, color: '#fff', fontWeight: '600' },
   segmentHint: { fontSize: 12, color: Colors.placeholder, marginTop: 6 },
   settingInput: { width: 80, marginTop: 0 },
+  // Contador de letras bajo el campo («18/20») y aclaración del rango de los campos numéricos
+  fieldCounter: { alignSelf: 'flex-end', fontSize: 11, color: Colors.placeholder, marginTop: 2 },
+  rangeHint: { fontSize: 11, color: Colors.textSecondary, marginTop: 4 },
   settingUnit: { fontSize: 13, color: Colors.textSecondary },
 });

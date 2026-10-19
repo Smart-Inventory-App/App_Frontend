@@ -157,6 +157,13 @@ La suite tiene **965 tests**, con ~96 % de cobertura de líneas y ~95 % de state
 
 **Perfil.** Todo se muestra como texto: datos personales, tipo de cuenta (una caja resaltada) y la configuración de alertas (días de stock, días por vencer y hora del chequeo, en **hora Argentina, UTC-3**). El lápiz del avatar abre el modo edición, donde se cambian nombre, apellido, usuario, tipo de cuenta y esos tres valores, con **Guardar y Cancelar debajo de todo**; mientras se edita no aparecen Idioma, Notificaciones ni Cerrar sesión. Cambiar de idioma pide confirmación y desactivar las notificaciones también.
 
+Límites de los campos (los mismos que valida el backend, en `src/utils/profileLimits.ts`):
+
+- **Nombre, apellido y usuario: hasta 20 caracteres**, con un contador debajo mientras se edita («18/20»). Si el valor guardado es más largo, se muestran sus primeros 20 caracteres seguidos de «...» y se edita con esos 20.
+- **Días de alerta de stock y de próximo a vencer: números de 2 a 90** (inclusive). Si el valor guardado está fuera de ese rango se usa el **7**.
+- **Hora del chequeo diario: números de 0 a 23** (inclusive). Si no es una hora válida se usa la **5**.
+- Cada campo numérico (`src/components/NumberStepper.tsx`) permite escribir el número y tiene dos botones pegados al borde (subir y bajar) que se detienen en los extremos, y debajo un mensaje con el rango aceptado.
+
 **Recuperar contraseña.** «Olvidé mi contraseña» abre la pantalla con el mail del login ya completado.
 
 ---
