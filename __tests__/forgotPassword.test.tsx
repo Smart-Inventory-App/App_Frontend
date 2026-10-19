@@ -1,5 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { KeyboardAvoidingView, StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import ForgotPasswordScreen from '../app/(auth)/forgot-password';
 import { authService } from '@/services/authService';
@@ -56,5 +58,18 @@ describe('ForgotPasswordScreen', () => {
     render(<ForgotPasswordScreen />);
     fireEvent.press(screen.getByText('Volver al inicio de sesión'));
     expect(mockBack).toHaveBeenCalled();
+  });
+});
+
+describe('ForgotPasswordScreen - barras del sistema de Android', () => {
+  it('keeps its content away from the status bar and the system buttons', () => {
+    const { UNSAFE_getByType } = render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 360, height: 800 }, insets: { top: 30, left: 0, right: 0, bottom: 24 } }}>
+        <ForgotPasswordScreen />
+      </SafeAreaProvider>,
+    );
+    const style = StyleSheet.flatten(UNSAFE_getByType(KeyboardAvoidingView).props.style);
+    expect(style.paddingTop).toBe(30);
+    expect(style.paddingBottom).toBe(24);
   });
 });

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Animated, PanResponder } from 'react-native';
+import { Animated, PanResponder, StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import TopBanner, { shouldDismissOnSwipe } from '../src/components/TopBanner';
 
@@ -103,5 +104,23 @@ describe('TopBanner', () => {
     fireEvent.press(screen.getByText('Hola'));
     act(() => { config.onPanResponderMove({}, { dy: -10 }); });
     await waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('TopBanner - barra de estado de Android', () => {
+  const bannerTop = () => StyleSheet.flatten(screen.getByTestId('top-banner').props.style).paddingTop;
+
+  it('keeps its usual distance from the top when the status bar is short', () => {
+    render(<TopBanner message="Hola" onDismiss={jest.fn()} />);
+    expect(bannerTop()).toBe(40);
+  });
+
+  it('moves below a tall status bar or camera cutout', () => {
+    render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 360, height: 800 }, insets: { top: 60, left: 0, right: 0, bottom: 0 } }}>
+        <TopBanner message="Hola" onDismiss={jest.fn()} />
+      </SafeAreaProvider>,
+    );
+    expect(bannerTop()).toBe(68);
   });
 });

@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppTextInput from '@/components/AppTextInput';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import { Ionicons } from '@expo/vector-icons';
@@ -68,6 +69,7 @@ function GoogleButton({ onError }: { onError: (msg: string) => void }) {
 }
 
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { login } = useAuth();
   const [step, setStep] = useState<Step>('email');
@@ -105,7 +107,7 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.flex}
+      style={[styles.flex, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <KeyboardAwareScrollView contentContainerStyle={styles.container}>

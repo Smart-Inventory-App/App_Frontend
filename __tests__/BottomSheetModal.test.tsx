@@ -1,6 +1,7 @@
 import React from 'react';
-import { Animated, KeyboardAvoidingView, Modal, Text } from 'react-native';
+import { Animated, KeyboardAvoidingView, Modal, StyleSheet, Text } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import BottomSheetModal from '../src/components/BottomSheetModal';
 
 const sheet = (visible: boolean, onRequestClose = jest.fn()) => (
@@ -56,5 +57,34 @@ describe('BottomSheetModal', () => {
     rerender(sheet(true));
     await act(async () => { await new Promise(r => setTimeout(r, 400)); });
     expect(screen.getByText('contenido')).toBeTruthy();
+  });
+});
+
+describe('BottomSheetModal - botones del sistema de Android', () => {
+  const metrics = { frame: { x: 0, y: 0, width: 360, height: 800 }, insets: { top: 30, left: 0, right: 0, bottom: 24 } };
+  const withInsets = (sheetStyle?: object) => (
+    <SafeAreaProvider initialMetrics={metrics}>
+      <BottomSheetModal visible onRequestClose={jest.fn()} sheetStyle={sheetStyle} sheetTestID="sheet">
+        <Text>contenido</Text>
+      </BottomSheetModal>
+    </SafeAreaProvider>
+  );
+
+  it('covers the whole screen, also under the status bar and the system buttons', () => {
+    const { UNSAFE_getByType } = render(withInsets());
+    expect(UNSAFE_getByType(Modal).props.statusBarTranslucent).toBe(true);
+    expect(UNSAFE_getByType(Modal).props.navigationBarTranslucent).toBe(true);
+  });
+
+  it('adds the height of the system buttons below the sheet content', () => {
+    render(withInsets());
+    expect(StyleSheet.flatten(screen.getByTestId('sheet').props.style).paddingBottom).toBe(24);
+  });
+
+  it('adds it on top of the padding the sheet already has', () => {
+    render(withInsets({ padding: 20 }));
+    expect(StyleSheet.flatten(screen.getByTestId('sheet').props.style).paddingBottom).toBe(44);
+    render(withInsets({ padding: 20, paddingBottom: 10 }));
+    expect(StyleSheet.flatten(screen.getAllByTestId('sheet')[1].props.style).paddingBottom).toBe(34);
   });
 });

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Animated, PanResponder, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
   autoDismissMs?: number;
 }
 
+const WRAPPER_PADDING_TOP = 40;
 const EXIT_DISTANCE = 200;
 const EXIT_DURATION_MS = 220;
 const SWIPE_DISTANCE_TO_DISMISS = 30;
@@ -21,6 +23,7 @@ export function shouldDismissOnSwipe(dy: number, vy: number): boolean {
 }
 
 export default function TopBanner({ message, onDismiss, autoDismissMs }: Props) {
+  const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(0)).current;
   const dismissing = useRef(false);
   const onDismissRef = useRef(onDismiss);
@@ -65,7 +68,7 @@ export default function TopBanner({ message, onDismiss, autoDismissMs }: Props) 
   );
 
   return (
-    <View style={styles.wrapper} pointerEvents="box-none">
+    <View testID="top-banner" style={[styles.wrapper, { paddingTop: Math.max(WRAPPER_PADDING_TOP, insets.top + 8) }]} pointerEvents="box-none">
       <Animated.View
         style={[styles.animated, { transform: [{ translateY }] }]}
         {...panResponder.panHandlers}
@@ -90,7 +93,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 100,
-    paddingTop: 40,
+    paddingTop: WRAPPER_PADDING_TOP,
     paddingHorizontal: 16,
     alignItems: 'center',
   },

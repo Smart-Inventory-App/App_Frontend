@@ -2,6 +2,9 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
 
+// Sin SafeAreaProvider en los tests: los márgenes seguros valen 0 (o lo que indique un provider propio del test)
+jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
+
 // Firebase SDK uses ESM and can't run in Jest — mock at the root so all tests are unaffected
 jest.mock('./src/services/firebaseService', () => ({
   getFirebaseToken: jest.fn().mockResolvedValue(null),

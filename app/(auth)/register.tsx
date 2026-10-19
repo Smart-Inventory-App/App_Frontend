@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppTextInput from '@/components/AppTextInput';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import { useTranslation } from 'react-i18next';
@@ -36,6 +37,7 @@ function RuleRow({ state, label }: { state: RuleState; label: string }) {
 }
 
 export default function RegisterScreen() {
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { register } = useAuth();
   const [email, setEmail] = useState('');
@@ -107,7 +109,7 @@ export default function RegisterScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.flex}
+      style={[styles.flex, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <KeyboardAwareScrollView contentContainerStyle={styles.container}>

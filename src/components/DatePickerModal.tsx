@@ -61,7 +61,7 @@ export default function DatePickerModal({ visible, value, onSelect, onClose }: P
     today.getFullYear() === view.year && today.getMonth() === view.month && today.getDate() === day;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <Pressable testID="calendar-backdrop" style={styles.overlay} onPress={onClose}>
         {/* Pressable interno: tocar la tarjeta no debe cerrar el calendario */}
         <Pressable style={styles.card} onPress={() => {}}>
