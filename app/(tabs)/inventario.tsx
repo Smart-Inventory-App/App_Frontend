@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -20,6 +19,7 @@ import { Product, ProductCreate } from '@/types/product';
 import { isValidBarcode } from '@/utils/barcode';
 import { truncateLabel } from '@/utils/text';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
+import ProductImage from '@/components/ProductImage';
 import ProductFormFields from '@/components/ProductFormFields';
 import BottomSheetModal from '@/components/BottomSheetModal';
 import ConfirmModal from '@/components/ConfirmModal';
@@ -189,10 +189,7 @@ export default function InventarioScreen() {
     ];
     return (
       <View style={styles.item}>
-        <Image
-          source={item.imagen_url ? { uri: item.imagen_url } : require('../../assets/icon.png')}
-          style={styles.itemImage}
-        />
+        <ProductImage uri={item.imagen_url} style={styles.itemImage} />
         <View style={styles.itemInfo}>
           <Text style={styles.itemName}>{item.nombre}</Text>
           {item.marca ? <Text style={styles.itemSub}>{truncateLabel(item.marca)}</Text> : null}

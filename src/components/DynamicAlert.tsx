@@ -1,6 +1,7 @@
 import { Alert } from '@/services/alertService';
 import React from 'react';
-import { FlatList, View, Text, StyleSheet, Image } from 'react-native';
+import { FlatList, View, Text, StyleSheet } from 'react-native';
+import ProductImage from '@/components/ProductImage';
 
 export default function DynamicAlert({ alertsData }: { alertsData: Alert[] }) {
     console.log('DynamicAlert received alertsData:', alertsData);
@@ -43,10 +44,7 @@ export default function DynamicAlert({ alertsData }: { alertsData: Alert[] }) {
                 }>
                     <View style={styles.container}>
                         <View>
-                            <Image
-                                source={alert.image_url ? { uri: alert.image_url } : require('../../assets/icon.png')}
-                                style={styles.alertImage}
-                            />
+                            <ProductImage uri={alert.image_url} style={styles.alertImage} />
                         </View>
                         <View>
                             <View>

@@ -187,6 +187,8 @@ export default {
     imagenGaleria: 'Elegir de la galería',
     required: 'requerido',
     optional: 'Opcional',
+    imageOpen: 'Ver imagen',
+    imageClose: 'Cerrar imagen',
     saveProduct: 'Guardar producto',
     loadTitle: 'Flujo de producto',
     entrada: 'Entrada',

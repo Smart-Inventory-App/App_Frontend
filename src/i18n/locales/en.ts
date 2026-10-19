@@ -183,6 +183,8 @@ export default {
     imagenGaleria: 'Choose from gallery',
     required: 'required',
     optional: 'Optional',
+    imageOpen: 'View image',
+    imageClose: 'Close image',
     saveProduct: 'Save product',
     loadTitle: 'Product flow',
     entrada: 'Stock in',

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import ProductItem from '../src/components/ProductItem';
 import { Image } from 'react-native';
 
@@ -35,5 +35,16 @@ describe('ProductItem', () => {
     const { UNSAFE_getByType } = render(<ProductItem name="Leche" expiry="-" stock="3" imageUrl="https://x/y.png" />);
     const image = UNSAFE_getByType(Image);
     expect(image.props.source).toEqual({ uri: 'https://x/y.png' });
+  });
+
+  it('opens the product image full screen when it is tapped', () => {
+    render(<ProductItem name="Leche" expiry="-" stock="3" imageUrl="https://x/y.png" />);
+    fireEvent.press(screen.getByTestId('product-image-button'));
+    expect(screen.getByTestId('zoom-image').props.source).toEqual({ uri: 'https://x/y.png' });
+  });
+
+  it('does not open anything for the default icon', () => {
+    render(<ProductItem name="Leche" expiry="-" stock="3" />);
+    expect(screen.queryByTestId('product-image-button')).toBeNull();
   });
 });

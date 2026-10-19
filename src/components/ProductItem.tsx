@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, Image } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import ProductImage from '@/components/ProductImage';
 import { Figtree_400Regular, useFonts } from '@expo-google-fonts/figtree';
 
 type Props = {
@@ -28,10 +29,7 @@ export default function ProductItem({ name, expiry, stock, status, statusColor, 
 
   return (
     <View style={styles.item}>
-      <Image
-        source={imageUrl ? { uri: imageUrl } : require("../../assets/icon.png")}
-        style={styles.image}
-      />
+      <ProductImage uri={imageUrl} style={styles.image} />
       <View style={styles.info}>
         <Text style={styles.name}>{name}</Text>
         <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'}}>

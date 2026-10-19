@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import DynamicAlert from '../src/components/DynamicAlert';
 import { Alert } from '../src/services/alertService';
 import { Image } from 'react-native';
@@ -69,6 +69,12 @@ describe('DynamicAlert', () => {
   it('renders a placeholder image when no image_url is given', () => {
     const { UNSAFE_getAllByType } = render(<DynamicAlert alertsData={[baseAlert()]} />);
     expect(UNSAFE_getAllByType(Image).length).toBeGreaterThan(0);
+  });
+
+  it('opens the product image full screen when it is tapped', () => {
+    render(<DynamicAlert alertsData={[baseAlert({ image_url: 'https://x/leche.png' })]} />);
+    fireEvent.press(screen.getByTestId('product-image-button'));
+    expect(screen.getByTestId('zoom-image').props.source).toEqual({ uri: 'https://x/leche.png' });
   });
 
   it('renders an empty list without crashing', () => {

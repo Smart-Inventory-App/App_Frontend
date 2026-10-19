@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView,
-  Image, ActivityIndicator, Alert,
+  ActivityIndicator, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +11,7 @@ import { pickFromGallery, pickFromCamera } from '@/services/imageService';
 import BottomSheetModal from '@/components/BottomSheetModal';
 import { useFieldFocus } from '@/components/KeyboardAwareScrollView';
 import DatePickerModal from '@/components/DatePickerModal';
+import ProductImage from '@/components/ProductImage';
 import { applySuggestionToForm } from '@/utils/ocrDraft';
 import { BARCODE_MAX_DIGITS, describeBarcodeLengths, onlyDigits } from '@/utils/barcode';
 import { displayToIso, formatDateDigits, isoToDisplay } from '@/utils/dateInput';
@@ -437,7 +438,7 @@ export default function ProductFormFields({
       <Text style={styles.label}>{t('product.imagen')}</Text>
       {form.imagen_url ? (
         <View style={styles.imagePreviewContainer}>
-          <Image source={{ uri: form.imagen_url }} style={styles.imagePreview} resizeMode="cover" />
+          <ProductImage uri={form.imagen_url} style={styles.imagePreview} resizeMode="cover" />
           <TouchableOpacity style={styles.imageChangeBtn} onPress={() => setShowImagePicker(true)} disabled={uploadingImage}>
             {uploadingImage
               ? <ActivityIndicator size="small" color={Colors.primary} />
