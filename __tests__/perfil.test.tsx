@@ -11,14 +11,16 @@ import { ensureNotificationPermission, getNotificationPermission } from '@/servi
 const mockReplace = jest.fn();
 const mockNavigate = jest.fn();
 const mockLogout = jest.fn();
-let mockFocusCallback: () => void = () => {};
+// Todos los efectos de foco de la pantalla (se disparan juntos al volver a ella)
+const mockFocusCallbacks = new Set<() => void>();
+const mockFocusCallback = () => [...mockFocusCallbacks].forEach(cb => cb());
 
 jest.mock('expo-router', () => {
   const ReactActual = require('react');
   return {
     router: { replace: (...args: any[]) => mockReplace(...args), navigate: (...args: any[]) => mockNavigate(...args) },
     useFocusEffect: (cb: () => void) => {
-      mockFocusCallback = cb;
+      mockFocusCallbacks.add(cb);
       ReactActual.useEffect(cb, [cb]);
     },
   };
@@ -73,6 +75,7 @@ const startEditingIfNeeded = () => {
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  mockFocusCallbacks.clear();
   await AsyncStorage.clear();
   mockedProfileService.getProfile.mockResolvedValue(baseProfile());
   // Por defecto el teléfono ya dio el permiso de notificaciones

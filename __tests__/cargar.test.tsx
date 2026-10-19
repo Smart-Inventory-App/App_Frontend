@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 
 import { Colors } from '@/constants/colors';
 import CargarScreen from '../app/(tabs)/cargar';
-import { slideTransition } from '../src/utils/tabTransition';
+import { resetTabTransition, slideTransition } from '../src/utils/tabTransition';
 import { productService } from '@/services/productService';
 
 const mockReplace = jest.fn();
@@ -549,8 +549,8 @@ describe('CargarScreen - teclado en la entrada', () => {
     render(<CargarScreen />);
     const padding = () => StyleSheet.flatten(screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle).paddingBottom;
     expect(padding()).toBe(40);
-    act(() => { handlers.keyboardDidShow(); });
-    expect(padding()).toBeGreaterThan(40);
+    act(() => { (handlers.keyboardDidShow as any)({ endCoordinates: { height: 300 } }); });
+    expect(padding()).toBe(340);
     act(() => { handlers.keyboardDidHide(); });
     expect(padding()).toBe(40);
   });
@@ -1115,6 +1115,8 @@ describe('CargarScreen - success screen buttons and check mark', () => {
     fireEvent.press(screen.getByTestId('open-existing-modal'));
     fireEvent.press(screen.getByTestId('mock-existing-success'));
   };
+
+  beforeEach(() => resetTabTransition());
 
   afterEach(() => {
     jest.useRealTimers();

@@ -68,6 +68,9 @@ export function subscribeFixedBanner(listener: BannerListener): () => void {
 export function resetTabTransition(): void {
   lastTab = 'index';
   bannerListeners.clear();
+  skipNext = false;
+  if (skipTimer) clearTimeout(skipTimer);
+  skipTimer = null;
 }
 
 /**

@@ -71,6 +71,13 @@ jest.mock('@/components/HistorialModal', () => {
   };
 });
 
+// El árbol de la pantalla como texto. Se dejan afuera las partes de la lista que son elementos de React
+// (encabezado, vacío y pie), que tienen referencias circulares y ya aparecen dibujadas en el árbol.
+const treeJson = () =>
+  JSON.stringify(screen.toJSON(), (key, value) =>
+    ['ListHeaderComponent', 'ListEmptyComponent', 'ListFooterComponent', '_owner', '_store'].includes(key) ? undefined : value,
+  );
+
 const mockedProducts = productService as jest.Mocked<typeof productService>;
 const mockedProfile = profileService as jest.Mocked<typeof profileService>;
 
@@ -379,7 +386,7 @@ describe('InventarioScreen - header, sort row and filters', () => {
     render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
     const before = (a: string, b: string) => {
-      const tree = JSON.stringify(screen.toJSON());
+      const tree = treeJson();
       return tree.indexOf(`"${a}"`) < tree.indexOf(`"${b}"`);
     };
     expect(before('Nombre', 'Stock')).toBe(true);
@@ -405,7 +412,7 @@ describe('InventarioScreen - header, sort row and filters', () => {
     render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
     expect(StyleSheet.flatten(screen.getByTestId('sort-row').props.style).flexDirection).toBeUndefined();
-    const whole = JSON.stringify(screen.toJSON());
+    const whole = treeJson();
     const tree = whole.slice(whole.indexOf('sort-row'));
     const at = (text: string) => tree.indexOf(text);
     expect(at('sort-label')).toBeLessThan(at('Nombre'));
@@ -450,7 +457,7 @@ describe('InventarioScreen - header, sort row and filters', () => {
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
     const gap = StyleSheet.flatten(screen.getByTestId('list-header-gap').props.style);
     expect(gap.height).toBeGreaterThanOrEqual(12);
-    const tree = JSON.stringify(screen.toJSON());
+    const tree = treeJson();
     expect(tree.indexOf('filter-search-ubicacion')).toBeLessThan(tree.indexOf('list-header-gap'));
     expect(tree.indexOf('list-header-gap')).toBeLessThan(tree.indexOf('product-item-1'));
   });
@@ -486,7 +493,7 @@ describe('InventarioScreen - header, sort row and filters', () => {
     expect(screen.queryByTestId('filter-categorias')).toBeNull();
     expect(screen.queryByTestId('filter-ubicaciones')).toBeNull();
     // la lupa va antes de "Todas"
-    const tree = JSON.stringify(screen.toJSON());
+    const tree = treeJson();
     expect(tree.indexOf('filter-search-categoria')).toBeLessThan(tree.indexOf('Todas'));
   });
 
@@ -603,7 +610,7 @@ describe('InventarioScreen - stock total', () => {
     render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
     expect(screen.getByText('Stock total de producto')).toBeTruthy();
-    const tree = JSON.stringify(screen.toJSON());
+    const tree = treeJson();
     expect(tree.indexOf('open-stock-total')).toBeLessThan(tree.indexOf('Buscar por nombre o marca...'));
   });
 
@@ -653,7 +660,7 @@ describe('InventarioScreen - header', () => {
     mockedProducts.getProducts.mockResolvedValue([product()]);
     render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
-    const tree = JSON.stringify(screen.toJSON());
+    const tree = treeJson();
     expect(tree.indexOf('header-home')).toBeLessThan(tree.indexOf('"Inventario"'));
     fireEvent.press(screen.getByTestId('header-home'));
     expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/');

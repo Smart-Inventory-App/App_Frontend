@@ -16,8 +16,8 @@ describe('SuccessCheck', () => {
   it('starts out of nothing: with no size and no opacity', () => {
     render(<SuccessCheck />);
     const style = StyleSheet.flatten(screen.getByTestId('success-check').props.style);
-    expect(style.transform[0].scale.__getValue()).toBe(0);
-    expect(style.opacity.__getValue()).toBe(0);
+    expect(style.transform[0].scale).toBe(0);
+    expect(style.opacity).toBe(0);
   });
 
   it('pops up with a spring that grows it to its full size', () => {
