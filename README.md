@@ -92,7 +92,8 @@ App_Frontend/
 │   │   ├── HomeHeader.tsx         # Banner del home (logo, saludo y estado)
 │   │   ├── BottomSheetModal.tsx   # Hoja inferior que respeta los botones del sistema
 │   │   ├── KeyboardAwareScrollView.tsx # Muestra el campo enfocado sobre el teclado
-│   │   ├── ImageViewerModal.tsx   # Imagen a pantalla completa, con zoom
+│   │   ├── ImageViewerModal.tsx   # Imagen a pantalla completa, con zoom de pellizco
+│   │   ├── ImageConfirmModal.tsx  # Confirmación antes de cargar una imagen
 │   │   ├── ProductItem.tsx
 │   │   └── StatCard.tsx
 │   ├── constants/
@@ -165,6 +166,8 @@ Límites de los campos (los mismos que valida el backend, en `src/utils/profileL
 - **Días de alerta de stock y de próximo a vencer: números de 2 a 90** (inclusive). Si el valor guardado está fuera de ese rango se usa el **7**.
 - **Hora del chequeo diario: números de 0 a 23** (inclusive). Si no es una hora válida se usa la **5**.
 - Cada campo numérico (`src/components/NumberStepper.tsx`) permite escribir el número y tiene dos botones pegados al borde (subir y bajar) que se detienen en los extremos, y debajo un mensaje con el rango aceptado.
+
+**Imágenes.** Al tocar una imagen se abre a pantalla completa: se acerca y se aleja **pellizcando con dos dedos** (el zoom se hace desde donde están los dedos) y, ya acercada, se arrastra con uno o dos dedos para ver cada parte; no hay zoom con doble toque. Al cargar una imagen de un producto (cámara o galería) no se ofrece recortarla: se muestra una ventana de confirmación con la imagen elegida y recién al confirmar se sube (`src/services/imageService.ts` elige y sube en dos pasos).
 
 **Recuperar contraseña.** «Olvidé mi contraseña» abre la pantalla con el mail del login ya completado.
 

@@ -3,12 +3,13 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { Image, Alert, StyleSheet } from 'react-native';
 import ProductFormFields from '../src/components/ProductFormFields';
 import { FieldFocusContext } from '../src/components/KeyboardAwareScrollView';
-import { pickFromCamera, pickFromGallery } from '@/services/imageService';
+import { pickFromCamera, pickFromGallery, uploadImage } from '@/services/imageService';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
 
 jest.mock('@/services/imageService', () => ({
   pickFromGallery: jest.fn(),
   pickFromCamera: jest.fn(),
+  uploadImage: jest.fn(),
 }));
 
 function Wrapper({ form: initialForm, ...rest }: Partial<React.ComponentProps<typeof ProductFormFields>> = {}) {
@@ -221,24 +222,104 @@ describe('ProductFormFields - nombre suggestions', () => {
 });
 
 describe('ProductFormFields - image picker', () => {
-  it('uploads from the camera and sets imagen_url', async () => {
-    (pickFromCamera as jest.Mock).mockResolvedValue('https://cdn/a.jpg');
+  const PICKED = { uri: 'file://a.jpg', fileName: 'a.jpg', mimeType: 'image/jpeg' };
+
+  it('asks for confirmation after taking a photo, and uploads it only when confirmed', async () => {
+    (pickFromCamera as jest.Mock).mockResolvedValue(PICKED);
+    (uploadImage as jest.Mock).mockResolvedValue('https://cdn/a.jpg');
     render(<Wrapper />);
     fireEvent.press(screen.getByText('Seleccionar imagen'));
     await act(async () => {
       fireEvent.press(screen.getByText('Tomar foto'));
     });
+    expect(screen.getByText('¿Querés cargar esta imagen?')).toBeTruthy();
+    expect(screen.getByTestId('image-confirm-preview').props.source).toEqual({ uri: 'file://a.jpg' });
+    expect(uploadImage).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('image-confirm-accept'));
+    });
+    expect(uploadImage).toHaveBeenCalledWith(PICKED);
     expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/a.jpg' });
+    expect(screen.queryByText('¿Querés cargar esta imagen?')).toBeNull();
   });
 
-  it('uploads from the gallery and sets imagen_url', async () => {
-    (pickFromGallery as jest.Mock).mockResolvedValue('https://cdn/b.jpg');
+  it('asks for confirmation after choosing from the gallery, and uploads it only when confirmed', async () => {
+    (pickFromGallery as jest.Mock).mockResolvedValue(PICKED);
+    (uploadImage as jest.Mock).mockResolvedValue('https://cdn/b.jpg');
     render(<Wrapper />);
     fireEvent.press(screen.getByText('Seleccionar imagen'));
     await act(async () => {
       fireEvent.press(screen.getByText('Elegir de la galería'));
     });
+    expect(screen.getByText('¿Querés cargar esta imagen?')).toBeTruthy();
+    expect(uploadImage).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('image-confirm-accept'));
+    });
     expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/b.jpg' });
+  });
+
+  it('does not upload nor set the image when the user cancels the confirmation', async () => {
+    (pickFromGallery as jest.Mock).mockResolvedValue(PICKED);
+    render(<Wrapper />);
+    fireEvent.press(screen.getByText('Seleccionar imagen'));
+    await act(async () => {
+      fireEvent.press(screen.getByText('Elegir de la galería'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('image-confirm-cancel'));
+    });
+    expect(uploadImage).not.toHaveBeenCalled();
+    expect(screen.UNSAFE_queryAllByType(Image)).toHaveLength(0);
+    expect(screen.queryByText('¿Querés cargar esta imagen?')).toBeNull();
+  });
+
+  it('keeps the current image when the user cancels the confirmation of a new one', async () => {
+    (pickFromGallery as jest.Mock).mockResolvedValue(PICKED);
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    fireEvent.press(screen.getByText('Cambiar imagen'));
+    await act(async () => {
+      fireEvent.press(screen.getByText('Elegir de la galería'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('image-confirm-cancel'));
+    });
+    expect(uploadImage).not.toHaveBeenCalled();
+    expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/existing.jpg' });
+  });
+
+  it('shows an alert when the upload fails after confirming', async () => {
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    (pickFromCamera as jest.Mock).mockResolvedValue(PICKED);
+    (uploadImage as jest.Mock).mockRejectedValue(new Error('sin conexión'));
+    render(<Wrapper />);
+    fireEvent.press(screen.getByText('Seleccionar imagen'));
+    await act(async () => {
+      fireEvent.press(screen.getByText('Tomar foto'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('image-confirm-accept'));
+    });
+    expect(Alert.alert).toHaveBeenCalledWith('Error', 'sin conexión');
+    expect(screen.UNSAFE_queryAllByType(Image)).toHaveLength(0);
+    (Alert.alert as jest.Mock).mockRestore();
+  });
+
+  it('shows a generic alert message when the upload fails with something that is not an Error', async () => {
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    (pickFromCamera as jest.Mock).mockResolvedValue(PICKED);
+    (uploadImage as jest.Mock).mockRejectedValue('boom');
+    render(<Wrapper />);
+    fireEvent.press(screen.getByText('Seleccionar imagen'));
+    await act(async () => {
+      fireEvent.press(screen.getByText('Tomar foto'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('image-confirm-accept'));
+    });
+    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Error al subir la imagen.');
+    (Alert.alert as jest.Mock).mockRestore();
   });
 
   it('keeps no image when the user cancels the picker', async () => {
@@ -264,7 +345,7 @@ describe('ProductFormFields - image picker', () => {
     (Alert.alert as jest.Mock).mockRestore();
   });
 
-  it('shows a generic alert message for a non-Error rejection', async () => {
+  it('shows a generic alert message when picking fails with something that is not an Error', async () => {
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     (pickFromCamera as jest.Mock).mockRejectedValue('boom');
     render(<Wrapper />);
@@ -272,7 +353,7 @@ describe('ProductFormFields - image picker', () => {
     await act(async () => {
       fireEvent.press(screen.getByText('Tomar foto'));
     });
-    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Error al subir la imagen.');
+    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Error al elegir la imagen.');
     (Alert.alert as jest.Mock).mockRestore();
   });
 

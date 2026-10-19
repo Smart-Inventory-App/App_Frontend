@@ -201,6 +201,8 @@ export default {
     imagenProximamente: 'Upload image (Coming soon)',
     imagenSeleccionar: 'Select image',
     imagenCambiar: 'Change image',
+    imagenConfirmarTitulo: 'Do you want to upload this image?',
+    imagenConfirmar: 'Confirm',
     imagenCamara: 'Take photo',
     imagenGaleria: 'Choose from gallery',
     required: 'required',

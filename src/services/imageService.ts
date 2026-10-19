@@ -5,7 +5,11 @@ import { appendImage } from '../utils/formData';
 
 const IMAGE_STORAGE_URL = process.env.EXPO_PUBLIC_IMAGE_STORAGE_URL;
 
-async function uploadAsset(asset: ImagePicker.ImagePickerAsset): Promise<string> {
+/** Una imagen elegida o sacada con la cámara que todavía no se subió. */
+export type PickedImage = ImagePicker.ImagePickerAsset;
+
+/** Sube la imagen elegida y devuelve su dirección. Se llama recién cuando el usuario la confirma. */
+export async function uploadImage(asset: PickedImage): Promise<string> {
   const formData = new FormData();
   await appendImage(
     formData,
@@ -29,29 +33,30 @@ async function uploadAsset(asset: ImagePicker.ImagePickerAsset): Promise<string>
   return data.url;
 }
 
-export async function pickFromGallery(): Promise<string | null> {
+// Elegir no sube nada: la imagen se carga tal cual (sin recorte) y recién se sube cuando el usuario la confirma.
+export async function pickFromGallery(): Promise<PickedImage | null> {
   const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (status !== 'granted') throw new Error('Se necesita permiso para acceder a la galería.');
 
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
-    allowsEditing: true,
+    allowsEditing: false,
     quality: 0.9,
   });
 
   if (result.canceled) return null;
-  return uploadAsset(result.assets[0]);
+  return result.assets[0];
 }
 
-export async function pickFromCamera(): Promise<string | null> {
+export async function pickFromCamera(): Promise<PickedImage | null> {
   const { status } = await ImagePicker.requestCameraPermissionsAsync();
   if (status !== 'granted') throw new Error('Se necesita permiso para usar la cámara.');
 
   const result = await ImagePicker.launchCameraAsync({
-    allowsEditing: true,
+    allowsEditing: false,
     quality: 0.9,
   });
 
   if (result.canceled) return null;
-  return uploadAsset(result.assets[0]);
+  return result.assets[0];
 }

@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import { getAuthToken } from '../src/services/api';
-import { pickFromCamera, pickFromGallery } from '../src/services/imageService';
+import { pickFromCamera, pickFromGallery, uploadImage } from '../src/services/imageService';
 
 jest.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: jest.fn(),
@@ -39,37 +39,20 @@ describe('imageService.pickFromGallery', () => {
     await expect(pickFromGallery()).resolves.toBeNull();
   });
 
-  it('uploads the picked asset and returns its url, attaching the auth token', async () => {
+  it('returns the picked image without uploading it: it is uploaded after the user confirms', async () => {
     (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
-    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
-      canceled: false,
-      assets: [{ uri: 'file://a.jpg', fileName: 'a.jpg', mimeType: 'image/jpeg' }],
-    });
-    (getAuthToken as jest.Mock).mockReturnValue('tok123');
-    mockedAxios.post.mockResolvedValue({ data: { url: 'https://cdn/a.jpg' } });
+    const asset = { uri: 'file://a.jpg', fileName: 'a.jpg', mimeType: 'image/jpeg' };
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({ canceled: false, assets: [asset] });
 
-    await expect(pickFromGallery()).resolves.toBe('https://cdn/a.jpg');
-    expect(mockedAxios.post).toHaveBeenCalledWith(
-      expect.stringContaining('/storage/upload'),
-      expect.any(FormData),
-      expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: 'Bearer tok123' }),
-      }),
-    );
+    await expect(pickFromGallery()).resolves.toBe(asset);
+    expect(mockedAxios.post).not.toHaveBeenCalled();
   });
 
-  it('uploads without an Authorization header when there is no token', async () => {
+  it('does not offer to crop the image', async () => {
     (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
-    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
-      canceled: false,
-      assets: [{ uri: 'file://a.jpg' }],
-    });
-    (getAuthToken as jest.Mock).mockReturnValue(null);
-    mockedAxios.post.mockResolvedValue({ data: { url: 'https://cdn/a.jpg' } });
-
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({ canceled: true });
     await pickFromGallery();
-    const headers = mockedAxios.post.mock.calls[0][2]?.headers as Record<string, string>;
-    expect(headers.Authorization).toBeUndefined();
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: false }));
   });
 });
 
@@ -85,16 +68,39 @@ describe('imageService.pickFromCamera', () => {
     await expect(pickFromCamera()).resolves.toBeNull();
   });
 
-  it('uploads the captured photo and returns its url', async () => {
+  it('returns the captured photo without uploading it, and without offering to crop it', async () => {
     (ImagePicker.requestCameraPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
-    (ImagePicker.launchCameraAsync as jest.Mock).mockResolvedValue({
-      canceled: false,
-      assets: [{ uri: 'file://b.jpg' }],
-    });
-    (getAuthToken as jest.Mock).mockReturnValue('tok');
-    mockedAxios.post.mockResolvedValue({ data: { url: 'https://cdn/b.jpg' } });
+    const asset = { uri: 'file://b.jpg' };
+    (ImagePicker.launchCameraAsync as jest.Mock).mockResolvedValue({ canceled: false, assets: [asset] });
 
-    await expect(pickFromCamera()).resolves.toBe('https://cdn/b.jpg');
+    await expect(pickFromCamera()).resolves.toBe(asset);
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+    expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: false }));
+  });
+});
+
+describe('imageService.uploadImage', () => {
+  it('uploads the image and returns its url, attaching the auth token', async () => {
+    (getAuthToken as jest.Mock).mockReturnValue('tok123');
+    mockedAxios.post.mockResolvedValue({ data: { url: 'https://cdn/a.jpg' } });
+
+    await expect(uploadImage({ uri: 'file://a.jpg', fileName: 'a.jpg', mimeType: 'image/jpeg' } as any)).resolves.toBe('https://cdn/a.jpg');
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      expect.stringContaining('/storage/upload'),
+      expect.any(FormData),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer tok123' }),
+      }),
+    );
+  });
+
+  it('uploads without an Authorization header when there is no token', async () => {
+    (getAuthToken as jest.Mock).mockReturnValue(null);
+    mockedAxios.post.mockResolvedValue({ data: { url: 'https://cdn/a.jpg' } });
+
+    await uploadImage({ uri: 'file://a.jpg' } as any);
+    const headers = mockedAxios.post.mock.calls[0][2]?.headers as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
   });
 });
 
@@ -110,15 +116,12 @@ describe('imageService (web)', () => {
     (Platform as any).OS = 'web';
     const blob = new (Blob as any)(['x'], { type: 'image/png' });
     (global as any).fetch = jest.fn().mockResolvedValue({ blob: () => Promise.resolve(blob) });
-    (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
-    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
-      canceled: false,
-      assets: [{ uri: 'blob:http://localhost/2', fileName: 'p.png', mimeType: 'image/png' }],
-    });
     (getAuthToken as jest.Mock).mockReturnValue(null);
     mockedAxios.post.mockResolvedValue({ data: { url: 'https://cdn/p.png' } });
 
-    await expect(pickFromGallery()).resolves.toBe('https://cdn/p.png');
+    await expect(
+      uploadImage({ uri: 'blob:http://localhost/2', fileName: 'p.png', mimeType: 'image/png' } as any),
+    ).resolves.toBe('https://cdn/p.png');
 
     const form = mockedAxios.post.mock.calls[0][1] as any;
     expect(form.get('file')).toBeInstanceOf(Blob);

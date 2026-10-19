@@ -205,6 +205,8 @@ export default {
     imagenProximamente: 'Cargar imagen (Próximamente)',
     imagenSeleccionar: 'Seleccionar imagen',
     imagenCambiar: 'Cambiar imagen',
+    imagenConfirmarTitulo: '¿Querés cargar esta imagen?',
+    imagenConfirmar: 'Confirmar',
     imagenCamara: 'Tomar foto',
     imagenGaleria: 'Elegir de la galería',
     required: 'requerido',
