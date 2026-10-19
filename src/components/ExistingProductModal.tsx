@@ -18,17 +18,27 @@ import { formatWaitSeconds } from '@/utils/ocrDraft';
 const NAME_INPUT_MAX = 60;
 const STOCK_MAX_DIGITS = 6;
 
-type Method = 'name' | 'barcode' | 'label';
+type Method = 'name' | 'barcode' | 'label' | 'receipt';
 type Step = 'menu' | 'name' | 'source' | 'processing' | 'edit' | 'results';
 
 interface Props {
   visible: boolean;
   onClose: () => void;
-  /** Se llama después de sumar el stock al producto elegido. */
-  onSuccess: () => void;
+  /**
+   * "entry": ingresar stock a un producto existente (nombre, etiqueta o código de barras).
+   * "exit": escanear para una salida (código de barras, etiqueta o factura); al elegir el producto se vuelve
+   * al formulario de salida con él cargado.
+   */
+  mode?: 'entry' | 'exit';
+  /** Entrada: se llama después de sumar el stock al producto elegido. */
+  onSuccess?: () => void;
+  /** Salida: el producto que el usuario eligió entre las coincidencias. */
+  onSelectProduct?: (product: ProductSuggestion) => void;
+  /** Salida: el usuario eligió la factura o remito, que se procesa con el escaneo de comprobantes. */
+  onPickReceipt?: () => void;
 }
 
-const METHOD_DOC_TYPE: Record<Exclude<Method, 'name'>, ScanDocType> = {
+const METHOD_DOC_TYPE: Record<'barcode' | 'label', ScanDocType> = {
   barcode: 'barcode',
   label: 'product_label',
 };
@@ -48,7 +58,7 @@ const productLabel = (p: ProductSuggestion) => p.nombre + (p.marca ? ` · ${p.ma
 
 // "Ingresar producto existente": se suma stock a un producto que el usuario ya tiene cargado,
 // encontrándolo por nombre, por la etiqueta o por el código de barras.
-export default function ExistingProductModal({ visible, onClose, onSuccess }: Props) {
+export default function ExistingProductModal({ visible, onClose, mode = 'entry', onSuccess, onSelectProduct, onPickReceipt }: Props) {
   const { t } = useTranslation();
 
   const [step, setStep] = useState<Step>('menu');
@@ -131,6 +141,11 @@ export default function ExistingProductModal({ visible, onClose, onSuccess }: Pr
   };
 
   const handlePickMethod = (picked: Method) => {
+    if (picked === 'receipt') {
+      onPickReceipt?.();
+      handleClose();
+      return;
+    }
     setMethod(picked);
     setError(null);
     setStep(picked === 'name' ? 'name' : 'source');
@@ -148,6 +163,12 @@ export default function ExistingProductModal({ visible, onClose, onSuccess }: Pr
   };
 
   const handlePickOption = (option: ProductSuggestion) => {
+    // En una salida el producto elegido vuelve al formulario, donde se indican la cantidad y el motivo
+    if (mode === 'exit') {
+      onSelectProduct?.(option);
+      handleClose();
+      return;
+    }
     setSelected(option);
     setError(null);
     if (method === 'name') {
@@ -159,7 +180,7 @@ export default function ExistingProductModal({ visible, onClose, onSuccess }: Pr
   // ── Por escaneo ─────────────────────────────────────────────────────────────
 
   const handlePickSource = async (source: 'camera' | 'gallery') => {
-    if (!method || method === 'name') return;
+    if (!method || method === 'name' || method === 'receipt') return;
     setError(null);
     try {
       const asset = await ocrService.pickImage(source);
@@ -272,7 +293,7 @@ export default function ExistingProductModal({ visible, onClose, onSuccess }: Pr
     setSaving(true);
     try {
       await productService.restockProduct(selected.id, quantity);
-      onSuccess();
+      onSuccess?.();
       handleClose();
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
@@ -362,19 +383,38 @@ export default function ExistingProductModal({ visible, onClose, onSuccess }: Pr
 
   const renderMenu = () => (
     <View>
-      <Text style={styles.sectionTitle}>{t('existing.menuTitle')}</Text>
-      <TouchableOpacity style={styles.menuButton} onPress={() => handlePickMethod('name')} testID="existing-method-name">
-        <Ionicons name="create-outline" size={24} color={Colors.primary} />
-        <Text style={styles.menuButtonText}>{t('existing.byName')}</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.menuButton} onPress={() => handlePickMethod('label')} testID="existing-method-label">
-        <Ionicons name="pricetag-outline" size={24} color={Colors.primary} />
-        <Text style={styles.menuButtonText}>{t('existing.byLabel')}</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.menuButton} onPress={() => handlePickMethod('barcode')} testID="existing-method-barcode">
-        <Ionicons name="barcode-outline" size={24} color={Colors.primary} />
-        <Text style={styles.menuButtonText}>{t('existing.byBarcode')}</Text>
-      </TouchableOpacity>
+      <Text style={styles.sectionTitle}>{t(mode === 'exit' ? 'scan.docTypeTitle' : 'existing.menuTitle')}</Text>
+      {mode === 'exit' ? (
+        <>
+          <TouchableOpacity style={styles.menuButton} onPress={() => handlePickMethod('barcode')} testID="existing-method-barcode">
+            <Ionicons name="barcode-outline" size={24} color={Colors.primary} />
+            <Text style={styles.menuButtonText}>{t('existing.exitByBarcode')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.menuButton} onPress={() => handlePickMethod('label')} testID="existing-method-label">
+            <Ionicons name="pricetag-outline" size={24} color={Colors.primary} />
+            <Text style={styles.menuButtonText}>{t('existing.exitByLabel')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.menuButton} onPress={() => handlePickMethod('receipt')} testID="existing-method-receipt">
+            <Ionicons name="receipt-outline" size={24} color={Colors.primary} />
+            <Text style={styles.menuButtonText}>{t('existing.exitByReceipt')}</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <>
+          <TouchableOpacity style={styles.menuButton} onPress={() => handlePickMethod('name')} testID="existing-method-name">
+            <Ionicons name="create-outline" size={24} color={Colors.primary} />
+            <Text style={styles.menuButtonText}>{t('existing.byName')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.menuButton} onPress={() => handlePickMethod('label')} testID="existing-method-label">
+            <Ionicons name="pricetag-outline" size={24} color={Colors.primary} />
+            <Text style={styles.menuButtonText}>{t('existing.byLabel')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.menuButton} onPress={() => handlePickMethod('barcode')} testID="existing-method-barcode">
+            <Ionicons name="barcode-outline" size={24} color={Colors.primary} />
+            <Text style={styles.menuButtonText}>{t('existing.byBarcode')}</Text>
+          </TouchableOpacity>
+        </>
+      )}
     </View>
   );
 
@@ -522,7 +562,7 @@ export default function ExistingProductModal({ visible, onClose, onSuccess }: Pr
       sheetTestID="existing-sheet"
     >
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>{t('existing.title')}</Text>
+        <Text style={styles.headerTitle}>{t(mode === 'exit' ? 'scan.openButton' : 'existing.title')}</Text>
         <TouchableOpacity onPress={handleClose} testID="existing-modal-close">
           <Ionicons name="close" size={24} color={Colors.textPrimary} />
         </TouchableOpacity>

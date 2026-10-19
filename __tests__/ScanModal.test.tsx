@@ -20,6 +20,7 @@ jest.mock('@/services/ocrService', () => ({
     scan: jest.fn(),
     pollJob: jest.fn(),
     submitSalida: jest.fn(),
+    submitEntrada: jest.fn(),
   },
   getScanErrorMessage: jest.fn((err: unknown, fallback: string) => {
     const detail = (err as any)?.response?.data?.detail;
@@ -431,7 +432,7 @@ describe('ScanModal - receipt review flow', () => {
       fireEvent.press(screen.getByTestId('confirm-receipt'));
     });
 
-    expect(mockedOcr.submitSalida).toHaveBeenCalledWith([{ product_id: 5, quantity: 3 }], 'Kiosco Don Juan');
+    expect(mockedOcr.submitSalida).toHaveBeenCalledWith([{ product_id: 5, quantity: 3 }], 'Kiosco Don Juan', 'consumed');
   });
 
   it('shows the chosen match first and sends it back to its place when the line is excluded', async () => {
@@ -478,6 +479,7 @@ describe('ScanModal - receipt review flow', () => {
     expect(mockedOcr.submitSalida).toHaveBeenCalledWith(
       expect.arrayContaining([{ product_id: 6, quantity: 2 }]),
       'Kiosco Don Juan',
+      'consumed',
     );
   });
 
@@ -513,6 +515,7 @@ describe('ScanModal - receipt review flow', () => {
     expect(mockedOcr.submitSalida).toHaveBeenCalledWith(
       expect.arrayContaining([{ product_id: 8, quantity: 1 }]),
       'Kiosco Don Juan',
+      'consumed',
     );
   });
 
@@ -912,5 +915,106 @@ describe('ScanModal - scanning a single field (expiry date or barcode)', () => {
       fireEvent.press(screen.getByTestId('scan-source-gallery'));
     });
     expect(screen.queryByText('Se necesita permiso para usar la cámara.')).toBeNull();
+  });
+});
+
+describe('ScanModal - receipts: exits and entries are separate', () => {
+  const receiptState = () => ({
+    status: 'done',
+    doc_type: 'receipt',
+    result: baseResult({
+      doc_type: 'receipt',
+      draft: null,
+      comprobante: { comercio: 'Kiosco Don Juan', fecha_compra: '2026-01-01', total: 100 },
+      items: [
+        baseDraft({
+          nombre: 'Yogur',
+          stock: 2,
+          coincidencia_id: 5,
+          coincidencias: [{ id: 5, nombre: 'Yogur Ser', score: 0.9, por_codigo: false, stock: 1 }],
+        }),
+      ],
+    }),
+  } as ScanState);
+
+  const scanReceipt = async (props: Partial<React.ComponentProps<typeof ScanModal>> = {}) => {
+    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
+    mockedOcr.scan.mockResolvedValue(receiptState());
+    const handlers = setup(props);
+    if (!props.fixedDocType) fireEvent.press(screen.getByTestId('doc-type-receipt'));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('scan-source-camera'));
+    });
+    return handlers;
+  };
+
+  it('opens a fixed receipt scan straight on the photo options, titled after the invoice or receipt', () => {
+    setup({ fixedDocType: 'receipt' });
+    expect(screen.getByText('Escanear factura o remito')).toBeTruthy();
+    expect(screen.getByTestId('scan-source-camera')).toBeTruthy();
+    expect(screen.queryByTestId('doc-type-receipt')).toBeNull();
+  });
+
+  it('on an exit receipt, offers the exit reasons, starting with "Consumido", and sends the chosen one', async () => {
+    mockedOcr.submitSalida.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
+    await scanReceipt({ fixedDocType: 'receipt', receiptDirection: 'salida' });
+    expect(screen.getByText('Motivo')).toBeTruthy();
+    ['consumed', 'expired', 'sold', 'rented'].forEach(r => expect(screen.getByTestId(`receipt-motivo-${r}`)).toBeTruthy());
+    fireEvent.press(screen.getByTestId('receipt-motivo-sold'));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('confirm-receipt'));
+    });
+    expect(mockedOcr.submitSalida).toHaveBeenCalledWith([{ product_id: 5, quantity: 2 }], 'Kiosco Don Juan', 'sold');
+    expect(mockedOcr.submitEntrada).not.toHaveBeenCalled();
+  });
+
+  it('on an entry receipt, only adds stock: no exit reasons, entry wording and the entry endpoint', async () => {
+    mockedOcr.submitEntrada.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
+    const { onSuccess, onClose } = await scanReceipt({ receiptDirection: 'entrada' });
+    expect(screen.queryByTestId('receipt-motivo-sold')).toBeNull();
+    expect(screen.getByText('No ingresar este renglón')).toBeTruthy();
+    expect(screen.getByText('Registrar entrada')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('confirm-receipt'));
+    });
+    expect(mockedOcr.submitEntrada).toHaveBeenCalledWith([{ product_id: 5, quantity: 2 }], 'Kiosco Don Juan');
+    expect(mockedOcr.submitSalida).not.toHaveBeenCalled();
+    expect(screen.getByText('Entrada registrada')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('receipt-result-done'));
+    expect(onSuccess).toHaveBeenCalledWith('restocked');
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('on an entry receipt, asks to choose at least one line to add', async () => {
+    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
+    const state = receiptState();
+    (state.result as any).items[0].coincidencia_id = undefined;
+    mockedOcr.scan.mockResolvedValue(state);
+    setup({ receiptDirection: 'entrada' });
+    fireEvent.press(screen.getByTestId('doc-type-receipt'));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('scan-source-camera'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('confirm-receipt'));
+    });
+    expect(screen.getByText('Elegí al menos un renglón para ingresar')).toBeTruthy();
+    expect(mockedOcr.submitEntrada).not.toHaveBeenCalled();
+  });
+
+  it('on an entry receipt, toggles a line between "No ingresar" and "Ingresar"', async () => {
+    await scanReceipt({ receiptDirection: 'entrada' });
+    fireEvent.press(screen.getByTestId('receipt-toggle-0'));
+    expect(screen.getByText('Ingresar este renglón')).toBeTruthy();
+  });
+
+  it('on an exit receipt, reports a success of kind "salida"', async () => {
+    mockedOcr.submitSalida.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
+    const { onSuccess } = await scanReceipt({ fixedDocType: 'receipt', receiptDirection: 'salida' });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('confirm-receipt'));
+    });
+    fireEvent.press(screen.getByTestId('receipt-result-done'));
+    expect(onSuccess).toHaveBeenCalledWith('salida');
   });
 });

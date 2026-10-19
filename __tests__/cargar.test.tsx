@@ -62,10 +62,17 @@ jest.mock('@/components/ProductFormFields', () => {
 
 jest.mock('@/components/ExistingProductModal', () => {
   const { View: RNView, Text: RNText, TouchableOpacity } = require('react-native');
-  return function MockExistingProductModal({ visible, onSuccess, onClose }: any) {
+  return function MockExistingProductModal({ visible, mode, onSuccess, onClose, onSelectProduct, onPickReceipt }: any) {
     if (!visible) return null;
     return (
       <RNView testID="mock-existing-modal">
+        <RNText testID="mock-existing-mode">{String(mode)}</RNText>
+        <TouchableOpacity testID="mock-existing-select" onPress={() => onSelectProduct({ id: 7, nombre: 'Yogur', marca: 'Ser', categoria: 'Lacteos', stock: 5 })}>
+          <RNText>select</RNText>
+        </TouchableOpacity>
+        <TouchableOpacity testID="mock-existing-receipt" onPress={() => onPickReceipt()}>
+          <RNText>receipt</RNText>
+        </TouchableOpacity>
         <TouchableOpacity testID="mock-existing-success" onPress={onSuccess}>
           <RNText>success</RNText>
         </TouchableOpacity>
@@ -79,11 +86,15 @@ jest.mock('@/components/ExistingProductModal', () => {
 
 jest.mock('@/components/ScanModal', () => {
   const { View: RNView, Text: RNText, TouchableOpacity } = require('react-native');
-  return function MockScanModal({ visible, onSuccess, onClose, onApplyToForm, fixedDocType }: any) {
+  return function MockScanModal({ visible, onSuccess, onClose, onApplyToForm, fixedDocType, receiptDirection }: any) {
     if (!visible) return null;
     return (
       <RNView testID="mock-scan-modal">
         <RNText testID="mock-scan-target">{String(fixedDocType)}</RNText>
+        <RNText testID="mock-scan-direction">{String(receiptDirection)}</RNText>
+        <TouchableOpacity testID="mock-scan-success-restocked" onPress={() => onSuccess('restocked')}>
+          <RNText>restocked</RNText>
+        </TouchableOpacity>
         <TouchableOpacity testID="mock-apply-barcode" onPress={() => onApplyToForm((f: any) => ({ ...f, codigo_barras: '7791234567898' }))}>
           <RNText>apply barcode</RNText>
         </TouchableOpacity>
@@ -382,7 +393,7 @@ describe('CargarScreen - salida labels', () => {
     expect(screen.getByText('Producto *')).toBeTruthy();
     expect(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado')).toBeTruthy();
     expect(screen.getByText('Motivo *')).toBeTruthy();
-    expect(screen.getByText('Motivo (Opcional)')).toBeTruthy();
+    expect(screen.getByText('Descripción de Motivo')).toBeTruthy();
     expect(screen.getByPlaceholderText('Descripción de salida (ej. vencido en heladera)')).toBeTruthy();
   });
 });
@@ -653,5 +664,183 @@ describe('CargarScreen - scanning feeds the form', () => {
     fireEvent.press(screen.getByTestId('mock-apply-expiry'));
     expect(mockedProducts.createProduct).not.toHaveBeenCalled();
     expect(screen.queryByText('Ver inventario')).toBeNull();
+  });
+});
+
+describe('CargarScreen - salida: motivos y escaneo', () => {
+  const goToSalida = () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByText('Salida'));
+  };
+
+  const selectProduct = async () => {
+    jest.useFakeTimers();
+    mockedProducts.suggestProducts.mockResolvedValue([{ id: 1, nombre: 'Leche', categoria: 'Lacteos', stock: 30 } as any]);
+    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado'), 'lech');
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(300);
+    });
+    jest.useRealTimers();
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    fireEvent.press(screen.getByText('Leche'));
+  };
+
+  it('offers four reasons, with "Vendido" and "Alquilado" after "Consumido" and "Vencido"', () => {
+    goToSalida();
+    const tree = JSON.stringify(screen.toJSON());
+    const order = ['Consumido', 'Vencido', 'Vendido', 'Alquilado'].map(label => tree.indexOf(`"${label}"`));
+    expect(order.every(i => i > 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it('calls the field "Stock a sacar" and the description "Descripción de Motivo", with no "optional"', () => {
+    goToSalida();
+    expect(screen.getByText('Stock a sacar *')).toBeTruthy();
+    expect(screen.queryByText('Cantidad a sacar *')).toBeNull();
+    expect(screen.getByText('Descripción de Motivo')).toBeTruthy();
+    expect(screen.queryByText(/Opcional/i)).toBeNull();
+  });
+
+  it.each([['sold', 'Vendido'], ['rented', 'Alquilado'], ['expired', 'Vencido'], ['consumed', 'Consumido']] as const)(
+    'registers the exit with the chosen reason (%s)',
+    async (reason, label) => {
+      mockedProducts.registerEvent.mockResolvedValue({ event_type: reason, quantity: 4, remaining_stock: 26 });
+      goToSalida();
+      await selectProduct();
+      fireEvent.changeText(screen.getByPlaceholderText('0'), '4');
+      fireEvent.press(screen.getByText(label));
+      await act(async () => {
+        fireEvent.press(screen.getByText('Registrar salida'));
+      });
+      expect(mockedProducts.registerEvent).toHaveBeenCalledWith(1, 4, reason, '');
+    },
+  );
+
+  it('shows the scan button above the product field, with the same format as the entry one', () => {
+    goToSalida();
+    expect(screen.getByText('Escanear imágenes')).toBeTruthy();
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('open-exit-scan-modal')).toBeLessThan(tree.indexOf('Producto *'));
+    expect(StyleSheet.flatten(screen.getByTestId('open-exit-scan-modal').props.style).borderRadius).toBe(10);
+  });
+
+  it('opens the exit scan menu from the button, and not the entry one', () => {
+    goToSalida();
+    fireEvent.press(screen.getByTestId('open-exit-scan-modal'));
+    expect(screen.getByTestId('mock-existing-mode').props.children).toBe('exit');
+    fireEvent.press(screen.getByTestId('mock-existing-close'));
+    expect(screen.queryByTestId('mock-existing-modal')).toBeNull();
+  });
+
+  it('comes back to the exit form with the scanned product already chosen', async () => {
+    mockedProducts.registerEvent.mockResolvedValue({ event_type: 'sold', quantity: 2, remaining_stock: 1 });
+    goToSalida();
+    fireEvent.press(screen.getByTestId('open-exit-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-existing-select'));
+    expect(screen.queryByTestId('mock-existing-modal')).toBeNull();
+    expect(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado').props.value).toBe('Yogur');
+    expect(screen.getByTestId('salida-selected-marca').props.children).toBe('Marca: Ser');
+    expect(screen.getByTestId('salida-selected-stock').props.children).toBe('Stock actual: 5');
+    fireEvent.changeText(screen.getByPlaceholderText('0'), '2');
+    fireEvent.press(screen.getByText('Vendido'));
+    await act(async () => {
+      fireEvent.press(screen.getByText('Registrar salida'));
+    });
+    expect(mockedProducts.registerEvent).toHaveBeenCalledWith(7, 2, 'sold', '');
+  });
+
+  it('opens the receipt scan for exits when "Factura o remito" is chosen', () => {
+    goToSalida();
+    fireEvent.press(screen.getByTestId('open-exit-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-existing-receipt'));
+    expect(screen.getByTestId('mock-scan-target').props.children).toBe('receipt');
+    expect(screen.getByTestId('mock-scan-direction').props.children).toBe('salida');
+  });
+
+  it('shows the exit success message after scanning an exit receipt', () => {
+    goToSalida();
+    fireEvent.press(screen.getByTestId('open-exit-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-existing-receipt'));
+    fireEvent.press(screen.getByTestId('mock-scan-success-salida'));
+    expect(screen.getByText('Se registró la salida correctamente')).toBeTruthy();
+  });
+
+  it('does not show the exit scan button in the entry tab', () => {
+    render(<CargarScreen />);
+    expect(screen.queryByTestId('open-exit-scan-modal')).toBeNull();
+  });
+});
+
+describe('CargarScreen - entrada: el comprobante solo ingresa stock', () => {
+  it('opens the general scan with receipts that add stock', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    expect(screen.getByTestId('mock-scan-direction').props.children).toBe('entrada');
+  });
+
+  it('keeps entry receipts as entries even after a field scan', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('mock-scan-barcode'));
+    expect(screen.getByTestId('mock-scan-direction').props.children).toBe('entrada');
+  });
+
+  it('shows the stock success message after an entry receipt', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-scan-success-restocked'));
+    expect(screen.getByText('Se ingresó el stock del comprobante')).toBeTruthy();
+  });
+});
+
+describe('CargarScreen - salida: datos informativos del producto elegido', () => {
+  const pickByName = async (suggestion: any) => {
+    jest.useFakeTimers();
+    mockedProducts.suggestProducts.mockResolvedValue([suggestion]);
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByText('Salida'));
+    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado'), 'lech');
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(300);
+    });
+    jest.useRealTimers();
+    await waitFor(() => expect(screen.getByText(suggestion.nombre)).toBeTruthy());
+    fireEvent.press(screen.getByText(suggestion.nombre));
+  };
+
+  it('shows only the name in the field, with the brand and the stock below it', async () => {
+    await pickByName({ id: 1, nombre: 'Leche', marca: 'La Serenísima', categoria: 'Lacteos', stock: 12 });
+    expect(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado').props.value).toBe('Leche');
+    expect(screen.getByTestId('salida-selected-marca').props.children).toBe('Marca: La Serenísima');
+    expect(screen.getByTestId('salida-selected-stock').props.children).toBe('Stock actual: 12');
+  });
+
+  it('places the info right below the field and above the stock to take out', async () => {
+    await pickByName({ id: 1, nombre: 'Leche', marca: 'Ser', categoria: 'Lacteos', stock: 12 });
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('salida-selected-info')).toBeGreaterThan(tree.indexOf('Producto *'));
+    expect(tree.indexOf('salida-selected-info')).toBeLessThan(tree.indexOf('Stock a sacar *'));
+  });
+
+  it('shows just the stock when the product has no brand', async () => {
+    await pickByName({ id: 2, nombre: 'Agua', categoria: 'Bebidas', stock: 3 });
+    expect(screen.queryByTestId('salida-selected-marca')).toBeNull();
+    expect(screen.getByTestId('salida-selected-stock').props.children).toBe('Stock actual: 3');
+  });
+
+  it('shows no info until a product is chosen, and hides it when the name is edited', async () => {
+    await pickByName({ id: 1, nombre: 'Leche', marca: 'Ser', categoria: 'Lacteos', stock: 12 });
+    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado'), 'Lec');
+    expect(screen.queryByTestId('salida-selected-info')).toBeNull();
+  });
+
+  it('shows the info of a product chosen from the scan, without the brand inside the field', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByText('Salida'));
+    expect(screen.queryByTestId('salida-selected-info')).toBeNull();
+    fireEvent.press(screen.getByTestId('open-exit-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-existing-select'));
+    expect(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado').props.value).toBe('Yogur');
+    expect(screen.getByTestId('salida-selected-marca').props.children).toBe('Marca: Ser');
+    expect(screen.getByTestId('salida-selected-stock').props.children).toBe('Stock actual: 5');
   });
 });

@@ -12,7 +12,8 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
-import { ProductCreate, ProductSuggestion } from '@/types/product';
+import { ExitReason, ProductCreate, ProductSuggestion } from '@/types/product';
+import { EXIT_REASONS, EXIT_REASON_LABEL_KEY } from '@/utils/exitReasons';
 import AppTextInput from '@/components/AppTextInput';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import ProductFormFields from '@/components/ProductFormFields';
@@ -20,7 +21,7 @@ import ScreenHeader from '@/components/ScreenHeader';
 import { isValidBarcode } from '@/utils/barcode';
 import ExistingProductModal from '@/components/ExistingProductModal';
 import ScanModal, { ScanSuccessKind } from '@/components/ScanModal';
-import { FieldScanDocType } from '@/types/ocr';
+import { FixedScanDocType } from '@/types/ocr';
 
 const SALIDA_NOTA_MAX = 50;
 
@@ -42,14 +43,15 @@ export default function CargarScreen() {
   const [scanVisible, setScanVisible] = useState(false);
   const [existingVisible, setExistingVisible] = useState(false);
   // null: escaneo general (etiqueta o remito); si no, el campo que se escanea (fecha de vencimiento o código de barras)
-  const [scanField, setScanField] = useState<FieldScanDocType | null>(null);
+  const [scanField, setScanField] = useState<FixedScanDocType | null>(null);
+  const [exitScanVisible, setExitScanVisible] = useState(false);
   const [scanSuccessKind, setScanSuccessKind] = useState<ScanSuccessKind | null>(null);
 
   const [salidaQuery, setSalidaQuery] = useState('');
   const [salidaSuggestions, setSalidaSuggestions] = useState<ProductSuggestion[]>([]);
   const [salidaSelected, setSalidaSelected] = useState<ProductSuggestion | null>(null);
   const [salidaCantidad, setSalidaCantidad] = useState('');
-  const [salidaMotivo, setSalidaMotivo] = useState<'consumed' | 'expired'>('consumed');
+  const [salidaMotivo, setSalidaMotivo] = useState<ExitReason>('consumed');
   const [salidaNota, setSalidaNota] = useState('');
 
   const applyDefaults = useCallback(() => {
@@ -198,6 +200,7 @@ export default function CargarScreen() {
       case 'merged': return t('product.successMsgMerged');
       case 'updated': return t('scan.successUpdated');
       case 'salida': return t('product.successMsgSalida');
+      case 'restocked': return t('scan.successRestocked');
       default: return t('scan.successCreated');
     }
   };
@@ -221,7 +224,8 @@ export default function CargarScreen() {
 
   const pickSalidaSuggestion = (s: ProductSuggestion) => {
     setSalidaSelected(s);
-    setSalidaQuery(s.nombre + (s.marca ? ` · ${s.marca}` : ''));
+    // En el campo va solo el nombre: la marca y el stock se muestran debajo, como datos informativos
+    setSalidaQuery(s.nombre);
     setSalidaSuggestions([]);
   };
 
@@ -313,6 +317,10 @@ export default function CargarScreen() {
           </>
         ) : (
           <View style={styles.container}>
+            <TouchableOpacity style={styles.scanBtn} onPress={() => setExitScanVisible(true)} testID="open-exit-scan-modal">
+              <Ionicons name="camera-outline" size={18} color={Colors.primary} />
+              <Text style={styles.scanBtnText}>{t('scan.openButton')}</Text>
+            </TouchableOpacity>
             <Text style={styles.label}>{t('product.salidaProducto')} *</Text>
             <AppTextInput
               style={styles.input}
@@ -321,6 +329,18 @@ export default function CargarScreen() {
               value={salidaQuery}
               onChangeText={onSalidaQueryChange}
             />
+            {salidaSelected && (
+              <View testID="salida-selected-info" style={styles.selectedInfo}>
+                {salidaSelected.marca ? (
+                  <Text testID="salida-selected-marca" style={styles.selectedInfoText}>
+                    {t('product.salidaMarcaInfo', { marca: salidaSelected.marca })}
+                  </Text>
+                ) : null}
+                <Text testID="salida-selected-stock" style={styles.selectedInfoText}>
+                  {t('product.salidaStockInfo', { stock: salidaSelected.stock })}
+                </Text>
+              </View>
+            )}
             {!salidaSelected && salidaSuggestions.length > 0 && (
               <View style={styles.suggestionsBox}>
                 {salidaSuggestions.map(s => (
@@ -356,26 +376,22 @@ export default function CargarScreen() {
 
             <Text style={styles.label}>{t('product.salidaMotivo')} *</Text>
             <View style={styles.chipsContent}>
-              <TouchableOpacity
-                style={[styles.chip, salidaMotivo === 'consumed' && styles.chipActive]}
-                onPress={() => setSalidaMotivo('consumed')}
-              >
-                <Text style={[styles.chipText, salidaMotivo === 'consumed' && styles.chipTextActive]}>
-                  {t('product.salidaMotivoConsumido')}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.chip, salidaMotivo === 'expired' && styles.chipActive]}
-                onPress={() => setSalidaMotivo('expired')}
-              >
-                <Text style={[styles.chipText, salidaMotivo === 'expired' && styles.chipTextActive]}>
-                  {t('product.salidaMotivoVencido')}
-                </Text>
-              </TouchableOpacity>
+              {EXIT_REASONS.map(reason => (
+                <TouchableOpacity
+                  key={reason}
+                  testID={`salida-motivo-${reason}`}
+                  style={[styles.chip, salidaMotivo === reason && styles.chipActive]}
+                  onPress={() => setSalidaMotivo(reason)}
+                >
+                  <Text style={[styles.chipText, salidaMotivo === reason && styles.chipTextActive]}>
+                    {t(EXIT_REASON_LABEL_KEY[reason])}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
             <View style={styles.labelRow}>
-              <Text style={styles.labelInRow}>{t('product.historialNotaPlaceholder')}</Text>
+              <Text style={styles.labelInRow}>{t('product.salidaNotaLabel')}</Text>
               <Text testID="salida-nota-counter" style={styles.counter}>{salidaNota.length}/{SALIDA_NOTA_MAX}</Text>
             </View>
             <AppTextInput
@@ -411,6 +427,13 @@ export default function CargarScreen() {
         onClose={() => setExistingVisible(false)}
         onSuccess={handleExistingSuccess}
       />
+      <ExistingProductModal
+        mode="exit"
+        visible={exitScanVisible}
+        onClose={() => setExitScanVisible(false)}
+        onSelectProduct={pickSalidaSuggestion}
+        onPickReceipt={() => { setScanField('receipt'); setScanVisible(true); }}
+      />
       <ScanModal
         visible={scanVisible}
         onClose={() => setScanVisible(false)}
@@ -423,6 +446,7 @@ export default function CargarScreen() {
         onAddMarca={handleAddMarca}
         onApplyToForm={updater => setForm(updater)}
         fixedDocType={scanField}
+        receiptDirection={scanField === 'receipt' ? 'salida' : 'entrada'}
       />
     </KeyboardAvoidingView>
   );
@@ -493,7 +517,9 @@ const styles = StyleSheet.create({
   },
   suggestionText: { fontSize: 14, color: Colors.textPrimary },
   suggestionSubtext: { fontSize: 11, color: Colors.textSecondary, marginTop: 1 },
-  chipsContent: { flexDirection: 'row', gap: 8, marginTop: 6 },
+  selectedInfo: { marginTop: 6, gap: 2 },
+  selectedInfoText: { fontSize: 13, color: Colors.textSecondary },
+  chipsContent: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 6,

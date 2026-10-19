@@ -180,6 +180,42 @@ describe('ocrService.submitSalida', () => {
   });
 });
 
+describe('ocrService.submitSalida - motivo', () => {
+  it('sends the chosen kind of exit', async () => {
+    mockedApi.post.mockResolvedValue({ data: { procesados: 1, fallidos: 0, errores: [] } });
+    await ocrService.submitSalida([{ product_id: 1, quantity: 1 }], 'Kiosco', 'sold');
+    expect(mockedApi.post).toHaveBeenCalledWith('/products/scan/salida', {
+      items: [{ product_id: 1, quantity: 1 }],
+      comercio: 'Kiosco',
+      motivo: 'sold',
+    });
+  });
+});
+
+describe('ocrService.submitEntrada', () => {
+  it('posts the items and comercio to the entry endpoint, and returns the result', async () => {
+    const response = { procesados: 1, fallidos: 0, errores: [] };
+    mockedApi.post.mockResolvedValue({ data: response });
+
+    const result = await ocrService.submitEntrada([{ product_id: 1, quantity: 2 }], 'Kiosco Don Juan');
+
+    expect(result).toEqual(response);
+    expect(mockedApi.post).toHaveBeenCalledWith('/products/scan/entrada', {
+      items: [{ product_id: 1, quantity: 2 }],
+      comercio: 'Kiosco Don Juan',
+    });
+  });
+
+  it('sends comercio as undefined when not provided', async () => {
+    mockedApi.post.mockResolvedValue({ data: { procesados: 0, fallidos: 0, errores: [] } });
+    await ocrService.submitEntrada([{ product_id: 1, quantity: 1 }]);
+    expect(mockedApi.post).toHaveBeenCalledWith('/products/scan/entrada', {
+      items: [{ product_id: 1, quantity: 1 }],
+      comercio: undefined,
+    });
+  });
+});
+
 describe('getScanErrorMessage', () => {
   it('returns a friendly message for a 503', () => {
     const err = { response: { status: 503, data: { detail: 'raw gateway error' } } };

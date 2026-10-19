@@ -4,6 +4,8 @@
  * Los 4 `doc_type` soportados por el backend, y la forma exacta del borrador
  * que arma `ocr_draft.to_scan_result`.
  */
+import { ExitReason } from './product';
+
 export type ScanDocType = 'product_label' | 'expiry_date' | 'receipt' | 'barcode';
 
 export const SCAN_DOC_TYPES: ScanDocType[] = [
@@ -18,6 +20,9 @@ export const SCAN_DOC_TYPES: ScanDocType[] = [
 export const GENERAL_SCAN_DOC_TYPES: ScanDocType[] = ['product_label', 'receipt'];
 
 export type FieldScanDocType = 'expiry_date' | 'barcode';
+
+// Tipos con los que el escaneo puede abrirse directo, sin preguntar qué se va a escanear
+export type FixedScanDocType = FieldScanDocType | 'receipt';
 
 export type ScanJobStatus = 'queued' | 'processing' | 'done' | 'failed';
 
@@ -83,6 +88,12 @@ export interface SalidaOCRItem {
 }
 
 export interface SalidaOCRRequest {
+  items: SalidaOCRItem[];
+  comercio?: string;
+  motivo?: ExitReason;
+}
+
+export interface EntradaOCRRequest {
   items: SalidaOCRItem[];
   comercio?: string;
 }

@@ -51,10 +51,13 @@ export interface ProductDefaults {
   last_ubicacion?: string;
 }
 
+// Motivos de una salida de stock
+export type ExitReason = 'consumed' | 'expired' | 'sold' | 'rented';
+
 export interface ConsumptionEvent {
   id: number;
   quantity: number;
-  event_type: 'consumed' | 'expired' | 'restocked';
+  event_type: ExitReason | 'restocked';
   consumed_at: string;
   note?: string;
   actor_email?: string;

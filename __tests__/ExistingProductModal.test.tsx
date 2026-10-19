@@ -485,3 +485,92 @@ describe('ExistingProductModal - by label', () => {
     expect(screen.getByTestId('existing-label-name-input').props.value).toBe('');
   });
 });
+
+describe('ExistingProductModal - exit mode (scan for a stock exit)', () => {
+  const setupExit = () => {
+    const onClose = jest.fn();
+    const onSelectProduct = jest.fn();
+    const onPickReceipt = jest.fn();
+    render(
+      <ExistingProductModal visible mode="exit" onClose={onClose} onSelectProduct={onSelectProduct} onPickReceipt={onPickReceipt} />,
+    );
+    return { onClose, onSelectProduct, onPickReceipt };
+  };
+
+  it('is titled "Escanear imágenes" and offers barcode, label and invoice or receipt, in that order', () => {
+    setupExit();
+    expect(screen.getByText('Escanear imágenes')).toBeTruthy();
+    expect(screen.getByText('¿Qué estás por escanear?')).toBeTruthy();
+    const tree = JSON.stringify(screen.toJSON());
+    const order = ['Código de barras', 'Etiqueta de producto', 'Factura o remito'].map(label => tree.indexOf(label));
+    expect(order.every(i => i > 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(screen.queryByTestId('existing-method-name')).toBeNull();
+  });
+
+  it('hands the invoice or receipt over to the receipt scan and closes this window', () => {
+    const { onPickReceipt, onClose } = setupExit();
+    fireEvent.press(screen.getByTestId('existing-method-receipt'));
+    expect(onPickReceipt).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('by barcode: reads, lets the user fix the code, and returns the chosen product to the exit form', async () => {
+    mockedProducts.getProductsByBarcode.mockResolvedValue([LECHE, LECHE_2]);
+    const { onSelectProduct, onClose } = setupExit();
+    fireEvent.press(screen.getByTestId('existing-method-barcode'));
+    await scanWith(scanned('barcode', baseDraft({ codigo_barras: '7791234567898' })));
+    expect(screen.getByTestId('existing-barcode-input').props.value).toBe('7791234567898');
+    await confirmEdit();
+    expect(screen.getByTestId('existing-option-product-2')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('existing-option-product-2'));
+    expect(onSelectProduct).toHaveBeenCalledWith(LECHE_2);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(mockedProducts.restockProduct).not.toHaveBeenCalled();
+  });
+
+  it('by barcode: explains there is no product with that code and lets the user edit it again', async () => {
+    mockedProducts.getProductsByBarcode.mockResolvedValue([]);
+    const { onSelectProduct } = setupExit();
+    fireEvent.press(screen.getByTestId('existing-method-barcode'));
+    await scanWith(scanned('barcode', baseDraft({ codigo_barras: '7791234567898' })));
+    await confirmEdit();
+    expect(screen.getByText('No existe un producto con el código de barras ingresado en el inventario. Corregí el código y volvé a confirmar.')).toBeTruthy();
+    expect(screen.getByTestId('existing-barcode-input')).toBeTruthy();
+    expect(onSelectProduct).not.toHaveBeenCalled();
+  });
+
+  it('by label: shows what was read, lets the name be fixed and returns the chosen product to the exit form', async () => {
+    mockedProducts.suggestProducts.mockResolvedValue([LECHE, LECHE_2]);
+    const { onSelectProduct, onClose } = setupExit();
+    fireEvent.press(screen.getByTestId('existing-method-label'));
+    await scanWith(scanned('product_label', baseDraft({ nombre: 'Leche entera', marca: 'Ser' })));
+    expect(screen.getByText('Información leída de la etiqueta')).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId('existing-label-name-input'), 'Leche');
+    await confirmEdit();
+    expect(mockedProducts.suggestProducts).toHaveBeenCalledWith('Leche');
+    fireEvent.press(screen.getByTestId('existing-option-product-1'));
+    expect(onSelectProduct).toHaveBeenCalledWith(LECHE);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('by label: explains there are no similar products and lets the name be edited again', async () => {
+    mockedProducts.suggestProducts.mockResolvedValue([]);
+    setupExit();
+    fireEvent.press(screen.getByTestId('existing-method-label'));
+    await scanWith(scanned('product_label', baseDraft({ nombre: 'Algo raro' })));
+    await confirmEdit();
+    expect(screen.getByText('No existe ningún producto con un nombre parecido a "Algo raro" en el inventario. Corregí el nombre y volvé a confirmar.')).toBeTruthy();
+    expect(screen.getByTestId('existing-label-name-input')).toBeTruthy();
+  });
+
+  it('never asks for a stock to add: that is chosen back in the exit form', async () => {
+    mockedProducts.getProductsByBarcode.mockResolvedValue([LECHE]);
+    setupExit();
+    fireEvent.press(screen.getByTestId('existing-method-barcode'));
+    await scanWith(scanned('barcode', baseDraft({ codigo_barras: '7791234567898' })));
+    await confirmEdit();
+    fireEvent.press(screen.getByTestId('existing-option-product-1'));
+    expect(screen.queryByTestId('existing-stock-input')).toBeNull();
+  });
+});

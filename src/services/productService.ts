@@ -1,5 +1,5 @@
 import api from './api';
-import { ConsumptionEvent, Product, ProductCreate, ProductDefaults, ProductSuggestion } from '../types/product';
+import { ConsumptionEvent, ExitReason, Product, ProductCreate, ProductDefaults, ProductSuggestion } from '../types/product';
 
 export interface ProductFilters {
   search?: string;
@@ -69,7 +69,7 @@ export const productService = {
   async registerEvent(
     productId: number,
     quantity: number,
-    eventType: 'consumed' | 'expired',
+    eventType: ExitReason,
     note?: string
   ): Promise<{ event_type: string; quantity: number; remaining_stock: number }> {
     const { data } = await api.post(`/products/${productId}/events`, {
@@ -89,7 +89,7 @@ export const productService = {
     productId: number,
     eventId: number,
     quantity: number,
-    eventType: 'consumed' | 'expired' | 'restocked',
+    eventType: ExitReason | 'restocked',
     note?: string
   ): Promise<{ event_type: string; quantity: number; remaining_stock: number }> {
     const { data } = await api.put(`/products/${productId}/events/${eventId}`, {

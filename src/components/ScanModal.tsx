@@ -14,8 +14,9 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { ocrService, getScanErrorMessage } from '@/services/ocrService';
-import { ProductCreate, ProductSuggestion } from '@/types/product';
-import { FieldScanDocType, GENERAL_SCAN_DOC_TYPES, ProductMatch, SalidaOCRResult, ScanDocType, ScanState } from '@/types/ocr';
+import { ExitReason, ProductCreate, ProductSuggestion } from '@/types/product';
+import { EXIT_REASONS, EXIT_REASON_LABEL_KEY } from '@/utils/exitReasons';
+import { FixedScanDocType, GENERAL_SCAN_DOC_TYPES, ProductMatch, SalidaOCRResult, ScanDocType, ScanState } from '@/types/ocr';
 import {
   applyMatchToForm,
   applySuggestionToForm,
@@ -40,7 +41,7 @@ const BARCODE_LIST_MAX_HEIGHT = 3.5 * (BARCODE_ROW_HEIGHT + BARCODE_ROW_GAP);
 
 type Step = 'doc-type' | 'source' | 'processing' | 'review' | 'receipt-result';
 
-export type ScanSuccessKind = 'created' | 'merged' | 'updated' | 'salida';
+export type ScanSuccessKind = 'created' | 'merged' | 'updated' | 'salida' | 'restocked';
 
 interface Props {
   visible: boolean;
@@ -58,10 +59,15 @@ interface Props {
    */
   onApplyToForm?: (updater: (form: Partial<ProductCreate>) => Partial<ProductCreate>) => void;
   /**
-   * Si se indica (fecha de vencimiento o código de barras), el modal no pregunta qué se va a escanear:
-   * arranca directamente en "elegí cómo cargar la foto" con el título de ese campo.
+   * Si se indica (fecha de vencimiento, código de barras o comprobante), el modal no pregunta qué se va a
+   * escanear: arranca directamente en "elegí cómo cargar la foto" con el título de ese tipo.
    */
-  fixedDocType?: FieldScanDocType | null;
+  fixedDocType?: FixedScanDocType | null;
+  /**
+   * Qué hace un comprobante escaneado: "entrada" suma el stock de sus renglones a productos ya cargados y
+   * "salida" lo descuenta (con el motivo que elija el usuario). Las dos lógicas no se mezclan.
+   */
+  receiptDirection?: 'entrada' | 'salida';
 }
 
 const DOC_TYPE_ICONS: Record<ScanDocType, keyof typeof Ionicons.glyphMap> = {
@@ -83,10 +89,18 @@ export default function ScanModal({
   onAddMarca,
   onApplyToForm,
   fixedDocType = null,
+  receiptDirection = 'salida',
 }: Props) {
   const { t } = useTranslation();
   // Primer paso del modal: elegir el tipo de documento, o directamente la foto si el tipo ya está definido
   const firstStep: Step = fixedDocType ? 'source' : 'doc-type';
+  const scanTitle = fixedDocType === 'expiry_date'
+    ? t('scan.titleExpiry')
+    : fixedDocType === 'barcode'
+      ? t('scan.titleBarcode')
+      : fixedDocType === 'receipt'
+        ? t('scan.titleReceipt')
+        : t('scan.title');
 
   const [step, setStep] = useState<Step>(firstStep);
   const [docType, setDocType] = useState<ScanDocType | null>(fixedDocType);
@@ -112,6 +126,7 @@ export default function ScanModal({
   const [lineSearchQuery, setLineSearchQuery] = useState('');
   const [lineSearchResults, setLineSearchResults] = useState<ProductSuggestion[]>([]);
   const [receiptResult, setReceiptResult] = useState<SalidaOCRResult | null>(null);
+  const [receiptMotivo, setReceiptMotivo] = useState<ExitReason>('consumed');
 
   const cancelledRef = useRef(false);
 
@@ -178,6 +193,7 @@ export default function ScanModal({
     setLineSearchQuery('');
     setLineSearchResults([]);
     setReceiptResult(null);
+    setReceiptMotivo('consumed');
   }
 
   const handleClose = () => {
@@ -310,16 +326,21 @@ export default function ScanModal({
     handleClose();
   };
 
+  const isEntrada = receiptDirection === 'entrada';
+
   const handleConfirmReceipt = async () => {
     const items = buildSalidaItems(lines);
     if (items.length === 0) {
-      setConfirmError(t('scan.receiptNoItemsSelected'));
+      setConfirmError(t(isEntrada ? 'scan.receiptNoItemsSelectedEntrada' : 'scan.receiptNoItemsSelected'));
       return;
     }
     setConfirmError(null);
     setConfirming(true);
     try {
-      const result = await ocrService.submitSalida(items, scanResult?.comprobante?.comercio);
+      const comercio = scanResult?.comprobante?.comercio;
+      const result = isEntrada
+        ? await ocrService.submitEntrada(items, comercio)
+        : await ocrService.submitSalida(items, comercio, receiptMotivo);
       setReceiptResult(result);
       setStep('receipt-result');
     } catch (err: unknown) {
@@ -330,7 +351,7 @@ export default function ScanModal({
   };
 
   const handleReceiptDone = () => {
-    onSuccess('salida');
+    onSuccess(isEntrada ? 'restocked' : 'salida');
     handleClose();
   };
 
@@ -586,7 +607,9 @@ export default function ScanModal({
                 testID={`receipt-toggle-${index}`}
               >
                 <Text style={styles.receiptToggleText}>
-                  {line.productId != null ? t('scan.receiptExclude') : t('scan.receiptInclude')}
+                  {line.productId != null
+                    ? t(isEntrada ? 'scan.receiptExcludeEntrada' : 'scan.receiptExclude')
+                    : t(isEntrada ? 'scan.receiptIncludeEntrada' : 'scan.receiptInclude')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -631,8 +654,27 @@ export default function ScanModal({
             )}
           </View>
         ))}
+        {!isEntrada && (
+          <View>
+            <Text style={styles.sectionTitle}>{t('product.salidaMotivo')}</Text>
+            <View style={styles.chipsContent}>
+              {EXIT_REASONS.map(reason => (
+                <TouchableOpacity
+                  key={reason}
+                  testID={`receipt-motivo-${reason}`}
+                  style={[styles.chip, receiptMotivo === reason && styles.chipActive]}
+                  onPress={() => setReceiptMotivo(reason)}
+                >
+                  <Text style={[styles.chipText, receiptMotivo === reason && styles.chipTextActive]}>
+                    {t(EXIT_REASON_LABEL_KEY[reason])}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
         <TouchableOpacity style={styles.confirmButton} onPress={handleConfirmReceipt} disabled={confirming} testID="confirm-receipt">
-          <Text style={styles.confirmButtonText}>{confirming ? t('scan.confirming') : t('scan.receiptSubmit')}</Text>
+          <Text style={styles.confirmButtonText}>{confirming ? t('scan.confirming') : t(isEntrada ? 'scan.receiptSubmitEntrada' : 'scan.receiptSubmit')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.backLink} onPress={resetAll}>
           <Text style={styles.backLinkText}>{t('scan.scanAnother')}</Text>
@@ -651,7 +693,7 @@ export default function ScanModal({
   const renderReceiptResult = () => (
     <View style={styles.centered}>
       <Ionicons name="checkmark-circle" size={56} color={Colors.primary} />
-      <Text style={styles.sectionTitle}>{t('scan.receiptResultTitle')}</Text>
+      <Text style={styles.sectionTitle}>{t(isEntrada ? 'scan.receiptResultTitleEntrada' : 'scan.receiptResultTitle')}</Text>
       {receiptResult && (
         <Text style={styles.hintText}>
           {t('scan.receiptResultSummary', { procesados: receiptResult.procesados, fallidos: receiptResult.fallidos })}
@@ -693,7 +735,7 @@ export default function ScanModal({
       sheetTestID="scan-sheet"
     >
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>{fixedDocType === 'expiry_date' ? t('scan.titleExpiry') : fixedDocType === 'barcode' ? t('scan.titleBarcode') : t('scan.title')}</Text>
+        <Text style={styles.headerTitle}>{scanTitle}</Text>
         <TouchableOpacity onPress={handleClose} testID="scan-modal-close">
           <Ionicons name="close" size={24} color={Colors.textPrimary} />
         </TouchableOpacity>

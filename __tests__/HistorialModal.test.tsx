@@ -166,6 +166,18 @@ describe('HistorialModal', () => {
     expect(screen.queryByText(BLOCKED)).toBeNull();
   });
 
+  it('labels sales and rentals in the history rows', async () => {
+    mockedProducts.getConsumptionHistory.mockResolvedValue([
+      event({ id: 1, event_type: 'sold' }),
+      event({ id: 2, event_type: 'rented' }),
+      event({ id: 3, event_type: 'expired' }),
+    ]);
+    render(<HistorialModal product={product} visible onClose={jest.fn()} onChanged={jest.fn()} />);
+    await waitFor(() => expect(screen.getByText('Vendido')).toBeTruthy());
+    expect(screen.getByText('Alquilado')).toBeTruthy();
+    expect(screen.getByText('Vencido')).toBeTruthy();
+  });
+
   describe('edit form depends on the kind of record', () => {
     const openEdit = async (events: ConsumptionEvent[]) => {
       mockedProducts.getConsumptionHistory.mockResolvedValue(events);
@@ -203,6 +215,23 @@ describe('HistorialModal', () => {
       expect(screen.queryByText('Entrada')).toBeNull();
       expect(screen.getByText('Motivo')).toBeTruthy();
       expect(screen.getByPlaceholderText('Motivo (Opcional)')).toBeTruthy();
+    });
+
+    it('an exit can be switched to any of the four reasons, including Vendido and Alquilado', async () => {
+      await openEdit([event({ id: 9, event_type: 'consumed', quantity: 2 })]);
+      expect(screen.getByText('Vendido')).toBeTruthy();
+      expect(screen.getByText('Alquilado')).toBeTruthy();
+      fireEvent.press(screen.getByTestId('historial-motivo-rented'));
+      await act(async () => {
+        fireEvent.press(screen.getByText('Guardar'));
+      });
+      expect(mockedProducts.updateConsumptionEvent).toHaveBeenCalledWith(1, 9, 2, 'rented', '');
+    });
+
+    it('an entry does not offer the exit reasons, Vendido and Alquilado included', async () => {
+      await openEdit([event({ id: 7, event_type: 'restocked', quantity: 5 })]);
+      expect(screen.queryByText('Vendido')).toBeNull();
+      expect(screen.queryByText('Alquilado')).toBeNull();
     });
   });
 
