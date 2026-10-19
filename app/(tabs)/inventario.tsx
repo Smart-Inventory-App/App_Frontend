@@ -34,10 +34,16 @@ import TopBanner from '@/components/TopBanner';
 
 const SORT_FIELDS = ['nombre', 'stock', 'vencimiento', 'categoria'] as const;
 
+// La lista se muestra de a páginas: los primeros 20 productos y, con "Cargar más", 10 más cada vez
+export const FIRST_PAGE_SIZE = 20;
+export const NEXT_PAGE_SIZE = 10;
+
 export default function InventarioScreen() {
   const { t } = useTranslation();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
@@ -70,23 +76,57 @@ export default function InventarioScreen() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const load = useCallback(async () => {
+  // Filtros y orden elegidos: la lista y las páginas siguientes se piden con los mismos
+  const currentFilters = useCallback(() => ({
+    search: search || undefined,
+    categoria: selectedCategoria ?? undefined,
+    ubicacion: selectedUbicacion ?? undefined,
+    sort_by: sortField ?? undefined,
+    sort_dir: sortDir,
+  }), [search, selectedCategoria, selectedUbicacion, sortField, sortDir]);
+
+  // Para ignorar una respuesta vieja si mientras tanto cambiaron los filtros o se recargó la lista
+  const requestRef = useRef(0);
+  const loadedCountRef = useRef(0);
+  loadedCountRef.current = products.length;
+
+  // Pide la primera página (20 productos). Al recargar después de un cambio se pide lo que ya estaba cargado.
+  const load = useCallback(async (keep = 0) => {
+    const request = ++requestRef.current;
+    const limit = Math.max(FIRST_PAGE_SIZE, keep);
     setLoading(true);
+    setLoadingMore(false);
     try {
-      const data = await productService.getProducts({
-        search: search || undefined,
-        categoria: selectedCategoria ?? undefined,
-        ubicacion: selectedUbicacion ?? undefined,
-        sort_by: sortField ?? undefined,
-        sort_dir: sortDir,
-      });
+      const data = await productService.getProducts({ ...currentFilters(), limit, offset: 0 });
+      if (request !== requestRef.current) return;
       setProducts(data);
+      setHasMore(data.length === limit);
     } catch {
-      Alert.alert('Error', t('inventory.loadError'));
+      if (request === requestRef.current) Alert.alert('Error', t('inventory.loadError'));
     } finally {
-      setLoading(false);
+      if (request === requestRef.current) setLoading(false);
     }
-  }, [search, selectedCategoria, selectedUbicacion, sortField, sortDir, t]);
+  }, [currentFilters, t]);
+
+  // Suma los 10 productos que siguen a los ya cargados, sin repetir ninguno
+  const loadMore = async () => {
+    if (loadingMore || loading) return;
+    const request = requestRef.current;
+    setLoadingMore(true);
+    try {
+      const data = await productService.getProducts({ ...currentFilters(), limit: NEXT_PAGE_SIZE, offset: products.length });
+      if (request !== requestRef.current) return;
+      setProducts(prev => {
+        const known = new Set(prev.map(p => p.id));
+        return [...prev, ...data.filter(p => !known.has(p.id))];
+      });
+      setHasMore(data.length === NEXT_PAGE_SIZE);
+    } catch {
+      if (request === requestRef.current) Alert.alert('Error', t('inventory.loadError'));
+    } finally {
+      if (request === requestRef.current) setLoadingMore(false);
+    }
+  };
 
   const loadFilterOptions = useCallback(async () => {
     try {
@@ -351,6 +391,18 @@ export default function InventarioScreen() {
           keyExtractor={item => String(item.id)}
           renderItem={renderItem}
           contentContainerStyle={{ padding: 16 }}
+          ListFooterComponent={hasMore ? (
+            <TouchableOpacity
+              testID="inventory-load-more"
+              style={[styles.loadMoreBtn, loadingMore && styles.loadMoreBtnDisabled]}
+              disabled={loadingMore}
+              onPress={loadMore}
+            >
+              {loadingMore
+                ? <ActivityIndicator testID="inventory-more-loading" size="small" color={Colors.primary} />
+                : <Text style={styles.loadMoreText}>{t('inventory.loadMore')}</Text>}
+            </TouchableOpacity>
+          ) : null}
         />
       )}
 
@@ -421,7 +473,7 @@ export default function InventarioScreen() {
         product={historialProduct}
         visible={!!historialProduct}
         onClose={() => setHistorialProduct(null)}
-        onChanged={load}
+        onChanged={() => load(loadedCountRef.current)}
       />
 
       {banner && (
@@ -494,8 +546,10 @@ const styles = StyleSheet.create({
   item: {
     backgroundColor: '#fff',
     borderRadius: 10,
-    padding: 12,
-    marginBottom: 10,
+    // Un poco más bajas que las entradas de las demás listas de la app
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
     elevation: 1,
@@ -503,11 +557,23 @@ const styles = StyleSheet.create({
   itemImage: { width: 44, height: 44, borderRadius: 8, marginRight: 12 },
   itemInfo: { flex: 1 },
   itemName: { fontSize: 15, fontWeight: 'bold', color: Colors.textPrimary },
-  itemSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
-  itemRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 12 },
+  loadMoreBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 10,
+    padding: 12,
+    backgroundColor: '#fff',
+    marginTop: 4,
+  },
+  loadMoreBtnDisabled: { opacity: 0.6 },
+  loadMoreText: { color: Colors.primary, fontWeight: '600', fontSize: 14 },
+  itemSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 1 },
+  itemRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 12 },
   itemDetail: { fontSize: 12, color: Colors.textSecondary },
-  itemActions: { flexDirection: 'column', gap: 8 },
-  actionBtn: { padding: 6 },
+  itemActions: { flexDirection: 'column', gap: 4 },
+  actionBtn: { padding: 4 },
   dotLabel: { width: 10, height: 10, borderRadius: 5 },
   labelGreen: { backgroundColor: '#2db7a3' },
   labelYellow: { backgroundColor: '#fbbc05' },

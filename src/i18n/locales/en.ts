@@ -139,6 +139,7 @@ export default {
     search: 'Search by name or brand...',
     empty: 'You have no products loaded',
     noResults: 'No results',
+    loadMore: 'Load more',
     deleteTitle: 'Delete product',
     deleteAction: 'Delete',
     deleteConfirm: 'Delete the product {{name}}?\nThis action cannot be undone.',

@@ -15,11 +15,14 @@ interface Props {
   /** Si se indica `onToggle`, aparece a la derecha una casilla para incluir o sacar el producto de una suma. */
   selected?: boolean;
   onToggle?: (product: Product) => void;
-  /** Si se indica, muestra debajo de los datos la fecha de carga del producto, resaltada. */
+  /** Si se indica, muestra arriba de la fila, pegada a la esquina superior izquierda, la fecha de carga del producto, resaltada. */
   showLoadDate?: boolean;
   /** Alto fijo de la fila: así todas las de un listado miden lo mismo (los textos largos se cortan en un renglón). */
   height?: number;
 }
+
+// Alto de las filas del listado de "Stock total de producto": todas miden lo mismo
+export const LOT_ROW_HEIGHT = 124;
 
 // Color del punto según lo cerca que está el vencimiento (el mismo criterio que el listado de Inventario)
 const statusColor = (product: Product): 'green' | 'yellow' | 'red' => {
@@ -44,6 +47,15 @@ export default function ProductLotRow({ product, onPress, selected = false, onTo
 
   return (
     <View testID={`lot-row-${product.id}`} style={[styles.item, height !== undefined && { height }]}>
+      {showLoadDate && product.created_at ? (
+        <View testID={`lot-loaded-${product.id}`} style={styles.loadDate}>
+          <Ionicons name="time-outline" size={12} color={Colors.primary} />
+          <Text style={styles.loadDateText}>
+            {t('home.loadDate')}: {formatArgentinaShort(product.created_at)}
+          </Text>
+        </View>
+      ) : null}
+      <View style={styles.mainRow}>
       <ProductImage uri={product.imagen_url} style={styles.image} />
       <TouchableOpacity
         testID={`lot-info-${product.id}`}
@@ -64,14 +76,6 @@ export default function ProductLotRow({ product, onPress, selected = false, onTo
           {product.vencimiento ? <Text style={styles.detail}>Vence: {product.vencimiento}</Text> : null}
           <View testID={`lot-status-${product.id}`} style={dotStyle} />
         </View>
-        {showLoadDate && product.created_at ? (
-          <View testID={`lot-loaded-${product.id}`} style={styles.loadDate}>
-            <Ionicons name="time-outline" size={12} color={Colors.primary} />
-            <Text style={styles.loadDateText}>
-              {t('home.loadDate')}: {formatArgentinaShort(product.created_at)}
-            </Text>
-          </View>
-        ) : null}
       </TouchableOpacity>
       {onToggle && (
         <TouchableOpacity
@@ -91,6 +95,7 @@ export default function ProductLotRow({ product, onPress, selected = false, onTo
           />
         </TouchableOpacity>
       )}
+      </View>
     </View>
   );
 }
@@ -101,10 +106,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
     marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
     elevation: 1,
   },
+  mainRow: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   image: { width: 44, height: 44, borderRadius: 8, marginRight: 12 },
   info: { flex: 1 },
   check: { marginLeft: 8 },
@@ -117,7 +121,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'flex-start',
     gap: 4,
-    marginTop: 6,
+    marginBottom: 8,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,

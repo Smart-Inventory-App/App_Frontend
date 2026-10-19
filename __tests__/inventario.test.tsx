@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Ionicons } from '@expo/vector-icons';
 import InventarioScreen from '../app/(tabs)/inventario';
@@ -597,5 +597,107 @@ describe('InventarioScreen - header', () => {
     expect(tree.indexOf('header-home')).toBeLessThan(tree.indexOf('"Inventario"'));
     fireEvent.press(screen.getByTestId('header-home'));
     expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/');
+  });
+});
+
+const manyProducts = (from: number, count: number) =>
+  Array.from({ length: count }, (_, i) => product({ id: from + i, nombre: `Producto ${from + i}` }));
+
+describe('InventarioScreen - paginated list', () => {
+  it('asks only for the first 20 products', async () => {
+    mockedProducts.getProducts.mockResolvedValue(manyProducts(1, 20));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Producto 1')).toBeTruthy());
+    expect(mockedProducts.getProducts).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 20, offset: 0 }));
+  });
+
+  it('shows "Cargar más" under a full page and asks for 10 more after the ones already loaded', async () => {
+    mockedProducts.getProducts.mockResolvedValueOnce(manyProducts(1, 20)).mockResolvedValueOnce(manyProducts(21, 10));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByTestId('inventory-load-more')).toBeTruthy());
+    expect(screen.getByText('Cargar más')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('inventory-load-more'));
+
+    await waitFor(() => expect(screen.getByText('Producto 21')).toBeTruthy());
+    expect(mockedProducts.getProducts).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 10, offset: 20 }));
+    expect(screen.getByText('Producto 1')).toBeTruthy();
+  });
+
+  it('keeps the same filters when asking for more', async () => {
+    mockedProducts.getProducts.mockResolvedValue(manyProducts(1, 20));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByTestId('inventory-load-more')).toBeTruthy());
+    fireEvent.press(screen.getByText('Lacteos'));
+    await waitFor(() =>
+      expect(mockedProducts.getProducts).toHaveBeenLastCalledWith(expect.objectContaining({ categoria: 'Lacteos', limit: 20, offset: 0 })),
+    );
+    await waitFor(() => expect(screen.getByTestId('inventory-load-more')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('inventory-load-more'));
+
+    await waitFor(() =>
+      expect(mockedProducts.getProducts).toHaveBeenLastCalledWith(expect.objectContaining({ categoria: 'Lacteos', limit: 10, offset: 20 })),
+    );
+  });
+
+  it('hides "Cargar más" once a page comes back with fewer products than requested', async () => {
+    mockedProducts.getProducts.mockResolvedValueOnce(manyProducts(1, 20)).mockResolvedValueOnce(manyProducts(21, 4));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByTestId('inventory-load-more')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('inventory-load-more'));
+
+    await waitFor(() => expect(screen.getByText('Producto 24')).toBeTruthy());
+    expect(screen.queryByTestId('inventory-load-more')).toBeNull();
+  });
+
+  it('does not show "Cargar más" when everything fits in the first page', async () => {
+    mockedProducts.getProducts.mockResolvedValue(manyProducts(1, 5));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Producto 1')).toBeTruthy());
+    expect(screen.queryByTestId('inventory-load-more')).toBeNull();
+  });
+
+  it('never repeats a product that the next page sends again', async () => {
+    mockedProducts.getProducts.mockResolvedValueOnce(manyProducts(1, 20)).mockResolvedValueOnce(manyProducts(20, 10));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByTestId('inventory-load-more')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('inventory-load-more'));
+
+    await waitFor(() => expect(screen.getByText('Producto 29')).toBeTruthy());
+    expect(screen.getAllByText('Producto 20')).toHaveLength(1);
+  });
+
+  it('shows an alert when the next page fails, and lets the user try again', async () => {
+    mockedProducts.getProducts.mockResolvedValueOnce(manyProducts(1, 20)).mockRejectedValueOnce(new Error('boom'));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByTestId('inventory-load-more')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('inventory-load-more'));
+
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('Error', expect.any(String)));
+    await waitFor(() => expect(screen.getByTestId('inventory-load-more')).toBeTruthy());
+    expect(screen.getByText('Producto 20')).toBeTruthy();
+  });
+
+  it('makes each entry a bit lower than the entries of the other lists', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const entry = StyleSheet.flatten(screen.getByTestId('product-info-1').parent?.props.style);
+    expect(entry.paddingVertical).toBeLessThan(12);
+    expect(entry.marginBottom).toBeLessThan(10);
+  });
+
+  it('shows the product names at the same size as in the other lists', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product({ marca: 'Sancor' })]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const name = StyleSheet.flatten(screen.getByText('Leche').props.style);
+    const brand = StyleSheet.flatten(screen.getByText('Sancor').props.style);
+    expect(name.fontSize).toBe(15);
+    expect(name.fontSize).toBeGreaterThan(brand.fontSize);
   });
 });

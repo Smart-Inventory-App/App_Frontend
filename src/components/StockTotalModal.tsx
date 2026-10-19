@@ -7,7 +7,7 @@ import { Colors } from '@/constants/colors';
 import AppTextInput from '@/components/AppTextInput';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import ProductDetailModal, { GeneralAlertRules } from '@/components/ProductDetailModal';
-import ProductLotRow from '@/components/ProductLotRow';
+import ProductLotRow, { LOT_ROW_HEIGHT } from '@/components/ProductLotRow';
 import ScreenHeader from '@/components/ScreenHeader';
 import { productService } from '@/services/productService';
 import { Product, ProductGroupDetail, ProductGroupKey, ProductGroupSummary } from '@/types/product';
@@ -156,6 +156,7 @@ export default function StockTotalModal({ visible, onClose, initial, generalRule
             onPress={setDetailProduct}
             selected={selectedIds.has(product.id)}
             onToggle={toggleProduct}
+            height={LOT_ROW_HEIGHT}
           />
         ))}
       </View>

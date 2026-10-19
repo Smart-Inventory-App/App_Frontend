@@ -143,6 +143,7 @@ export default {
     search: 'Buscar por nombre o marca...',
     empty: 'No tenés productos cargados',
     noResults: 'Sin resultados',
+    loadMore: 'Cargar más',
     deleteTitle: 'Eliminar producto',
     deleteAction: 'Eliminar',
     deleteConfirm: '¿Eliminar el producto {{name}}?\nEsta acción no se puede deshacer.',

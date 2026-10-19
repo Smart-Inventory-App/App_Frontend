@@ -107,16 +107,25 @@ describe('ProductLotRow', () => {
     expect(screen.queryByTestId('lot-loaded-4')).toBeNull();
   });
 
-  it('shows the load date below the data, highlighted, in Argentine time', () => {
+  it('shows the load date in the top left corner of the row, highlighted, in Argentine time', () => {
     const { Colors } = require('../src/constants/colors');
     render(<ProductLotRow product={lot({ created_at: '2026-10-05T15:30:00Z' })} onPress={jest.fn()} showLoadDate />);
     expect(screen.getByText('Fecha de carga: 05/10/2026 12:30')).toBeTruthy();
     const tree = JSON.stringify(screen.toJSON());
-    expect(tree.indexOf('Stock: ')).toBeLessThan(tree.indexOf('lot-loaded-4'));
+    expect(tree.indexOf('lot-loaded-4')).toBeLessThan(tree.indexOf('Leche'));
+    expect(tree.indexOf('lot-loaded-4')).toBeLessThan(tree.indexOf('Stock: '));
     const pill = StyleSheet.flatten(screen.getByTestId('lot-loaded-4').props.style);
     expect(pill.borderRadius).toBeGreaterThan(0);
     const text = StyleSheet.flatten(screen.getByText('Fecha de carga: 05/10/2026 12:30').props.style);
     expect(text.color).toBe(Colors.primary);
+  });
+
+  it('keeps the load date in its own row, stuck to the top left like the reason of a change', () => {
+    render(<ProductLotRow product={lot({ created_at: '2026-10-05T15:30:00Z' })} onPress={jest.fn()} showLoadDate />);
+    const pill = StyleSheet.flatten(screen.getByTestId('lot-loaded-4').props.style);
+    expect(pill.alignSelf).toBe('flex-start');
+    expect(pill.marginBottom).toBeGreaterThan(0);
+    expect(StyleSheet.flatten(screen.getByTestId('lot-row-4').props.style).flexDirection).toBeUndefined();
   });
 
   it('shows nothing when the product has no load date', () => {

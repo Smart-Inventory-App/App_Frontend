@@ -25,6 +25,12 @@ describe('productService', () => {
     expect(mockedApi.get).toHaveBeenCalledWith('/products/', { params: { search: 'leche' } });
   });
 
+  it('getProducts forwards the page (limit and offset) to the API', async () => {
+    mockedApi.get.mockResolvedValue({ data: [] });
+    await productService.getProducts({ sort_by: 'nombre', limit: 10, offset: 20 });
+    expect(mockedApi.get).toHaveBeenCalledWith('/products/', { params: { sort_by: 'nombre', limit: 10, offset: 20 } });
+  });
+
   it('getProducts works without filters', async () => {
     mockedApi.get.mockResolvedValue({ data: [] });
     await productService.getProducts();

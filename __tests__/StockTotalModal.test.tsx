@@ -178,6 +178,14 @@ describe('StockTotalModal - search by name', () => {
     expect(screen.getByTestId('stock-total-lots').props.children).toBe('1 producto con el mismo nombre y categoría');
   });
 
+  it('gives every product of the list the same height', async () => {
+    open();
+    await pick();
+    const heights = ['lot-row-1', 'lot-row-2', 'lot-row-3'].map(id => StyleSheet.flatten(screen.getByTestId(id).props.style).height);
+    expect(heights[0]).toBeGreaterThan(0);
+    expect(new Set(heights).size).toBe(1);
+  });
+
   it('lists every product found below the summary, under the title "Productos encontrados"', async () => {
     open();
     await pick();

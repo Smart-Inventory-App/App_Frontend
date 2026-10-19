@@ -18,6 +18,9 @@ export interface ProductFilters {
   ubicacion?: string;
   sort_by?: 'nombre' | 'stock' | 'vencimiento' | 'categoria';
   sort_dir?: 'asc' | 'desc';
+  /** Para pedir de a páginas: cuántos productos traer y cuántos saltear. Sin `limit` trae todos. */
+  limit?: number;
+  offset?: number;
 }
 
 export interface ProductFilterOptions {
