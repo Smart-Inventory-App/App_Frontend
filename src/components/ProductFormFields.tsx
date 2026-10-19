@@ -341,7 +341,9 @@ export default function ProductFormFields({
       <Text style={styles.sectionLabel}>{t('product.alertasTitle')}</Text>
       <View style={styles.alertRow}>
         <View style={styles.alertField}>
-          <Text style={styles.label}>{t('product.stockMinimo')}</Text>
+          <View testID="alert-label-box-stock-minimo" style={styles.alertLabelBox}>
+            <Text style={[styles.label, styles.alertLabel]}>{t('product.stockMinimo')}</Text>
+          </View>
           <TextInput
             style={styles.input}
             placeholder={t('product.defaultPlaceholder')}
@@ -358,7 +360,9 @@ export default function ProductFormFields({
           </Text>
         </View>
         <View style={styles.alertField}>
-          <Text style={styles.label}>{t('product.diasAlertaVencimiento')}</Text>
+          <View testID="alert-label-box-dias" style={styles.alertLabelBox}>
+            <Text style={[styles.label, styles.alertLabel]}>{t('product.diasAlertaVencimiento')}</Text>
+          </View>
           <TextInput
             style={styles.input}
             placeholder={t('product.defaultPlaceholder')}
@@ -483,6 +487,9 @@ const styles = StyleSheet.create({
   },
   alertRow: { flexDirection: 'row', gap: 12 },
   alertField: { flex: 1 },
+  // Reserva dos renglones y apoya el título contra el input: los dos campos quedan a la misma altura aunque un título ocupe más de una línea
+  alertLabelBox: { minHeight: 32, marginTop: 12, justifyContent: 'flex-end' },
+  alertLabel: { lineHeight: 16, marginTop: 0 },
   ruleHint: { fontSize: 11, color: Colors.textSecondary, marginTop: 3 },
   suggestionsBox: {
     marginTop: 4,

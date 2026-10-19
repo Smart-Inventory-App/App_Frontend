@@ -471,6 +471,15 @@ describe('ProductFormFields - labels and placeholders', () => {
     expect(screen.getByTestId('input-ubicacion').props.placeholder).toBe('Ej. Heladera, Alacena A, Freezer');
   });
 
+  it('reserves the same label height in both alert rule fields so the inputs line up, with the title against its input', () => {
+    render(<Wrapper />);
+    const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
+    expect(flat('alert-label-box-stock-minimo').minHeight).toBe(32);
+    expect(flat('alert-label-box-dias').minHeight).toBe(flat('alert-label-box-stock-minimo').minHeight);
+    expect(flat('alert-label-box-stock-minimo').justifyContent).toBe('flex-end');
+    expect(flat('alert-label-box-dias').justifyContent).toBe('flex-end');
+  });
+
   it('shows "Default" in the alert rule fields', () => {
     render(<Wrapper />);
     expect(screen.getAllByPlaceholderText('Default')).toHaveLength(2);
