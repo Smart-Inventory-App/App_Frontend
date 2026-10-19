@@ -75,7 +75,7 @@ jest.mock('@/components/ExistingProductModal', () => {
     return (
       <RNView testID="mock-existing-modal">
         <RNText testID="mock-existing-mode">{String(mode)}</RNText>
-        <TouchableOpacity testID="mock-existing-select" onPress={() => onSelectProduct({ id: 7, nombre: 'Yogur', marca: 'Ser', categoria: 'Lacteos', stock: 5 })}>
+        <TouchableOpacity testID="mock-existing-select" onPress={() => { onSelectProduct({ id: 7, nombre: 'Yogur', marca: 'Ser', categoria: 'Lacteos', stock: 5 }); onClose(); }}>
           <RNText>select</RNText>
         </TouchableOpacity>
         <TouchableOpacity testID="mock-existing-receipt" onPress={() => onPickReceipt()}>
@@ -763,7 +763,7 @@ describe('CargarScreen - salida: motivos y escaneo', () => {
     goToSalida();
     expect(screen.getByText('Escanear imágenes')).toBeTruthy();
     const tree = JSON.stringify(screen.toJSON());
-    expect(tree.indexOf('open-exit-scan-modal')).toBeLessThan(tree.indexOf('Producto *'));
+    expect(tree.indexOf('open-exit-scan-modal')).toBeLessThan(tree.indexOf('Buscá un producto que ya tenés cargado'));
     expect(StyleSheet.flatten(screen.getByTestId('open-exit-scan-modal').props.style).borderRadius).toBe(10);
   });
 
@@ -847,8 +847,10 @@ describe('CargarScreen - salida: datos informativos del producto elegido', () =>
       await jest.advanceTimersByTimeAsync(300);
     });
     jest.useRealTimers();
-    await waitFor(() => expect(screen.getByText(suggestion.nombre)).toBeTruthy());
-    fireEvent.press(screen.getByText(suggestion.nombre));
+    // Con marca, la sugerencia dice "nombre · marca"
+    const label = new RegExp(`^${suggestion.nombre}( · .*)?$`);
+    await waitFor(() => expect(screen.getByText(label)).toBeTruthy());
+    fireEvent.press(screen.getByText(label));
   };
 
   it('shows only the name in the field, with the brand and the stock below it', async () => {
@@ -862,8 +864,8 @@ describe('CargarScreen - salida: datos informativos del producto elegido', () =>
   it('places the info right below the field and above the stock to take out', async () => {
     await pickByName({ id: 1, nombre: 'Leche', marca: 'Ser', categoria: 'Lacteos', stock: 12 });
     const tree = JSON.stringify(screen.toJSON());
-    expect(tree.indexOf('salida-selected-info')).toBeGreaterThan(tree.indexOf('Producto *'));
-    expect(tree.indexOf('salida-selected-info')).toBeLessThan(tree.indexOf('Stock a sacar *'));
+    expect(tree.indexOf('salida-selected-info')).toBeGreaterThan(tree.indexOf('Buscá un producto que ya tenés cargado'));
+    expect(tree.indexOf('salida-selected-info')).toBeLessThan(tree.indexOf('Stock a sacar'));
   });
 
   it('shows just the stock when the product has no brand', async () => {

@@ -25,7 +25,7 @@ describe('HomeHeader', () => {
 
   it('cuts names longer than 20 characters, keeping the first 20 followed by "..."', () => {
     render(<HomeHeader greeting="Bienvenido" name="Maximiliano Alejandro Rodriguez" />);
-    expect(screen.getByTestId('home-name').props.children).toBe('Maximiliano Alejand...');
+    expect(screen.getByTestId('home-name').props.children).toBe('Maximiliano Alejandr...');
   });
 
   it('keeps each line to a single line', () => {

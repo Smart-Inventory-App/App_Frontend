@@ -178,7 +178,7 @@ export default function PerfilScreen() {
       <ScreenHeader title={t('tabs.profile')} onHomePress={() => router.navigate('/(tabs)/')} />
       <KeyboardAwareScrollView style={styles.container} contentContainerStyle={styles.content}>
         {/* Avatar */}
-        <View style={styles.avatarContainer}>
+        <View testID="profile-avatar" style={styles.avatarContainer}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initials}</Text>
           </View>

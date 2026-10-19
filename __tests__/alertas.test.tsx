@@ -176,11 +176,14 @@ describe('AlertasScreen - coming back to the screen', () => {
     render(<AlertasScreen />);
     await waitFor(() => expect(screen.getByText('P1 - Información')).toBeTruthy());
     fireEvent.press(screen.getByTestId('alert-filter-Stocks'));
-    await waitFor(() => expect(screen.queryByText('P1 - Información')).toBeNull());
+    await waitFor(() => expect(mockedAlerts.getStockAlerts).toHaveBeenCalled());
+    expect(StyleSheet.flatten(screen.getByTestId('alert-filter-Stocks').props.style).backgroundColor).toBe(Colors.primary);
+    mockedAlerts.getAlerts.mockClear();
 
     // Salir de la pantalla y volver a entrar: la pestaña sigue montada y se dispara el foco otra vez
     act(() => { mockFocusCallback(); });
 
+    await waitFor(() => expect(mockedAlerts.getAlerts).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByText('P1 - Información')).toBeTruthy());
     expect(screen.getByText('P2 - Información')).toBeTruthy();
     expect(StyleSheet.flatten(screen.getByTestId('alert-filter-Todas').props.style).backgroundColor).toBe(Colors.primary);

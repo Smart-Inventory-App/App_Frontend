@@ -253,7 +253,7 @@ export default function InventarioScreen() {
       color === 'red' && styles.labelRed,
     ];
     return (
-      <View style={styles.item}>
+      <View testID={`product-item-${item.id}`} style={styles.item}>
         <ProductImage uri={item.imagen_url} style={styles.itemImage} />
         <TouchableOpacity
           testID={`product-info-${item.id}`}

@@ -154,7 +154,7 @@ describe('StockTotalModal - search by name', () => {
     expect(mockedProducts.getProductGroup).toHaveBeenCalledWith(expect.objectContaining({ nombre: 'Leche', categoria: 'Lacteos' }));
     expect(screen.getByTestId('stock-total-nombre').props.children).toBe('Leche');
     expect(screen.queryByTestId('stock-total-marca')).toBeNull();
-    expect(screen.getByText('Categoría: Lacteos')).toBeTruthy();
+    expect(within(screen.getByTestId('stock-total-summary')).getByText('Categoría: Lacteos')).toBeTruthy();
     expect(screen.getByTestId('stock-total-value').props.children).toBe('12 unidades');
     expect(screen.getByTestId('stock-total-lots').props.children).toBe('3 productos con el mismo nombre y categoría');
     expect(screen.getByTestId('stock-total-input').props.value).toBe('Leche');

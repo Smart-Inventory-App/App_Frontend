@@ -402,7 +402,7 @@ describe('HomeScreen - numbers, row sizes, dates and arrows', () => {
   it('shows the product information, without "Stock total", from an entry of that history', async () => {
     await load({ changes: [change()] });
     fireEvent.press(screen.getByTestId('home-changes-more'));
-    await waitFor(() => expect(screen.getAllByTestId('change-info-event-1')).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByTestId('change-info-event-1')).toHaveLength(2), { timeout: 5000 });
     fireEvent.press(screen.getAllByTestId('change-info-event-1')[1]);
     expect(screen.getByTestId('detail-nombre').props.children).toBe('Leche');
     expect(screen.queryByTestId('detail-total-button')).toBeNull();

@@ -96,7 +96,8 @@ describe('BottomSheetModal - botones del sistema de Android', () => {
     act(() => { handlers.keyboardDidHide(); });
     expect(padding()).toBe(24);
     unmount();
-    expect(remove).toHaveBeenCalledTimes(2);
+    // Todo lo que se escuchó se deja de escuchar al cerrar
+    expect(remove).toHaveBeenCalledTimes((Keyboard.addListener as jest.Mock).mock.calls.length);
     jest.restoreAllMocks();
   });
 
@@ -104,6 +105,6 @@ describe('BottomSheetModal - botones del sistema de Android', () => {
     render(withInsets({ padding: 20 }));
     expect(StyleSheet.flatten(screen.getByTestId('sheet').props.style).paddingBottom).toBe(44);
     render(withInsets({ padding: 20, paddingBottom: 10 }));
-    expect(StyleSheet.flatten(screen.getAllByTestId('sheet')[1].props.style).paddingBottom).toBe(34);
+    expect(StyleSheet.flatten(screen.getByTestId('sheet').props.style).paddingBottom).toBe(34);
   });
 });

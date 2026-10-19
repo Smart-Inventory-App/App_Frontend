@@ -247,8 +247,7 @@ describe('PerfilScreen', () => {
   it('brings the avatar closer to the banner', async () => {
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
-    const avatar = screen.getByText('AP').parent?.parent;
-    expect(StyleSheet.flatten(avatar?.props.style).marginTop).toBeLessThan(32);
+    expect(StyleSheet.flatten(screen.getByTestId('profile-avatar').props.style).marginTop).toBeLessThan(32);
   });
 
   it('shows the alert check hour in Argentine time (the server keeps it in UTC)', async () => {

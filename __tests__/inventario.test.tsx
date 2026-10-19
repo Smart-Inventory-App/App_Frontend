@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, FlatList, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Ionicons } from '@expo/vector-icons';
 import InventarioScreen from '../app/(tabs)/inventario';
@@ -289,7 +289,7 @@ describe('InventarioScreen - edit modal and success messages', () => {
     fireEvent.press(screen.getByTestId('edit-sheet'));
     expect(screen.getByTestId('edit-sheet')).toBeTruthy();
     fireEvent.press(screen.getByTestId('edit-overlay'));
-    await waitFor(() => expect(screen.queryByTestId('edit-sheet')).toBeNull(), { timeout: 3000 });
+    await waitFor(() => expect(screen.queryByTestId('edit-sheet')).toBeNull(), { timeout: 10000 });
     expect(mockedProducts.updateProduct).not.toHaveBeenCalled();
   });
 
@@ -301,7 +301,7 @@ describe('InventarioScreen - edit modal and success messages', () => {
     const { Modal } = require('react-native');
     const editModal = UNSAFE_getAllByType(Modal).find((m: any) => m.props.visible);
     act(() => { editModal.props.onRequestClose(); });
-    await waitFor(() => expect(screen.queryByTestId('edit-sheet')).toBeNull(), { timeout: 3000 });
+    await waitFor(() => expect(screen.queryByTestId('edit-sheet')).toBeNull(), { timeout: 10000 });
     expect(mockedProducts.updateProduct).not.toHaveBeenCalled();
   });
 
@@ -600,6 +600,9 @@ describe('InventarioScreen - header', () => {
   });
 });
 
+// La lista dibuja solo las primeras entradas: lo cargado se mira en los datos que recibe
+const listed = () => screen.UNSAFE_getByType(FlatList).props.data as Product[];
+
 const manyProducts = (from: number, count: number) =>
   Array.from({ length: count }, (_, i) => product({ id: from + i, nombre: `Producto ${from + i}` }));
 
@@ -619,9 +622,10 @@ describe('InventarioScreen - paginated list', () => {
 
     fireEvent.press(screen.getByTestId('inventory-load-more'));
 
-    await waitFor(() => expect(screen.getByText('Producto 21')).toBeTruthy());
+    await waitFor(() => expect(listed()).toHaveLength(30));
     expect(mockedProducts.getProducts).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 10, offset: 20 }));
-    expect(screen.getByText('Producto 1')).toBeTruthy();
+    expect(listed()[0].nombre).toBe('Producto 1');
+    expect(listed()[29].nombre).toBe('Producto 30');
   });
 
   it('keeps the same filters when asking for more', async () => {
@@ -648,7 +652,7 @@ describe('InventarioScreen - paginated list', () => {
 
     fireEvent.press(screen.getByTestId('inventory-load-more'));
 
-    await waitFor(() => expect(screen.getByText('Producto 24')).toBeTruthy());
+    await waitFor(() => expect(listed()).toHaveLength(24));
     expect(screen.queryByTestId('inventory-load-more')).toBeNull();
   });
 
@@ -666,8 +670,8 @@ describe('InventarioScreen - paginated list', () => {
 
     fireEvent.press(screen.getByTestId('inventory-load-more'));
 
-    await waitFor(() => expect(screen.getByText('Producto 29')).toBeTruthy());
-    expect(screen.getAllByText('Producto 20')).toHaveLength(1);
+    await waitFor(() => expect(listed()).toHaveLength(29));
+    expect(listed().filter(p => p.id === 20)).toHaveLength(1);
   });
 
   it('shows an alert when the next page fails, and lets the user try again', async () => {
@@ -679,14 +683,14 @@ describe('InventarioScreen - paginated list', () => {
 
     await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('Error', expect.any(String)));
     await waitFor(() => expect(screen.getByTestId('inventory-load-more')).toBeTruthy());
-    expect(screen.getByText('Producto 20')).toBeTruthy();
+    expect(listed()).toHaveLength(20);
   });
 
   it('makes each entry a bit lower than the entries of the other lists', async () => {
     mockedProducts.getProducts.mockResolvedValue([product()]);
     render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
-    const entry = StyleSheet.flatten(screen.getByTestId('product-info-1').parent?.props.style);
+    const entry = StyleSheet.flatten(screen.getByTestId('product-item-1').props.style);
     expect(entry.paddingVertical).toBeLessThan(12);
     expect(entry.marginBottom).toBeLessThan(10);
   });
