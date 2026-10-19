@@ -81,3 +81,16 @@ export interface ProductGroupSummary extends ProductGroupKey {
 export interface ProductGroupDetail extends ProductGroupSummary {
   productos: Product[];
 }
+
+// Un cambio del stock de un producto: una entrada, una salida o una modificación al editarlo
+export type StockChangeKind = 'entrada' | 'salida' | 'modificacion';
+
+export interface StockChange {
+  id: string;
+  kind: StockChangeKind;
+  stock_before: number;
+  stock_after: number;
+  quantity: number;
+  occurred_at: string;
+  producto: Product;
+}

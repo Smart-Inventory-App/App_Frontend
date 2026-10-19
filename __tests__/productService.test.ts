@@ -96,6 +96,20 @@ describe('productService', () => {
     expect(mockedApi.post).toHaveBeenCalledWith('/products/3/restock', { quantity: 5 });
   });
 
+  it('getRecentChanges asks for the latest stock changes, five by default', async () => {
+    mockedApi.get.mockResolvedValue({ data: [{ id: 'event-1' }] });
+    await expect(productService.getRecentChanges()).resolves.toEqual([{ id: 'event-1' }]);
+    expect(mockedApi.get).toHaveBeenCalledWith('/products/changes', { params: { limit: 5, offset: 0 } });
+    await productService.getRecentChanges(2);
+    expect(mockedApi.get).toHaveBeenLastCalledWith('/products/changes', { params: { limit: 2, offset: 0 } });
+  });
+
+  it('getRecentChanges can skip the changes already seen to ask for the next page', async () => {
+    mockedApi.get.mockResolvedValue({ data: [] });
+    await productService.getRecentChanges(10, 20);
+    expect(mockedApi.get).toHaveBeenCalledWith('/products/changes', { params: { limit: 10, offset: 20 } });
+  });
+
   it('suggestGroups searches the products grouped by name and category', async () => {
     mockedApi.get.mockResolvedValue({ data: [{ nombre: 'Leche', stock_total: 12 }] });
     await expect(productService.suggestGroups('lec')).resolves.toEqual([{ nombre: 'Leche', stock_total: 12 }]);

@@ -101,4 +101,43 @@ describe('ProductLotRow', () => {
     fireEvent.press(screen.getByTestId('lot-check-4'));
     expect(onPress).not.toHaveBeenCalled();
   });
+
+  it('does not show the load date unless asked to', () => {
+    render(<ProductLotRow product={lot({ created_at: '2026-10-05T15:30:00Z' })} onPress={jest.fn()} />);
+    expect(screen.queryByTestId('lot-loaded-4')).toBeNull();
+  });
+
+  it('shows the load date below the data, highlighted, in Argentine time', () => {
+    const { Colors } = require('../src/constants/colors');
+    render(<ProductLotRow product={lot({ created_at: '2026-10-05T15:30:00Z' })} onPress={jest.fn()} showLoadDate />);
+    expect(screen.getByText('Fecha de carga: 05/10/2026 12:30')).toBeTruthy();
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('Stock: ')).toBeLessThan(tree.indexOf('lot-loaded-4'));
+    const pill = StyleSheet.flatten(screen.getByTestId('lot-loaded-4').props.style);
+    expect(pill.borderRadius).toBeGreaterThan(0);
+    const text = StyleSheet.flatten(screen.getByText('Fecha de carga: 05/10/2026 12:30').props.style);
+    expect(text.color).toBe(Colors.primary);
+  });
+
+  it('shows nothing when the product has no load date', () => {
+    render(<ProductLotRow product={lot({ created_at: undefined })} onPress={jest.fn()} showLoadDate />);
+    expect(screen.queryByTestId('lot-loaded-4')).toBeNull();
+  });
+
+  it('has the height it is given, so every row of a list is the same size', () => {
+    render(<ProductLotRow product={lot()} onPress={jest.fn()} height={150} />);
+    expect(StyleSheet.flatten(screen.getByTestId('lot-row-4').props.style).height).toBe(150);
+  });
+
+  it('adapts to its content when no height is given', () => {
+    render(<ProductLotRow product={lot()} onPress={jest.fn()} />);
+    expect(StyleSheet.flatten(screen.getByTestId('lot-row-4').props.style).height).toBeUndefined();
+  });
+
+  it('cuts long texts in one line only when it has a fixed height', () => {
+    const { rerender } = render(<ProductLotRow product={lot({ nombre: 'Nombre muy largo' })} onPress={jest.fn()} height={150} />);
+    expect(screen.getByText('Nombre muy largo').props.numberOfLines).toBe(1);
+    rerender(<ProductLotRow product={lot({ nombre: 'Nombre muy largo' })} onPress={jest.fn()} />);
+    expect(screen.getByText('Nombre muy largo').props.numberOfLines).toBeUndefined();
+  });
 });

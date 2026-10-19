@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
 import ProductImage from '@/components/ProductImage';
 import { Product } from '@/types/product';
+import { formatArgentinaShort } from '@/utils/datetime';
 import { truncateLabel } from '@/utils/text';
 
 interface Props {
@@ -14,6 +15,10 @@ interface Props {
   /** Si se indica `onToggle`, aparece a la derecha una casilla para incluir o sacar el producto de una suma. */
   selected?: boolean;
   onToggle?: (product: Product) => void;
+  /** Si se indica, muestra debajo de los datos la fecha de carga del producto, resaltada. */
+  showLoadDate?: boolean;
+  /** Alto fijo de la fila: así todas las de un listado miden lo mismo (los textos largos se cortan en un renglón). */
+  height?: number;
 }
 
 // Color del punto según lo cerca que está el vencimiento (el mismo criterio que el listado de Inventario)
@@ -26,9 +31,10 @@ const statusColor = (product: Product): 'green' | 'yellow' | 'red' => {
 };
 
 // Fila de un producto como en el listado de Inventario, sin acciones de edición: imagen, datos principales y estado.
-export default function ProductLotRow({ product, onPress, selected = false, onToggle }: Props) {
+export default function ProductLotRow({ product, onPress, selected = false, onToggle, showLoadDate = false, height }: Props) {
   const { t } = useTranslation();
   const color = statusColor(product);
+  const oneLine = height !== undefined ? 1 : undefined;
   const dotStyle = [
     styles.dot,
     color === 'green' && styles.dotGreen,
@@ -37,7 +43,7 @@ export default function ProductLotRow({ product, onPress, selected = false, onTo
   ];
 
   return (
-    <View testID={`lot-row-${product.id}`} style={styles.item}>
+    <View testID={`lot-row-${product.id}`} style={[styles.item, height !== undefined && { height }]}>
       <ProductImage uri={product.imagen_url} style={styles.image} />
       <TouchableOpacity
         testID={`lot-info-${product.id}`}
@@ -45,11 +51,11 @@ export default function ProductLotRow({ product, onPress, selected = false, onTo
         activeOpacity={0.7}
         onPress={() => onPress(product)}
       >
-        <Text style={styles.name}>{product.nombre}</Text>
-        {product.marca ? <Text style={styles.sub}>{truncateLabel(product.marca)}</Text> : null}
-        <Text style={styles.sub}>{t('inventory.filterCategory')}: {truncateLabel(product.categoria)}</Text>
+        <Text style={styles.name} numberOfLines={oneLine}>{product.nombre}</Text>
+        {product.marca ? <Text style={styles.sub} numberOfLines={oneLine}>{truncateLabel(product.marca)}</Text> : null}
+        <Text style={styles.sub} numberOfLines={oneLine}>{t('inventory.filterCategory')}: {truncateLabel(product.categoria)}</Text>
         {product.ubicacion ? (
-          <Text style={styles.sub}>
+          <Text style={styles.sub} numberOfLines={oneLine}>
             <Ionicons name="location-outline" size={11} /> {truncateLabel(product.ubicacion)}
           </Text>
         ) : null}
@@ -58,6 +64,14 @@ export default function ProductLotRow({ product, onPress, selected = false, onTo
           {product.vencimiento ? <Text style={styles.detail}>Vence: {product.vencimiento}</Text> : null}
           <View testID={`lot-status-${product.id}`} style={dotStyle} />
         </View>
+        {showLoadDate && product.created_at ? (
+          <View testID={`lot-loaded-${product.id}`} style={styles.loadDate}>
+            <Ionicons name="time-outline" size={12} color={Colors.primary} />
+            <Text style={styles.loadDateText}>
+              {t('home.loadDate')}: {formatArgentinaShort(product.created_at)}
+            </Text>
+          </View>
+        ) : null}
       </TouchableOpacity>
       {onToggle && (
         <TouchableOpacity
@@ -98,6 +112,18 @@ const styles = StyleSheet.create({
   sub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
   row: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 12 },
   detail: { fontSize: 12, color: Colors.textSecondary },
+  loadDate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: '#2CC4B426',
+  },
+  loadDateText: { fontSize: 11, fontWeight: '700', color: Colors.primary },
   dot: { width: 10, height: 10, borderRadius: 5 },
   dotGreen: { backgroundColor: '#2db7a3' },
   dotYellow: { backgroundColor: '#fbbc05' },

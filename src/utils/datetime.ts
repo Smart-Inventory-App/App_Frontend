@@ -29,6 +29,15 @@ export function formatArgentinaDateTime(value: string): string {
   return `${time} ${date}`;
 }
 
+// Fecha y hora cortas, en hora argentina: "DD/MM/AAAA HH:mm".
+export function formatArgentinaShort(value: string): string {
+  const utcMs = parseToUtcMs(value);
+  if (utcMs === null) return value;
+  const local = new Date(utcMs + ARGENTINA_OFFSET_MINUTES * 60000);
+  const date = `${pad(local.getUTCDate())}/${pad(local.getUTCMonth() + 1)}/${local.getUTCFullYear()}`;
+  return `${date} ${pad(local.getUTCHours())}:${pad(local.getUTCMinutes())}`;
+}
+
 // Las notas automáticas del backend mencionan "registro #43"; se muestran con la fecha y hora de ese registro.
 export function humanizeEventNote(note: string, events: { id: number; consumed_at: string }[]): string {
   return note.replace(/registro #(\d+)/g, (whole, id) => {

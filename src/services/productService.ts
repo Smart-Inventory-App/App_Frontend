@@ -9,6 +9,7 @@ import {
   ProductGroupKey,
   ProductGroupSummary,
   ProductSuggestion,
+  StockChange,
 } from '../types/product';
 
 export interface ProductFilters {
@@ -52,6 +53,15 @@ export const productService = {
     const { data } = await api.get<ProductGroupDetail>('/products/group', {
       params: { nombre: key.nombre, categoria: key.categoria },
     });
+    return data;
+  },
+
+  /**
+   * Los últimos cambios de stock del usuario (entradas, salidas y modificaciones), del más nuevo al más viejo.
+   * `offset` salta esa cantidad de cambios para pedir las páginas siguientes.
+   */
+  async getRecentChanges(limit = 5, offset = 0): Promise<StockChange[]> {
+    const { data } = await api.get<StockChange[]>('/products/changes', { params: { limit, offset } });
     return data;
   },
 

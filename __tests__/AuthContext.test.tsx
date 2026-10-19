@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { authService } from '@/services/authService';
 import { setAuthToken, setUnauthorizedHandler } from '@/services/api';
 import { clearFlashMessage, peekFlashMessage } from '@/utils/flashMessage';
+import { markWelcomeSeen, resetWelcome, shouldWelcome } from '@/utils/welcomeState';
 import {
   getFirebaseToken,
   registerTokenWithBackend,
@@ -168,5 +169,64 @@ describe('AuthContext', () => {
     render(<AuthProvider><Probe /></AuthProvider>);
     await waitFor(() => expect(screen.getByTestId('loading').props.children).toBe('false'));
     (Platform as any).OS = originalOS;
+  });
+});
+
+describe('AuthContext - welcome message', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(null);
+  });
+
+  it('welcomes the user again after logging in', async () => {
+    mockedAuth.login.mockResolvedValue({ access_token: 'new-token', token_type: 'bearer' });
+    (getFirebaseToken as jest.Mock).mockResolvedValue(null);
+    render(<AuthProvider><Probe /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading').props.children).toBe('false'));
+    markWelcomeSeen();
+    expect(shouldWelcome()).toBe(false);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('login'));
+    });
+
+    expect(shouldWelcome()).toBe(true);
+  });
+
+  it('welcomes the user again after logging in with Google', async () => {
+    mockedAuth.googleLogin.mockResolvedValue({ access_token: 'g-new', token_type: 'bearer' });
+    (getFirebaseToken as jest.Mock).mockResolvedValue(null);
+    render(<AuthProvider><Probe /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading').props.children).toBe('false'));
+    markWelcomeSeen();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('google'));
+    });
+
+    expect(shouldWelcome()).toBe(true);
+  });
+
+  it('starts the welcome again when the session is closed', async () => {
+    (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('stored-token');
+    render(<AuthProvider><Probe /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('authenticated').props.children).toBe('true'));
+    markWelcomeSeen();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('logout'));
+    });
+
+    expect(shouldWelcome()).toBe(true);
+    resetWelcome();
+  });
+
+  it('does not change the welcome when only restoring a stored session', async () => {
+    (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('stored-token');
+    markWelcomeSeen();
+    render(<AuthProvider><Probe /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('authenticated').props.children).toBe('true'));
+    expect(shouldWelcome()).toBe(false);
+    resetWelcome();
   });
 });
