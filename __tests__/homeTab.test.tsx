@@ -349,7 +349,7 @@ describe('HomeScreen - numbers, row sizes, dates and arrows', () => {
     expect(screen.getByTestId('change-after-event-1').props.children).toBe('3.141.912');
   });
 
-  it('gives every change the same height, and every recent product the same height', async () => {
+  it('gives every change the same height, while every recent product adapts to its own data', async () => {
     await load({
       changes: [
         change({ id: 'event-1' }),
@@ -363,8 +363,8 @@ describe('HomeScreen - numbers, row sizes, dates and arrows', () => {
     const height = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style).height;
     expect(height('change-row-event-1')).toBeGreaterThan(0);
     expect(height('change-row-event-1')).toBe(height('change-row-event-2'));
-    expect(height('lot-row-5')).toBeGreaterThan(0);
-    expect(height('lot-row-5')).toBe(height('lot-row-6'));
+    expect(height('lot-row-5')).toBeUndefined();
+    expect(height('lot-row-6')).toBeUndefined();
   });
 
   it('shows the date and time of every change', async () => {

@@ -55,7 +55,7 @@ export default function ProductLotRow({ product, onPress, selected = false, onTo
           </Text>
         </View>
       ) : null}
-      <View style={styles.mainRow}>
+      <View style={[styles.mainRow, height !== undefined && styles.mainRowFill]}>
       <ProductImage uri={product.imagen_url} style={styles.image} />
       <TouchableOpacity
         testID={`lot-info-${product.id}`}
@@ -108,7 +108,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     elevation: 1,
   },
-  mainRow: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  mainRow: { flexDirection: 'row', alignItems: 'center' },
+  mainRowFill: { flex: 1 },
   image: { width: 44, height: 44, borderRadius: 8, marginRight: 12 },
   info: { flex: 1 },
   check: { marginLeft: 8 },

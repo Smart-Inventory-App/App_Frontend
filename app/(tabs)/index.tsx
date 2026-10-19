@@ -22,7 +22,6 @@ import { markWelcomeSeen, shouldWelcome } from '@/utils/welcomeState';
 const LAST_CHANGES = 5;
 const RECENT_PRODUCTS = 3;
 // Alto de cada fila de los listados: todas las de un mismo listado miden lo mismo
-const RECENT_ROW_HEIGHT = 150;
 
 export default function HomeScreen() {
   useFonts({ Figtree_400Regular, Roboto_500Medium });
@@ -158,7 +157,7 @@ export default function HomeScreen() {
               <Text style={styles.empty}>{t('home.noProducts')}</Text>
             ) : (
               recentProducts.map(p => (
-                <ProductLotRow key={p.id} product={p} onPress={setDetailProduct} showLoadDate height={RECENT_ROW_HEIGHT} />
+                <ProductLotRow key={p.id} product={p} onPress={setDetailProduct} showLoadDate />
               ))
             )}
           </>
