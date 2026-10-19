@@ -1,6 +1,7 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
   KeyboardAvoidingView,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -15,6 +16,7 @@ import { productService } from '@/services/productService';
 import { ExitReason, ProductCreate, ProductSuggestion } from '@/types/product';
 import { isoToDisplay } from '@/utils/dateInput';
 import { EXIT_REASONS, EXIT_REASON_LABEL_KEY } from '@/utils/exitReasons';
+import { selectedFirst } from '@/utils/selectedFirst';
 import AppTextInput from '@/components/AppTextInput';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import ProductFormFields from '@/components/ProductFormFields';
@@ -52,7 +54,9 @@ export default function CargarScreen() {
   const [salidaSuggestions, setSalidaSuggestions] = useState<ProductSuggestion[]>([]);
   const [salidaSelected, setSalidaSelected] = useState<ProductSuggestion | null>(null);
   const [salidaCantidad, setSalidaCantidad] = useState('');
-  const [salidaMotivo, setSalidaMotivo] = useState<ExitReason>('consumed');
+  // Sin motivo elegido al principio: hay que elegir uno (tocar el elegido lo deselecciona)
+  const [salidaMotivo, setSalidaMotivo] = useState<ExitReason | null>(null);
+  const motivoChipsRef = useRef<ScrollView>(null);
   const [salidaNota, setSalidaNota] = useState('');
 
   useFocusEffect(useCallback(() => {
@@ -128,6 +132,7 @@ export default function CargarScreen() {
     if (!salidaSelected) return t('product.validationSalidaProducto');
     const n = Number(salidaCantidad);
     if (!salidaCantidad || isNaN(n) || n <= 0) return t('product.validationSalidaCantidad');
+    if (!salidaMotivo) return t('product.validationSalidaMotivo');
     return null;
   };
 
@@ -140,7 +145,7 @@ export default function CargarScreen() {
     setError(null);
     setSaving(true);
     try {
-      await productService.registerEvent(salidaSelected!.id, Number(salidaCantidad), salidaMotivo, salidaNota);
+      await productService.registerEvent(salidaSelected!.id, Number(salidaCantidad), salidaMotivo!, salidaNota);
       setMerged(false);
       setSuccess(true);
     } catch (err: unknown) {
@@ -163,7 +168,7 @@ export default function CargarScreen() {
     setSalidaQuery('');
     setSalidaSelected(null);
     setSalidaCantidad('');
-    setSalidaMotivo('consumed');
+    setSalidaMotivo(null);
     setSalidaNota('');
     setSuccess(false);
     setMerged(false);
@@ -389,20 +394,32 @@ export default function CargarScreen() {
             />
 
             <Text style={styles.label}>{t('product.salidaMotivo')} *</Text>
-            <View style={styles.chipsContent}>
-              {EXIT_REASONS.map(reason => (
+            {/* Se desliza hacia los costados si los botones no entran; el elegido pasa al principio */}
+            <ScrollView
+              ref={motivoChipsRef}
+              testID="salida-motivo-scroll"
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              style={styles.motivoScroll}
+              contentContainerStyle={styles.motivoChips}
+            >
+              {selectedFirst(EXIT_REASONS, reason => reason === salidaMotivo).map(reason => (
                 <TouchableOpacity
                   key={reason}
                   testID={`salida-motivo-${reason}`}
-                  style={[styles.chip, salidaMotivo === reason && styles.chipActive]}
-                  onPress={() => setSalidaMotivo(reason)}
+                  style={[styles.chip, styles.motivoChip, salidaMotivo === reason && styles.chipActive]}
+                  onPress={() => {
+                    setSalidaMotivo(salidaMotivo === reason ? null : reason);
+                    motivoChipsRef.current?.scrollTo?.({ x: 0, animated: true });
+                  }}
                 >
                   <Text style={[styles.chipText, salidaMotivo === reason && styles.chipTextActive]}>
                     {t(EXIT_REASON_LABEL_KEY[reason])}
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
 
             <View style={styles.labelRow}>
               <Text style={styles.labelInRow}>{t('product.salidaNotaLabel')}</Text>
@@ -557,6 +574,10 @@ const styles = StyleSheet.create({
   infoValueStrong: { fontWeight: '700', color: Colors.primary },
   infoValueEmpty: { color: Colors.placeholder },
   chipsContent: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
+  // Motivos de salida en una sola fila que se desliza hacia los costados
+  motivoScroll: { flexGrow: 0, marginTop: 6 },
+  motivoChips: { flexDirection: 'row', gap: 8, paddingRight: 4 },
+  motivoChip: { flexShrink: 0 },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 6,
