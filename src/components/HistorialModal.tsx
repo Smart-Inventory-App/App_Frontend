@@ -2,20 +2,21 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import AppTextInput from '@/components/AppTextInput';
+import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import BottomSheetModal from '@/components/BottomSheetModal';
 import ConfirmModal from '@/components/ConfirmModal';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
-import { ConsumptionEvent, Product } from '@/types/product';
+import { ConsumptionEvent, ExitReason, Product } from '@/types/product';
+import { EXIT_REASONS, EXIT_REASON_LABEL_KEY } from '@/utils/exitReasons';
 import { formatArgentinaDateTime, humanizeEventNote } from '@/utils/datetime';
 
 const NOTE_MAX = 50;
@@ -34,7 +35,7 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editQuantity, setEditQuantity] = useState('');
-  const [editMotivo, setEditMotivo] = useState<'consumed' | 'expired' | 'restocked'>('consumed');
+  const [editMotivo, setEditMotivo] = useState<ExitReason | 'restocked'>('consumed');
   const [editNote, setEditNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [eventToDelete, setEventToDelete] = useState<ConsumptionEvent | null>(null);
@@ -60,8 +61,7 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
 
   const motivoLabel = (type: ConsumptionEvent['event_type']) => {
     if (type === 'restocked') return t('product.historialEntrada');
-    if (type === 'expired') return t('product.salidaMotivoVencido');
-    return t('product.salidaMotivoConsumido');
+    return t(EXIT_REASON_LABEL_KEY[type]);
   };
 
   const startEdit = (event: ConsumptionEvent) => {
@@ -142,7 +142,7 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
       ) : events.length === 0 ? (
         <Text style={styles.emptyText}>{t('product.historialEmpty')}</Text>
       ) : (
-        <ScrollView style={{ maxHeight: 420 }}>
+        <KeyboardAwareScrollView style={{ maxHeight: 420 }}>
           {events.map(event => {
             const isEditing = editingId === event.id;
             return (
@@ -150,39 +150,35 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
                 {isEditing ? (
                   <View style={styles.editForm}>
                     <Text style={styles.editLabel}>{t('product.historialUnidades')}</Text>
-                    <TextInput
+                    <AppTextInput
                       style={styles.editInput}
                       keyboardType="numeric"
                       value={editQuantity}
                       maxLength={STOCK_MAX_DIGITS}
                       onChangeText={v => setEditQuantity(v.replace(/[^0-9]/g, ''))}
                     />
-                    {/* Una entrada solo cambia unidades y motivo; una salida también puede pasar de consumido a vencido */}
+                    {/* Una entrada solo cambia unidades y motivo; una salida también puede cambiar de motivo */}
                     {event.event_type !== 'restocked' && (
                     <View style={styles.editMotivoRow}>
-                      <TouchableOpacity
-                        style={[styles.motivoChip, editMotivo === 'consumed' && styles.motivoChipActive]}
-                        onPress={() => setEditMotivo('consumed')}
-                      >
-                        <Text style={[styles.motivoChipText, editMotivo === 'consumed' && styles.motivoChipTextActive]}>
-                          {t('product.salidaMotivoConsumido')}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.motivoChip, editMotivo === 'expired' && styles.motivoChipActive]}
-                        onPress={() => setEditMotivo('expired')}
-                      >
-                        <Text style={[styles.motivoChipText, editMotivo === 'expired' && styles.motivoChipTextActive]}>
-                          {t('product.salidaMotivoVencido')}
-                        </Text>
-                      </TouchableOpacity>
+                      {EXIT_REASONS.map(reason => (
+                        <TouchableOpacity
+                          key={reason}
+                          testID={`historial-motivo-${reason}`}
+                          style={[styles.motivoChip, editMotivo === reason && styles.motivoChipActive]}
+                          onPress={() => setEditMotivo(reason)}
+                        >
+                          <Text style={[styles.motivoChipText, editMotivo === reason && styles.motivoChipTextActive]}>
+                            {t(EXIT_REASON_LABEL_KEY[reason])}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
                     </View>
                     )}
                     <View style={styles.editLabelRow}>
                       <Text style={styles.editLabel}>{t('product.historialMotivo')}</Text>
                       <Text testID="historial-note-counter" style={styles.editCounter}>{editNote.length}/{NOTE_MAX}</Text>
                     </View>
-                    <TextInput
+                    <AppTextInput
                       style={styles.editInput}
                       placeholder={t('product.historialNotaPlaceholder')}
                       placeholderTextColor={Colors.placeholder}
@@ -243,7 +239,7 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
               </View>
             );
           })}
-        </ScrollView>
+        </KeyboardAwareScrollView>
       )}
       <ConfirmModal
         visible={!!eventToDelete}
@@ -306,7 +302,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textPrimary,
   },
-  editMotivoRow: { flexDirection: 'row', gap: 8 },
+  editMotivoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   motivoChip: {
     paddingHorizontal: 12,
     paddingVertical: 5,

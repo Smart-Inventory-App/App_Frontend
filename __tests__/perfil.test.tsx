@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,13 +8,18 @@ import { profileService, UserProfile } from '@/services/profileService';
 import { changeLanguage } from '@/i18n';
 
 const mockReplace = jest.fn();
+const mockNavigate = jest.fn();
 const mockLogout = jest.fn();
+let mockFocusCallback: () => void = () => {};
 
 jest.mock('expo-router', () => {
   const ReactActual = require('react');
   return {
-    router: { replace: (...args: any[]) => mockReplace(...args) },
-    useFocusEffect: (cb: () => void) => ReactActual.useEffect(cb, [cb]),
+    router: { replace: (...args: any[]) => mockReplace(...args), navigate: (...args: any[]) => mockNavigate(...args) },
+    useFocusEffect: (cb: () => void) => {
+      mockFocusCallback = cb;
+      ReactActual.useEffect(cb, [cb]);
+    },
   };
 });
 
@@ -49,6 +55,16 @@ const baseProfile = (overrides: Partial<UserProfile> = {}): UserProfile => ({
   ...overrides,
 });
 
+// Hora UTC que se guarda para una hora de Argentina (UTC-3)
+const utcHourOf = (argentinaHour: number) => (argentinaHour + 3) % 24;
+
+const startEditing = () => {
+  fireEvent.press(screen.UNSAFE_getAllByType(Ionicons).find((n: any) => n.props.name === 'pencil'));
+};
+const startEditingIfNeeded = () => {
+  if (!screen.queryByText('Guardar')) startEditing();
+};
+
 beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
@@ -79,7 +95,7 @@ describe('PerfilScreen', () => {
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
 
-    fireEvent.press(screen.UNSAFE_getAllByType(Ionicons).find((n: any) => n.props.name === 'pencil'));
+    startEditing();
 
     fireEvent.changeText(screen.getByDisplayValue('Ana'), 'Anita');
     mockedProfileService.updateProfile.mockResolvedValue(baseProfile({ firstName: 'Anita' }));
@@ -88,103 +104,185 @@ describe('PerfilScreen', () => {
       fireEvent.press(screen.getByText('Guardar'));
     });
 
-    expect(mockedProfileService.updateProfile).toHaveBeenCalledWith('Anita', 'Perez', 'ana');
+    expect(mockedProfileService.updateProfile).toHaveBeenCalledWith('Anita', 'Perez', 'ana', 7, 7, utcHourOf(5), 'individuo');
     expect(screen.getByText('Perfil actualizado')).toBeTruthy();
+    expect(screen.queryByText('Guardar')).toBeNull();
   });
 
   it('shows an error message when saving the profile fails', async () => {
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
-    fireEvent.press(screen.UNSAFE_getAllByType(Ionicons).find((n: any) => n.props.name === 'pencil'));
+    startEditing();
     mockedProfileService.updateProfile.mockRejectedValue(new Error('boom'));
     await act(async () => {
       fireEvent.press(screen.getByText('Guardar'));
     });
     expect(screen.getByText('No se pudo actualizar el perfil')).toBeTruthy();
+    expect(screen.getByText('Guardar')).toBeTruthy();
   });
 
-  it('cancels editing, discarding changes', async () => {
+  it('cancels editing, discarding every change', async () => {
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
-    fireEvent.press(screen.UNSAFE_getAllByType(Ionicons).find((n: any) => n.props.name === 'pencil'));
+    startEditing();
     fireEvent.changeText(screen.getByDisplayValue('Ana'), 'Cambio');
+    fireEvent.changeText(screen.getByTestId('coverage-days-input'), '30');
+    fireEvent.press(screen.getByTestId('user-type-comercio'));
     fireEvent.press(screen.getByText('Cancelar'));
+    expect(mockedProfileService.updateProfile).not.toHaveBeenCalled();
     expect(screen.getByText('Ana')).toBeTruthy();
+    expect(screen.getByTestId('coverage-days-value').props.children.join('')).toContain('7');
+    expect(screen.getByText('Consumidor final')).toBeTruthy();
+    startEditing();
+    expect(screen.getByTestId('coverage-days-input').props.value).toBe('7');
+    expect(screen.getByDisplayValue('Ana')).toBeTruthy();
   });
 
-  it('changes the user type', async () => {
-    mockedProfileService.updateProfile.mockResolvedValue(baseProfile({ userType: 'comercio' }));
+  it('shows the settings already filled in, not as inputs or buttons', async () => {
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
-    await act(async () => {
-      fireEvent.press(screen.getByText('Comercio'));
-    });
-    expect(mockedProfileService.updateProfile).toHaveBeenCalledWith('Ana', 'Perez', 'ana', undefined, undefined, undefined, 'comercio');
+    expect(screen.queryByTestId('coverage-days-input')).toBeNull();
+    expect(screen.queryByTestId('expiry-days-input')).toBeNull();
+    expect(screen.queryByTestId('alert-hour-input')).toBeNull();
+    expect(screen.queryByTestId('user-type-individuo')).toBeNull();
+    expect(screen.queryByTestId('user-type-comercio')).toBeNull();
+    expect(screen.getByTestId('coverage-days-value').props.children.join('')).toBe('7 días');
+    expect(screen.getByTestId('expiry-days-value').props.children.join('')).toBe('7 días');
+    expect(screen.getByTestId('alert-hour-value').props.children.join('')).toBe('5 hs Hora Argentina (UTC -3)');
   });
 
-  it('reverts the user type when the update fails', async () => {
-    mockedProfileService.updateProfile.mockRejectedValue(new Error('boom'));
+  it('shows the account type in a highlighted box as wide as the screen, which is not a button', async () => {
+    const { Colors } = require('../src/constants/colors');
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ userType: 'comercio' }));
     render(<PerfilScreen />);
-    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
-    await act(async () => {
-      fireEvent.press(screen.getByText('Comercio'));
-    });
-    expect(mockedProfileService.updateProfile).toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByTestId('user-type-display')).toBeTruthy());
+    const box = StyleSheet.flatten(screen.getByTestId('user-type-display').props.style);
+    expect(box.width).toBe('100%');
+    expect(box.backgroundColor).toBe(Colors.primary);
+    expect(box.paddingVertical).toBe(10);
+    expect(screen.getByText('Comercio')).toBeTruthy();
+    expect(screen.queryByText('Consumidor final')).toBeNull();
+    expect(screen.getByTestId('user-type-display').props.onPress).toBeUndefined();
   });
 
-  it('does not re-update the user type when pressing the already-active option', async () => {
+  it('lets the user edit the settings only while editing the profile', async () => {
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    startEditing();
+    expect(screen.getByTestId('coverage-days-input').props.value).toBe('7');
+    expect(screen.getByTestId('expiry-days-input').props.value).toBe('7');
+    expect(screen.getByTestId('alert-hour-input')).toBeTruthy();
+    expect(screen.getByTestId('user-type-individuo')).toBeTruthy();
+    expect(screen.getByTestId('user-type-comercio')).toBeTruthy();
+    expect(screen.queryByTestId('user-type-display')).toBeNull();
+  });
+
+  it('saves the account type and the alert settings together with the personal data', async () => {
+    mockedProfileService.updateProfile.mockResolvedValue(baseProfile({ userType: 'comercio', coverageDaysThreshold: 10 }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    startEditing();
+    fireEvent.press(screen.getByTestId('user-type-comercio'));
+    fireEvent.changeText(screen.getByTestId('coverage-days-input'), '10');
+    fireEvent.changeText(screen.getByTestId('expiry-days-input'), '5');
+    fireEvent.changeText(screen.getByTestId('alert-hour-input'), '9');
+    fireEvent.changeText(screen.getByDisplayValue('Perez'), 'Gomez');
+    fireEvent.changeText(screen.getByDisplayValue('ana'), 'anita');
     await act(async () => {
-      fireEvent.press(screen.getByText('Consumidor final'));
+      fireEvent.press(screen.getByText('Guardar'));
     });
+    expect(mockedProfileService.updateProfile).toHaveBeenCalledWith('Ana', 'Gomez', 'anita', 10, 5, utcHourOf(9), 'comercio');
+    expect(screen.getByText('Comercio')).toBeTruthy();
+    expect(screen.getByTestId('coverage-days-value').props.children.join('')).toContain('10');
+  });
+
+  it('does not save invalid alert settings, and says so', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    for (const [id, value] of [['coverage-days-input', '0'], ['expiry-days-input', ''], ['alert-hour-input', '24']]) {
+      startEditingIfNeeded();
+      fireEvent.changeText(screen.getByTestId(id), value);
+      await act(async () => {
+        fireEvent.press(screen.getByText('Guardar'));
+      });
+      expect(screen.getByText(/Revisá los valores/)).toBeTruthy();
+      fireEvent.press(screen.getByText('Cancelar'));
+    }
     expect(mockedProfileService.updateProfile).not.toHaveBeenCalled();
   });
 
-  it('saves settings on blur with a valid coverage days value', async () => {
-    mockedProfileService.updateProfile.mockResolvedValue(baseProfile({ coverageDaysThreshold: 10 }));
+  it('hides the language, notifications and logout buttons while editing the profile', async () => {
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
-    const input = screen.getAllByDisplayValue('7')[0];
-    fireEvent.changeText(input, '10');
-    await act(async () => {
-      fireEvent(input, 'blur');
-    });
-    expect(mockedProfileService.updateProfile).toHaveBeenCalled();
+    expect(screen.getByText(/Idioma:/)).toBeTruthy();
+    startEditing();
+    expect(screen.queryByText(/Idioma:/)).toBeNull();
+    expect(screen.queryByText(/Notificaciones:/)).toBeNull();
+    expect(screen.queryByText('Cerrar sesión')).toBeNull();
+    fireEvent.press(screen.getByText('Cancelar'));
+    expect(screen.getByText(/Idioma:/)).toBeTruthy();
+    expect(screen.getByText(/Notificaciones:/)).toBeTruthy();
+    expect(screen.getByText('Cerrar sesión')).toBeTruthy();
   });
 
-  it('ignores invalid settings values (no update call)', async () => {
+  it('puts save and cancel below every field, and the settings below the personal data', async () => {
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
-    const input = screen.getAllByDisplayValue('7')[0];
-    fireEvent.changeText(input, '0');
-    await act(async () => {
-      fireEvent(input, 'blur');
-    });
-    expect(mockedProfileService.updateProfile).not.toHaveBeenCalled();
+    startEditing();
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('Usuario')).toBeLessThan(tree.indexOf('coverage-days-input'));
+    expect(tree.indexOf('alert-hour-input')).toBeLessThan(tree.indexOf('Guardar'));
+    expect(tree.indexOf('Guardar')).toBeLessThan(tree.indexOf('Cancelar'));
   });
 
-  it('silently ignores a failure saving settings', async () => {
-    mockedProfileService.updateProfile.mockRejectedValue(new Error('boom'));
+  it('leaves the editing mode when coming back to the screen', async () => {
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
-    const input = screen.getAllByDisplayValue('7')[0];
-    fireEvent.changeText(input, '10');
-    await act(async () => {
-      fireEvent(input, 'blur');
-    });
+    startEditing();
+    expect(screen.getByText('Guardar')).toBeTruthy();
+    act(() => { mockFocusCallback(); });
+    await waitFor(() => expect(screen.queryByText('Guardar')).toBeNull());
   });
 
-  it('toggles the language', async () => {
+  it('brings the avatar closer to the banner', async () => {
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    expect(StyleSheet.flatten(screen.getByTestId('profile-avatar').props.style).marginTop).toBeLessThan(32);
+  });
+
+  it('shows the alert check hour in Argentine time (the server keeps it in UTC)', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ alertCheckHour: 11 }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByTestId('alert-hour-value')).toBeTruthy());
+    expect(screen.getByTestId('alert-hour-value').props.children.join('')).toBe('8 hs Hora Argentina (UTC -3)');
+    startEditing();
+    expect(screen.getByTestId('alert-hour-input').props.value).toBe('8');
+    expect(screen.getByText('hs Hora Argentina (UTC -3)')).toBeTruthy();
+  });
+
+  it('asks for confirmation before changing the language, and changes it once confirmed', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    fireEvent.press(screen.getByText(/Idioma:/));
+    expect(screen.getByText('Se va a cambiar el idioma a English.')).toBeTruthy();
+    expect(changeLanguage).not.toHaveBeenCalled();
     await act(async () => {
-      fireEvent.press(screen.getByText(/Idioma:/));
+      fireEvent.press(screen.getByText('Confirmar'));
     });
     expect(changeLanguage).toHaveBeenCalledWith('en');
+    expect(screen.queryByText('Se va a cambiar el idioma a English.')).toBeNull();
   });
 
-  it('activates notifications', async () => {
+  it('does not change the language when the confirmation is cancelled', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    fireEvent.press(screen.getByText(/Idioma:/));
+    fireEvent.press(screen.getByText('Cancelar'));
+    expect(changeLanguage).not.toHaveBeenCalled();
+    expect(screen.queryByText('Se va a cambiar el idioma a English.')).toBeNull();
+  });
+
+  it('activates notifications right away, without asking', async () => {
     mockedProfileService.activateNotifications.mockResolvedValue(true);
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
@@ -192,21 +290,36 @@ describe('PerfilScreen', () => {
     await act(async () => {
       fireEvent.press(screen.getByText(/Notificaciones:/));
     });
+    expect(screen.queryByText('¿Estás seguro de desactivar las notificaciones?')).toBeNull();
     expect(mockedProfileService.activateNotifications).toHaveBeenCalled();
     await waitFor(() => expect(screen.getByText(/Activadas/)).toBeTruthy());
     await expect(AsyncStorage.getItem('notificationsEnabled')).resolves.toBe('true');
   });
 
-  it('deactivates notifications once already enabled', async () => {
+  it('asks for confirmation before turning the notifications off, and does it once confirmed', async () => {
     await AsyncStorage.setItem('notificationsEnabled', JSON.stringify(true));
     mockedProfileService.deactivateNotifications.mockResolvedValue(true);
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByText(/Activadas/)).toBeTruthy());
+    fireEvent.press(screen.getByText(/Notificaciones:/));
+    expect(screen.getByText('¿Estás seguro de desactivar las notificaciones?')).toBeTruthy();
+    expect(mockedProfileService.deactivateNotifications).not.toHaveBeenCalled();
     await act(async () => {
-      fireEvent.press(screen.getByText(/Notificaciones:/));
+      fireEvent.press(screen.getByText('Confirmar'));
     });
     expect(mockedProfileService.deactivateNotifications).toHaveBeenCalled();
     await waitFor(() => expect(screen.getByText(/Desactivadas/)).toBeTruthy());
+  });
+
+  it('keeps the notifications on when the confirmation is cancelled', async () => {
+    await AsyncStorage.setItem('notificationsEnabled', JSON.stringify(true));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText(/Activadas/)).toBeTruthy());
+    fireEvent.press(screen.getByText(/Notificaciones:/));
+    fireEvent.press(screen.getByText('Cancelar'));
+    expect(mockedProfileService.deactivateNotifications).not.toHaveBeenCalled();
+    expect(screen.getByText(/Activadas/)).toBeTruthy();
+    expect(screen.queryByText('¿Estás seguro de desactivar las notificaciones?')).toBeNull();
   });
 
   it('logs an error when toggling notifications fails', async () => {
@@ -248,5 +361,194 @@ describe('PerfilScreen', () => {
     expect(mockLogout).toHaveBeenCalled();
     expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
     expect(screen.queryByText('¿Estás seguro que querés cerrar sesión?')).toBeNull();
+  });
+});
+
+describe('PerfilScreen - header', () => {
+  it('shows the home icon on the left and "Perfil" on the right, and the icon goes home', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile());
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Perfil')).toBeTruthy());
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('header-home')).toBeLessThan(tree.indexOf('"Perfil"'));
+    fireEvent.press(screen.getByTestId('header-home'));
+    expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/');
+  });
+
+  it('puts the banner above the rest of the profile', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile());
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByTestId('screen-header')).toBeTruthy());
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('screen-header')).toBeLessThan(tree.indexOf('Cerrar sesión'));
+    expect(tree.indexOf('screen-header')).toBeLessThan(tree.indexOf('ana'));
+  });
+});
+
+describe('PerfilScreen - limits of the fields', () => {
+  const LONG = 'Maximiliano Alejandro Rodriguez Gonzalez';
+
+  it('shows the first 20 characters followed by "..." when the name, last name or username are longer', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ firstName: LONG, lastName: LONG, username: LONG }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getAllByText('Maximiliano Alejandr...').length).toBe(3));
+    expect(screen.queryByText(LONG)).toBeNull();
+  });
+
+  it('shows short values untouched, and exactly 20 characters without dots', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ firstName: 'a'.repeat(20), lastName: 'Perez', username: 'ana' }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('a'.repeat(20))).toBeTruthy());
+    expect(screen.getByText('Perez')).toBeTruthy();
+  });
+
+  it('edits a long name with its first 20 characters', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ firstName: LONG }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Maximiliano Alejandr...')).toBeTruthy());
+    startEditing();
+    expect(screen.getByTestId('first-name-input').props.value).toBe('Maximiliano Alejandr');
+    expect(screen.getByTestId('first-name-counter').props.children.join('')).toBe('20/20');
+  });
+
+  it('limits the name, last name and username to 20 characters', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    startEditing();
+    ['first-name-input', 'last-name-input', 'username-input'].forEach(id => {
+      expect(screen.getByTestId(id).props.maxLength).toBe(20);
+    });
+  });
+
+  it('shows a counter under each of the three fields that follows what is typed', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    expect(screen.queryByTestId('first-name-counter')).toBeNull();
+    startEditing();
+    const counter = (id: string) => screen.getByTestId(id).props.children.join('');
+    expect(counter('first-name-counter')).toBe('3/20');
+    expect(counter('last-name-counter')).toBe('5/20');
+    expect(counter('username-counter')).toBe('3/20');
+    fireEvent.changeText(screen.getByTestId('first-name-input'), 'Maria Fernanda Lopez');
+    expect(counter('first-name-counter')).toBe('20/20');
+    fireEvent.changeText(screen.getByTestId('username-input'), '');
+    expect(counter('username-counter')).toBe('0/20');
+  });
+
+  it('says under each number field which numbers are accepted', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    expect(screen.queryByTestId('coverage-days-hint')).toBeNull();
+    startEditing();
+    expect(screen.getByTestId('coverage-days-hint').props.children).toBe('Se aceptan números entre 2 y 90 (inclusive).');
+    expect(screen.getByTestId('expiry-days-hint').props.children).toBe('Se aceptan números entre 2 y 90 (inclusive).');
+    expect(screen.getByTestId('alert-hour-hint').props.children).toBe('Se aceptan números entre 0 y 23 (inclusive).');
+  });
+
+  it('puts the hint right below its own field', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    startEditing();
+    const tree = JSON.stringify(screen.toJSON());
+    const at = (id: string) => tree.indexOf(`"${id}"`);
+    expect(at('coverage-days-input')).toBeLessThan(at('coverage-days-hint'));
+    expect(at('coverage-days-hint')).toBeLessThan(at('expiry-days-input'));
+    expect(at('expiry-days-input')).toBeLessThan(at('expiry-days-hint'));
+    expect(at('expiry-days-hint')).toBeLessThan(at('alert-hour-input'));
+    expect(at('alert-hour-input')).toBeLessThan(at('alert-hour-hint'));
+  });
+
+  it('moves the days and the hour with the up and down buttons, and saves them', async () => {
+    mockedProfileService.updateProfile.mockResolvedValue(baseProfile());
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    startEditing();
+    fireEvent.press(screen.getByTestId('coverage-days-input-up'));
+    fireEvent.press(screen.getByTestId('coverage-days-input-up'));
+    fireEvent.press(screen.getByTestId('expiry-days-input-down'));
+    fireEvent.press(screen.getByTestId('alert-hour-input-up'));
+    expect(screen.getByTestId('coverage-days-input').props.value).toBe('9');
+    expect(screen.getByTestId('expiry-days-input').props.value).toBe('6');
+    expect(screen.getByTestId('alert-hour-input').props.value).toBe('6');
+    await act(async () => {
+      fireEvent.press(screen.getByText('Guardar'));
+    });
+    expect(mockedProfileService.updateProfile).toHaveBeenCalledWith('Ana', 'Perez', 'ana', 9, 6, utcHourOf(6), 'individuo');
+  });
+
+  it('stops at 2 and 90 for the days, and at 0 and 23 for the hour', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    startEditing();
+    fireEvent.changeText(screen.getByTestId('coverage-days-input'), '90');
+    fireEvent.press(screen.getByTestId('coverage-days-input-up'));
+    expect(screen.getByTestId('coverage-days-input').props.value).toBe('90');
+    fireEvent.changeText(screen.getByTestId('expiry-days-input'), '2');
+    fireEvent.press(screen.getByTestId('expiry-days-input-down'));
+    expect(screen.getByTestId('expiry-days-input').props.value).toBe('2');
+    fireEvent.changeText(screen.getByTestId('alert-hour-input'), '23');
+    fireEvent.press(screen.getByTestId('alert-hour-input-up'));
+    expect(screen.getByTestId('alert-hour-input').props.value).toBe('23');
+    fireEvent.changeText(screen.getByTestId('alert-hour-input'), '0');
+    fireEvent.press(screen.getByTestId('alert-hour-input-down'));
+    expect(screen.getByTestId('alert-hour-input').props.value).toBe('0');
+  });
+
+  it.each([
+    ['coverage-days-input', '1'],
+    ['coverage-days-input', '91'],
+    ['expiry-days-input', '0'],
+    ['expiry-days-input', '99'],
+    ['alert-hour-input', '24'],
+  ])('does not save a typed %s of %s, and says so', async (id, value) => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    startEditing();
+    fireEvent.changeText(screen.getByTestId(id), value);
+    await act(async () => {
+      fireEvent.press(screen.getByText('Guardar'));
+    });
+    expect(screen.getByText('Revisá los valores: los días deben estar entre 2 y 90 y la hora entre 0 y 23')).toBeTruthy();
+    expect(mockedProfileService.updateProfile).not.toHaveBeenCalled();
+  });
+
+  it.each(['2', '90'])('saves the day limit %s', async value => {
+    mockedProfileService.updateProfile.mockResolvedValue(baseProfile());
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    startEditing();
+    fireEvent.changeText(screen.getByTestId('coverage-days-input'), value);
+    await act(async () => {
+      fireEvent.press(screen.getByText('Guardar'));
+    });
+    expect(mockedProfileService.updateProfile).toHaveBeenCalled();
+  });
+
+  it('uses 7 days when the saved days are outside 2 to 90, in the view and in the edition', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ coverageDaysThreshold: 1, expiryDaysThreshold: 91 }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByTestId('coverage-days-value')).toBeTruthy());
+    expect(screen.getByTestId('coverage-days-value').props.children.join('')).toBe('7 días');
+    expect(screen.getByTestId('expiry-days-value').props.children.join('')).toBe('7 días');
+    startEditing();
+    expect(screen.getByTestId('coverage-days-input').props.value).toBe('7');
+    expect(screen.getByTestId('expiry-days-input').props.value).toBe('7');
+  });
+
+  it('keeps the saved days when they are inside the range', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ coverageDaysThreshold: 2, expiryDaysThreshold: 90 }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByTestId('coverage-days-value')).toBeTruthy());
+    expect(screen.getByTestId('coverage-days-value').props.children.join('')).toBe('2 días');
+    expect(screen.getByTestId('expiry-days-value').props.children.join('')).toBe('90 días');
+  });
+
+  it('uses the hour 5 when the saved hour is not a valid hour', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ alertCheckHour: undefined as any }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByTestId('alert-hour-value')).toBeTruthy());
+    expect(screen.getByTestId('alert-hour-value').props.children.join('')).toBe('5 hs Hora Argentina (UTC -3)');
+    startEditing();
+    expect(screen.getByTestId('alert-hour-input').props.value).toBe('5');
   });
 });

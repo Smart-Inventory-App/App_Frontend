@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Modal } from 'react-native';
 import ConfirmModal from '../src/components/ConfirmModal';
 
 const baseProps = {
@@ -43,5 +44,13 @@ describe('ConfirmModal', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
     UNSAFE_getAllByType(Modal)[0].props.onRequestClose();
     expect(onCancel).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('ConfirmModal - pantalla completa', () => {
+  it('covers the status bar and the system buttons too', () => {
+    const { UNSAFE_getByType } = render(<ConfirmModal {...baseProps} visible onConfirm={jest.fn()} onCancel={jest.fn()} />);
+    expect(UNSAFE_getByType(Modal).props.statusBarTranslucent).toBe(true);
+    expect(UNSAFE_getByType(Modal).props.navigationBarTranslucent).toBe(true);
   });
 });

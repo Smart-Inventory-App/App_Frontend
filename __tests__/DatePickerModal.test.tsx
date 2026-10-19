@@ -94,3 +94,11 @@ describe('DatePickerModal', () => {
     expect(screen.getByText('Octubre 2026')).toBeTruthy();
   });
 });
+
+describe('DatePickerModal - pantalla completa', () => {
+  it('covers the status bar and the system buttons too', () => {
+    const { UNSAFE_getByType } = render(<DatePickerModal visible value="2026-10-15" onSelect={jest.fn()} onClose={jest.fn()} />);
+    expect(UNSAFE_getByType(Modal).props.statusBarTranslucent).toBe(true);
+    expect(UNSAFE_getByType(Modal).props.navigationBarTranslucent).toBe(true);
+  });
+});

@@ -1,7 +1,8 @@
 import * as ImagePicker from 'expo-image-picker';
 import api from './api';
 import { appendImage } from '../utils/formData';
-import { ScanDocType, ScanState, SalidaOCRItem, SalidaOCRRequest, SalidaOCRResult } from '../types/ocr';
+import { EntradaOCRRequest, ScanDocType, ScanState, SalidaOCRItem, SalidaOCRRequest, SalidaOCRResult } from '../types/ocr';
+import { ExitReason } from '../types/product';
 
 const SCAN_URL = '/products/scan';
 const UPLOAD_TIMEOUT_MS = 30000;
@@ -95,9 +96,16 @@ async function pollJob(jobId: string, options: PollOptions = {}): Promise<ScanSt
   throw new Error('timeout');
 }
 
-async function submitSalida(items: SalidaOCRItem[], comercio?: string | null): Promise<SalidaOCRResult> {
-  const payload: SalidaOCRRequest = { items, comercio: comercio || undefined };
+async function submitSalida(items: SalidaOCRItem[], comercio?: string | null, motivo?: ExitReason): Promise<SalidaOCRResult> {
+  const payload: SalidaOCRRequest = { items, comercio: comercio || undefined, motivo };
   const { data } = await api.post<SalidaOCRResult>(`${SCAN_URL}/salida`, payload);
+  return data;
+}
+
+// Ingresa stock de los productos de un comprobante (la contracara de submitSalida)
+async function submitEntrada(items: SalidaOCRItem[], comercio?: string | null): Promise<SalidaOCRResult> {
+  const payload: EntradaOCRRequest = { items, comercio: comercio || undefined };
+  const { data } = await api.post<SalidaOCRResult>(`${SCAN_URL}/entrada`, payload);
   return data;
 }
 
@@ -136,6 +144,7 @@ export const ocrService = {
   getJob,
   pollJob,
   submitSalida,
+  submitEntrada,
 };
 
 export default ocrService;

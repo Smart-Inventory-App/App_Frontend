@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Image, Alert, StyleSheet } from 'react-native';
 import ProductFormFields from '../src/components/ProductFormFields';
+import { FieldFocusContext } from '../src/components/KeyboardAwareScrollView';
 import { pickFromCamera, pickFromGallery } from '@/services/imageService';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
 
@@ -457,6 +458,84 @@ describe('ProductFormFields - labels and placeholders', () => {
     expect(screen.queryByText(/DD\/MM\/AAAA/)).toBeNull();
     expect(screen.getByTestId('input-vencimiento').props.placeholder).toBe('DD/MM/AAAA');
     expect(screen.getByTestId('input-descripcion').props.placeholder).toBe('Opcional');
+  });
+
+  it('starts the Categoría, Marca and Ubicación placeholders with a capital letter', () => {
+    render(<Wrapper />);
+    fireEvent.press(screen.getByTestId('add-categoria'));
+    expect(screen.getByTestId('input-categoria').props.placeholder).toBe('Ej. Lácteos');
+    fireEvent.press(screen.getByTestId('confirm-categoria'));
+    fireEvent.press(screen.getByTestId('add-marca'));
+    expect(screen.getByTestId('input-marca').props.placeholder).toBe('Opcional');
+    fireEvent.press(screen.getByTestId('confirm-marca'));
+    fireEvent.press(screen.getByTestId('add-ubicacion'));
+    expect(screen.getByTestId('input-ubicacion').props.placeholder).toBe('Ej. Heladera, Alacena A, Freezer');
+  });
+
+  it('reserves the same label height in both alert rule fields so the inputs line up, with the title against its input', () => {
+    render(<Wrapper />);
+    const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
+    expect(flat('alert-label-box-stock-minimo').minHeight).toBe(32);
+    expect(flat('alert-label-box-dias').minHeight).toBe(flat('alert-label-box-stock-minimo').minHeight);
+    expect(flat('alert-label-box-stock-minimo').justifyContent).toBe('flex-end');
+    expect(flat('alert-label-box-dias').justifyContent).toBe('flex-end');
+  });
+
+  it('puts the selected option first and sends it back to its place when deselected', () => {
+    render(<Wrapper categoriaOptions={['Lácteos', 'Limpieza', 'Bebidas']} />);
+    const order = () => {
+      const tree = JSON.stringify(screen.toJSON());
+      return ['Lácteos', 'Limpieza', 'Bebidas'].sort((a, b) => tree.indexOf(a) - tree.indexOf(b));
+    };
+    expect(order()).toEqual(['Lácteos', 'Limpieza', 'Bebidas']);
+    fireEvent.press(screen.getByText('Bebidas'));
+    expect(order()).toEqual(['Bebidas', 'Lácteos', 'Limpieza']);
+    fireEvent.press(screen.getByText('Bebidas'));
+    expect(order()).toEqual(['Lácteos', 'Limpieza', 'Bebidas']);
+  });
+
+  it('tells the screen when any text field is focused', () => {
+    const onFieldFocus = jest.fn();
+    render(
+      <FieldFocusContext.Provider value={onFieldFocus}>
+        <Wrapper />
+      </FieldFocusContext.Provider>,
+    );
+    const ids = ['input-vencimiento', 'input-codigo-barras', 'input-descripcion'];
+    ids.forEach(id => fireEvent(screen.getByTestId(id), 'focus'));
+    fireEvent(screen.getByPlaceholderText('ej. Leche entera 1L'), 'focus');
+    fireEvent(screen.getByPlaceholderText('0'), 'focus');
+    screen.getAllByPlaceholderText('Default').forEach(input => fireEvent(input, 'focus'));
+    fireEvent.press(screen.getByTestId('add-categoria'));
+    fireEvent(screen.getByTestId('input-categoria'), 'focus');
+    expect(onFieldFocus).toHaveBeenCalledTimes(ids.length + 2 + 2 + 1);
+  });
+
+  it('does not show the camera buttons unless the screen can scan', () => {
+    render(<Wrapper />);
+    expect(screen.queryByTestId('scan-expiry')).toBeNull();
+    expect(screen.queryByTestId('scan-barcode')).toBeNull();
+  });
+
+  it('shows a camera button to the right of the calendar and one to the right of the barcode, in the same format', () => {
+    render(<Wrapper onScanField={jest.fn()} />);
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('open-calendar')).toBeLessThan(tree.indexOf('scan-expiry'));
+    expect(tree.indexOf('input-codigo-barras')).toBeLessThan(tree.indexOf('scan-barcode'));
+    const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
+    expect(flat('scan-expiry')).toMatchObject({ width: 40, height: 40, borderRadius: 8, backgroundColor: '#fff' });
+    expect(flat('scan-barcode')).toMatchObject(flat('open-calendar'));
+    expect(flat('scan-expiry')).toMatchObject(flat('open-calendar'));
+    expect(flat('input-codigo-barras').flex).toBe(1);
+  });
+
+  it('asks to scan the expiry date or the barcode when its camera button is pressed', () => {
+    const onScanField = jest.fn();
+    render(<Wrapper onScanField={onScanField} />);
+    fireEvent.press(screen.getByTestId('scan-expiry'));
+    expect(onScanField).toHaveBeenLastCalledWith('expiry_date');
+    fireEvent.press(screen.getByTestId('scan-barcode'));
+    expect(onScanField).toHaveBeenLastCalledWith('barcode');
   });
 
   it('shows "Default" in the alert rule fields', () => {

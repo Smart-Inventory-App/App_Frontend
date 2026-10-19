@@ -1,5 +1,16 @@
 import api from './api';
-import { ConsumptionEvent, Product, ProductCreate, ProductDefaults, ProductSuggestion } from '../types/product';
+import {
+  ConsumptionEvent,
+  ExitReason,
+  Product,
+  ProductCreate,
+  ProductDefaults,
+  ProductGroupDetail,
+  ProductGroupKey,
+  ProductGroupSummary,
+  ProductSuggestion,
+  StockChange,
+} from '../types/product';
 
 export interface ProductFilters {
   search?: string;
@@ -7,6 +18,9 @@ export interface ProductFilters {
   ubicacion?: string;
   sort_by?: 'nombre' | 'stock' | 'vencimiento' | 'categoria';
   sort_dir?: 'asc' | 'desc';
+  /** Para pedir de a páginas: cuántos productos traer y cuántos saltear. Sin `limit` trae todos. */
+  limit?: number;
+  offset?: number;
 }
 
 export interface ProductFilterOptions {
@@ -31,6 +45,29 @@ export const productService = {
     return data;
   },
 
+  /** Productos agrupados por nombre y categoría cuyo nombre contiene `q`, con su stock total. */
+  async suggestGroups(q: string): Promise<ProductGroupSummary[]> {
+    const { data } = await api.get<ProductGroupSummary[]>('/products/groups', { params: { q } });
+    return data;
+  },
+
+  /** Todos los productos con ese nombre y categoría (de cualquier marca) y su stock total. */
+  async getProductGroup(key: ProductGroupKey): Promise<ProductGroupDetail> {
+    const { data } = await api.get<ProductGroupDetail>('/products/group', {
+      params: { nombre: key.nombre, categoria: key.categoria },
+    });
+    return data;
+  },
+
+  /**
+   * Los últimos cambios de stock del usuario (entradas, salidas y modificaciones), del más nuevo al más viejo.
+   * `offset` salta esa cantidad de cambios para pedir las páginas siguientes.
+   */
+  async getRecentChanges(limit = 5, offset = 0): Promise<StockChange[]> {
+    const { data } = await api.get<StockChange[]>('/products/changes', { params: { limit, offset } });
+    return data;
+  },
+
   async getProductsByBarcode(codigo: string): Promise<ProductSuggestion[]> {
     const { data } = await api.get<ProductSuggestion[]>(`/products/by-barcode/${encodeURIComponent(codigo)}/all`);
     return data;
@@ -51,6 +88,12 @@ export const productService = {
     return data;
   },
 
+  /** Suma stock a un producto que el usuario ya tiene cargado. */
+  async restockProduct(id: number, quantity: number): Promise<Product> {
+    const { data } = await api.post<Product>(`/products/${id}/restock`, { quantity });
+    return data;
+  },
+
   async updateProduct(id: number, payload: Partial<ProductCreate>): Promise<Product> {
     const { data } = await api.put<Product>(`/products/${id}`, payload);
     return data;
@@ -63,7 +106,7 @@ export const productService = {
   async registerEvent(
     productId: number,
     quantity: number,
-    eventType: 'consumed' | 'expired',
+    eventType: ExitReason,
     note?: string
   ): Promise<{ event_type: string; quantity: number; remaining_stock: number }> {
     const { data } = await api.post(`/products/${productId}/events`, {
@@ -83,7 +126,7 @@ export const productService = {
     productId: number,
     eventId: number,
     quantity: number,
-    eventType: 'consumed' | 'expired' | 'restocked',
+    eventType: ExitReason | 'restocked',
     note?: string
   ): Promise<{ event_type: string; quantity: number; remaining_stock: number }> {
     const { data } = await api.put(`/products/${productId}/events/${eventId}`, {

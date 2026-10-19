@@ -1,9 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,14 +10,20 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
-import { Product, ProductCreate } from '@/types/product';
+import { profileService } from '@/services/profileService';
+import { Product, ProductCreate, ProductGroupKey } from '@/types/product';
 import { isValidBarcode } from '@/utils/barcode';
 import { truncateLabel } from '@/utils/text';
+import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
+import ProductDetailModal, { GeneralAlertRules } from '@/components/ProductDetailModal';
+import ProductImage from '@/components/ProductImage';
+import StockTotalModal from '@/components/StockTotalModal';
+import { selectedFirst } from '@/utils/selectedFirst';
 import ProductFormFields from '@/components/ProductFormFields';
 import BottomSheetModal from '@/components/BottomSheetModal';
 import ConfirmModal from '@/components/ConfirmModal';
@@ -27,16 +32,29 @@ import HistorialModal from '@/components/HistorialModal';
 import ScreenHeader from '@/components/ScreenHeader';
 import TopBanner from '@/components/TopBanner';
 
+const SORT_FIELDS = ['nombre', 'stock', 'vencimiento', 'categoria'] as const;
+
+// La lista se muestra de a páginas: los primeros 20 productos y, con "Cargar más", 10 más cada vez
+export const FIRST_PAGE_SIZE = 20;
+export const NEXT_PAGE_SIZE = 10;
+
 export default function InventarioScreen() {
   const { t } = useTranslation();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
   const [selectedUbicacion, setSelectedUbicacion] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [historialProduct, setHistorialProduct] = useState<Product | null>(null);
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null);
+  const [generalRules, setGeneralRules] = useState<GeneralAlertRules | null>(null);
+  const [stockTotalVisible, setStockTotalVisible] = useState(false);
+  // Producto con el que se abre "Stock total" cuando se llega desde su ventana de información
+  const [stockTotalInitial, setStockTotalInitial] = useState<ProductGroupKey | null>(null);
   const [editForm, setEditForm] = useState<Partial<ProductCreate>>({});
   const [saving, setSaving] = useState(false);
   const [filterOptions, setFilterOptions] = useState<{ categorias: string[]; ubicaciones: string[]; marcas: string[] }>({
@@ -58,23 +76,57 @@ export default function InventarioScreen() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const load = useCallback(async () => {
+  // Filtros y orden elegidos: la lista y las páginas siguientes se piden con los mismos
+  const currentFilters = useCallback(() => ({
+    search: search || undefined,
+    categoria: selectedCategoria ?? undefined,
+    ubicacion: selectedUbicacion ?? undefined,
+    sort_by: sortField ?? undefined,
+    sort_dir: sortDir,
+  }), [search, selectedCategoria, selectedUbicacion, sortField, sortDir]);
+
+  // Para ignorar una respuesta vieja si mientras tanto cambiaron los filtros o se recargó la lista
+  const requestRef = useRef(0);
+  const loadedCountRef = useRef(0);
+  loadedCountRef.current = products.length;
+
+  // Pide la primera página (20 productos). Al recargar después de un cambio se pide lo que ya estaba cargado.
+  const load = useCallback(async (keep = 0) => {
+    const request = ++requestRef.current;
+    const limit = Math.max(FIRST_PAGE_SIZE, keep);
     setLoading(true);
+    setLoadingMore(false);
     try {
-      const data = await productService.getProducts({
-        search: search || undefined,
-        categoria: selectedCategoria ?? undefined,
-        ubicacion: selectedUbicacion ?? undefined,
-        sort_by: sortField ?? undefined,
-        sort_dir: sortDir,
-      });
+      const data = await productService.getProducts({ ...currentFilters(), limit, offset: 0 });
+      if (request !== requestRef.current) return;
       setProducts(data);
+      setHasMore(data.length === limit);
     } catch {
-      Alert.alert('Error', t('inventory.loadError'));
+      if (request === requestRef.current) Alert.alert('Error', t('inventory.loadError'));
     } finally {
-      setLoading(false);
+      if (request === requestRef.current) setLoading(false);
     }
-  }, [search, selectedCategoria, selectedUbicacion, sortField, sortDir, t]);
+  }, [currentFilters, t]);
+
+  // Suma los 10 productos que siguen a los ya cargados, sin repetir ninguno
+  const loadMore = async () => {
+    if (loadingMore || loading) return;
+    const request = requestRef.current;
+    setLoadingMore(true);
+    try {
+      const data = await productService.getProducts({ ...currentFilters(), limit: NEXT_PAGE_SIZE, offset: products.length });
+      if (request !== requestRef.current) return;
+      setProducts(prev => {
+        const known = new Set(prev.map(p => p.id));
+        return [...prev, ...data.filter(p => !known.has(p.id))];
+      });
+      setHasMore(data.length === NEXT_PAGE_SIZE);
+    } catch {
+      if (request === requestRef.current) Alert.alert('Error', t('inventory.loadError'));
+    } finally {
+      if (request === requestRef.current) setLoadingMore(false);
+    }
+  };
 
   const loadFilterOptions = useCallback(async () => {
     try {
@@ -86,6 +138,13 @@ export default function InventarioScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
   useFocusEffect(useCallback(() => { loadFilterOptions(); }, [loadFilterOptions]));
+
+  // Las reglas generales (Perfil) se muestran en el detalle de los productos que no tienen una propia
+  useFocusEffect(useCallback(() => {
+    profileService.getProfile()
+      .then(profile => setGeneralRules({ coverageDays: profile.coverageDaysThreshold, expiryDays: profile.expiryDaysThreshold }))
+      .catch(() => {});
+  }, []));
 
   const categories = useMemo(() => {
     return [...new Set([...filterOptions.categorias, ...extraCategorias])];
@@ -100,6 +159,13 @@ export default function InventarioScreen() {
   }, [filterOptions.marcas, extraMarcas]);
 
   const handleSearch = (text: string) => setSearchInput(text);
+
+  // El criterio elegido va primero; al quitarlo vuelve a su lugar original
+  const sortFields = useMemo(() => selectedFirst([...SORT_FIELDS], f => f === sortField), [sortField]);
+  const sortChipsRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    sortChipsRef.current?.scrollTo?.({ x: 0, animated: true });
+  }, [sortField]);
 
   const handleSort = (field: typeof sortField) => {
     if (sortField === field) {
@@ -187,12 +253,14 @@ export default function InventarioScreen() {
       color === 'red' && styles.labelRed,
     ];
     return (
-      <View style={styles.item}>
-        <Image
-          source={item.imagen_url ? { uri: item.imagen_url } : require('../../assets/icon.png')}
-          style={styles.itemImage}
-        />
-        <View style={styles.itemInfo}>
+      <View testID={`product-item-${item.id}`} style={styles.item}>
+        <ProductImage uri={item.imagen_url} style={styles.itemImage} />
+        <TouchableOpacity
+          testID={`product-info-${item.id}`}
+          style={styles.itemInfo}
+          activeOpacity={0.7}
+          onPress={() => setDetailProduct(item)}
+        >
           <Text style={styles.itemName}>{item.nombre}</Text>
           {item.marca ? <Text style={styles.itemSub}>{truncateLabel(item.marca)}</Text> : null}
           <Text style={styles.itemSub}>{t('inventory.filterCategory')}: {truncateLabel(item.categoria)}</Text>
@@ -208,7 +276,7 @@ export default function InventarioScreen() {
             ) : null}
             <View style={labelStyle} />
           </View>
-        </View>
+        </TouchableOpacity>
         <View style={styles.itemActions}>
           <TouchableOpacity onPress={() => openEdit(item)} style={styles.actionBtn}>
             <Ionicons name="pencil" size={18} color={Colors.primary} />
@@ -228,7 +296,16 @@ export default function InventarioScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title={t('inventory.title')} />
+      <ScreenHeader title={t('inventory.title')} onHomePress={() => router.navigate('/(tabs)/')} />
+
+      <TouchableOpacity
+        testID="open-stock-total"
+        style={styles.stockTotalBtn}
+        onPress={() => { setStockTotalInitial(null); setStockTotalVisible(true); }}
+      >
+        <Ionicons name="layers-outline" size={18} color={Colors.primary} />
+        <Text style={styles.stockTotalBtnText}>{t('stockTotal.openButton')}</Text>
+      </TouchableOpacity>
 
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={16} color={Colors.placeholder} style={styles.searchIcon} />
@@ -250,12 +327,13 @@ export default function InventarioScreen() {
         <Ionicons name="swap-vertical-outline" size={14} color={Colors.textSecondary} />
         <Text style={styles.sortLabel}>{t('inventory.sortBy')}</Text>
         <ScrollView
+          ref={sortChipsRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.chipsScroll}
           contentContainerStyle={[styles.chipsContent, styles.sortChipsContent]}
         >
-          {(['nombre', 'stock', 'vencimiento', 'categoria'] as const).map(field => {
+          {sortFields.map(field => {
             const active = sortField === field;
             const arrow = active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
             return (
@@ -313,6 +391,18 @@ export default function InventarioScreen() {
           keyExtractor={item => String(item.id)}
           renderItem={renderItem}
           contentContainerStyle={{ padding: 16 }}
+          ListFooterComponent={hasMore ? (
+            <TouchableOpacity
+              testID="inventory-load-more"
+              style={[styles.loadMoreBtn, loadingMore && styles.loadMoreBtnDisabled]}
+              disabled={loadingMore}
+              onPress={loadMore}
+            >
+              {loadingMore
+                ? <ActivityIndicator testID="inventory-more-loading" size="small" color={Colors.primary} />
+                : <Text style={styles.loadMoreText}>{t('inventory.loadMore')}</Text>}
+            </TouchableOpacity>
+          ) : null}
         />
       )}
 
@@ -330,7 +420,7 @@ export default function InventarioScreen() {
             <Ionicons name="close" size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
         </View>
-        <ScrollView contentContainerStyle={styles.modalScrollContent}>
+        <KeyboardAwareScrollView contentContainerStyle={styles.modalScrollContent}>
           <ProductFormFields
             form={editForm}
             onChange={setEditForm}
@@ -341,7 +431,7 @@ export default function InventarioScreen() {
             marcaOptions={marcas}
             onAddMarca={marca => setExtraMarcas(prev => [...new Set([...prev, marca])])}
           />
-        </ScrollView>
+        </KeyboardAwareScrollView>
         <TouchableOpacity
           style={[styles.saveBtn, saving && { opacity: 0.6 }]}
           onPress={handleSaveEdit}
@@ -350,6 +440,25 @@ export default function InventarioScreen() {
           <Text style={styles.saveBtnText}>{saving ? t('inventory.saving') : t('inventory.saveChanges')}</Text>
         </TouchableOpacity>
       </BottomSheetModal>
+
+      {/* Solo muestra los datos del producto: tocar su información abre esta ventana, sin edición */}
+      <ProductDetailModal
+        product={detailProduct}
+        generalRules={generalRules}
+        onClose={() => setDetailProduct(null)}
+        onShowTotal={product => {
+          setDetailProduct(null);
+          setStockTotalInitial({ nombre: product.nombre, categoria: product.categoria });
+          setStockTotalVisible(true);
+        }}
+      />
+
+      <StockTotalModal
+        visible={stockTotalVisible}
+        initial={stockTotalInitial}
+        generalRules={generalRules}
+        onClose={() => setStockTotalVisible(false)}
+      />
 
       <ConfirmModal
         visible={!!productToDelete}
@@ -364,7 +473,7 @@ export default function InventarioScreen() {
         product={historialProduct}
         visible={!!historialProduct}
         onClose={() => setHistorialProduct(null)}
-        onChanged={load}
+        onChanged={() => load(loadedCountRef.current)}
       />
 
       {banner && (
@@ -376,6 +485,20 @@ export default function InventarioScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f2f3f6' },
+  stockTotalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 10,
+    padding: 12,
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 16,
+  },
+  stockTotalBtnText: { color: Colors.primary, fontWeight: '600', fontSize: 14 },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -423,8 +546,10 @@ const styles = StyleSheet.create({
   item: {
     backgroundColor: '#fff',
     borderRadius: 10,
-    padding: 12,
-    marginBottom: 10,
+    // Un poco más bajas que las entradas de las demás listas de la app
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
     elevation: 1,
@@ -432,11 +557,23 @@ const styles = StyleSheet.create({
   itemImage: { width: 44, height: 44, borderRadius: 8, marginRight: 12 },
   itemInfo: { flex: 1 },
   itemName: { fontSize: 15, fontWeight: 'bold', color: Colors.textPrimary },
-  itemSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
-  itemRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 12 },
+  loadMoreBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 10,
+    padding: 12,
+    backgroundColor: '#fff',
+    marginTop: 4,
+  },
+  loadMoreBtnDisabled: { opacity: 0.6 },
+  loadMoreText: { color: Colors.primary, fontWeight: '600', fontSize: 14 },
+  itemSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 1 },
+  itemRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 12 },
   itemDetail: { fontSize: 12, color: Colors.textSecondary },
-  itemActions: { flexDirection: 'column', gap: 8 },
-  actionBtn: { padding: 6 },
+  itemActions: { flexDirection: 'column', gap: 4 },
+  actionBtn: { padding: 4 },
   dotLabel: { width: 10, height: 10, borderRadius: 5 },
   labelGreen: { backgroundColor: '#2db7a3' },
   labelYellow: { backgroundColor: '#fbbc05' },

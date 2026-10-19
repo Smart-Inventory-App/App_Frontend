@@ -1,19 +1,23 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView,
-  Image, ActivityIndicator, Alert,
+  ActivityIndicator, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
+import { FieldScanDocType } from '@/types/ocr';
 import { pickFromGallery, pickFromCamera } from '@/services/imageService';
 import BottomSheetModal from '@/components/BottomSheetModal';
+import { useFieldFocus } from '@/components/KeyboardAwareScrollView';
 import DatePickerModal from '@/components/DatePickerModal';
+import ProductImage from '@/components/ProductImage';
 import { applySuggestionToForm } from '@/utils/ocrDraft';
 import { BARCODE_MAX_DIGITS, describeBarcodeLengths, onlyDigits } from '@/utils/barcode';
 import { displayToIso, formatDateDigits, isoToDisplay } from '@/utils/dateInput';
 import { findSimilarOptions } from '@/utils/optionSearch';
+import { selectedFirst } from '@/utils/selectedFirst';
 import { truncateLabel } from '@/utils/text';
 
 const NOMBRE_MAX = 20;
@@ -31,6 +35,8 @@ interface Props {
   marcaOptions?: string[];
   onAddMarca?: (marca: string) => void;
   suggestNombre?: (q: string) => Promise<ProductSuggestion[]>;
+  /** Si se indica, la fecha de vencimiento y el código de barras muestran un botón de cámara para escanearlos. */
+  onScanField?: (type: FieldScanDocType) => void;
 }
 
 const normalizeToExisting = (value: string, options: string[]): string => {
@@ -48,15 +54,25 @@ interface OptionPickerProps {
   onChange: (value: string | undefined) => void;
   onAdd?: (value: string) => void;
   showLocationIcon?: boolean;
+  onInputFocus?: () => void;
 }
 
 // Campo de selección por chips (categoría, marca, ubicación) con alta de valores nuevos.
 function OptionPicker({
-  label, required, testKey, options, value, placeholder, onChange, onAdd, showLocationIcon,
+  label, required, testKey, options, value, placeholder, onChange, onAdd, showLocationIcon, onInputFocus,
 }: OptionPickerProps) {
   const [adding, setAdding] = useState(false);
+  const chipsRef = useRef<ScrollView>(null);
   const [draft, setDraft] = useState('');
   const similar = useMemo(() => findSimilarOptions(draft, options), [draft, options]);
+
+  // La opción elegida va primero; al deseleccionarla vuelve a su lugar original (el orden de `options`).
+  const ordered = useMemo(() => selectedFirst(options, o => o === value), [options, value]);
+
+  // Vuelve al principio del renglón para que la opción elegida quede a la vista.
+  useEffect(() => {
+    chipsRef.current?.scrollTo?.({ x: 0, animated: true });
+  }, [value]);
 
   const close = () => {
     setAdding(false);
@@ -81,6 +97,7 @@ function OptionPicker({
     <>
       <Text style={styles.label}>{label}{required ? ' *' : ''}</Text>
       <ScrollView
+        ref={chipsRef}
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.chipsScroll}
@@ -92,7 +109,7 @@ function OptionPicker({
             <Ionicons name="add" size={20} color={Colors.primary} />
           </TouchableOpacity>
         )}
-        {options.map(option => (
+        {ordered.map(option => (
           <TouchableOpacity
             key={option}
             style={[styles.chip, value === option && styles.chipActive]}
@@ -114,6 +131,7 @@ function OptionPicker({
               value={draft}
               onChangeText={setDraft}
               autoFocus
+              onFocus={onInputFocus}
               maxLength={OPTION_MAX}
               onSubmitEditing={handleConfirm}
             />
@@ -162,8 +180,11 @@ export default function ProductFormFields({
   marcaOptions = [],
   onAddMarca,
   suggestNombre,
+  onScanField,
 }: Props) {
   const { t } = useTranslation();
+  // Dentro de un KeyboardAwareScrollView, avisa qué campo se está completando para mostrarlo sobre el teclado
+  const onFieldFocus = useFieldFocus() ?? undefined;
   const [vencText, setVencText] = useState(() => isoToDisplay(form.vencimiento));
   const [showCalendar, setShowCalendar] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -230,6 +251,21 @@ export default function ProductFormFields({
 
   const vencInvalid = vencText.length === 10 && displayToIso(vencText) === null;
 
+  // Con el botón de cámara el campo comparte renglón con el botón, igual que el de vencimiento
+  const barcodeInput = (
+    <TextInput
+      testID="input-codigo-barras"
+      style={onScanField ? [styles.input, styles.dateInput] : styles.input}
+      placeholder={t('product.codigoBarrasPlaceholder', { lengths: describeBarcodeLengths(t('product.codigoBarrasOr')) })}
+      placeholderTextColor={Colors.placeholder}
+      keyboardType="number-pad"
+      maxLength={BARCODE_MAX_DIGITS}
+      onFocus={onFieldFocus}
+      value={form.codigo_barras ?? ''}
+      onChangeText={v => set('codigo_barras', onlyDigits(v) || undefined)}
+    />
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.labelRow}>
@@ -242,7 +278,7 @@ export default function ProductFormFields({
         placeholderTextColor={Colors.placeholder}
         value={form.nombre ?? ''}
         onChangeText={v => set('nombre', v)}
-        onFocus={() => setNombreFocused(true)}
+        onFocus={() => { setNombreFocused(true); onFieldFocus?.(); }}
         onBlur={() => setTimeout(() => setNombreFocused(false), 150)}
         maxLength={NOMBRE_MAX}
       />
@@ -277,6 +313,7 @@ export default function ProductFormFields({
         placeholder={t('product.categoriaPlaceholder')}
         onChange={v => set('categoria', v)}
         onAdd={onAddCategoria}
+        onInputFocus={onFieldFocus}
       />
 
       <Text style={styles.label}>{t('product.stock')} *</Text>
@@ -286,6 +323,7 @@ export default function ProductFormFields({
         placeholderTextColor={Colors.placeholder}
         keyboardType="numeric"
         maxLength={STOCK_MAX_DIGITS}
+        onFocus={onFieldFocus}
         value={form.stock !== undefined ? String(form.stock) : ''}
         onChangeText={v => {
           const digits = v.replace(/[^0-9]/g, '');
@@ -301,6 +339,7 @@ export default function ProductFormFields({
         placeholder={t('product.optional')}
         onChange={v => set('marca', v)}
         onAdd={onAddMarca}
+        onInputFocus={onFieldFocus}
       />
 
       <Text style={styles.label}>{t('product.vencimiento')}</Text>
@@ -312,12 +351,23 @@ export default function ProductFormFields({
           placeholderTextColor={Colors.placeholder}
           keyboardType="number-pad"
           maxLength={10}
+          onFocus={onFieldFocus}
           value={vencText}
           onChangeText={handleVencimientoChange}
         />
         <TouchableOpacity testID="open-calendar" style={[styles.squareBtn, styles.calendarBtn]} onPress={() => setShowCalendar(true)}>
           <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
         </TouchableOpacity>
+        {onScanField && (
+          <TouchableOpacity
+            testID="scan-expiry"
+            accessibilityLabel={t('product.scanExpiry')}
+            style={[styles.squareBtn, styles.calendarBtn]}
+            onPress={() => onScanField('expiry_date')}
+          >
+            <Ionicons name="camera-outline" size={20} color={Colors.primary} />
+          </TouchableOpacity>
+        )}
       </View>
       <DatePickerModal
         visible={showCalendar}
@@ -327,26 +377,32 @@ export default function ProductFormFields({
       />
 
       <Text style={styles.label}>{t('product.codigoBarras')}</Text>
-      <TextInput
-        testID="input-codigo-barras"
-        style={styles.input}
-        placeholder={t('product.codigoBarrasPlaceholder', { lengths: describeBarcodeLengths(t('product.codigoBarrasOr')) })}
-        placeholderTextColor={Colors.placeholder}
-        keyboardType="number-pad"
-        maxLength={BARCODE_MAX_DIGITS}
-        value={form.codigo_barras ?? ''}
-        onChangeText={v => set('codigo_barras', onlyDigits(v) || undefined)}
-      />
+      {onScanField ? (
+        <View style={styles.dateRow}>
+          {barcodeInput}
+          <TouchableOpacity
+            testID="scan-barcode"
+            accessibilityLabel={t('product.scanBarcode')}
+            style={[styles.squareBtn, styles.calendarBtn]}
+            onPress={() => onScanField('barcode')}
+          >
+            <Ionicons name="camera-outline" size={20} color={Colors.primary} />
+          </TouchableOpacity>
+        </View>
+      ) : barcodeInput}
 
       <Text style={styles.sectionLabel}>{t('product.alertasTitle')}</Text>
       <View style={styles.alertRow}>
         <View style={styles.alertField}>
-          <Text style={styles.label}>{t('product.stockMinimo')}</Text>
+          <View testID="alert-label-box-stock-minimo" style={styles.alertLabelBox}>
+            <Text style={[styles.label, styles.alertLabel]}>{t('product.stockMinimo')}</Text>
+          </View>
           <TextInput
             style={styles.input}
             placeholder={t('product.defaultPlaceholder')}
             placeholderTextColor={Colors.placeholder}
             keyboardType="numeric"
+            onFocus={onFieldFocus}
             value={form.stock_minimo != null ? String(form.stock_minimo) : ''}
             onChangeText={(v) => {
               const n = parseInt(v, 10);
@@ -358,12 +414,15 @@ export default function ProductFormFields({
           </Text>
         </View>
         <View style={styles.alertField}>
-          <Text style={styles.label}>{t('product.diasAlertaVencimiento')}</Text>
+          <View testID="alert-label-box-dias" style={styles.alertLabelBox}>
+            <Text style={[styles.label, styles.alertLabel]}>{t('product.diasAlertaVencimiento')}</Text>
+          </View>
           <TextInput
             style={styles.input}
             placeholder={t('product.defaultPlaceholder')}
             placeholderTextColor={Colors.placeholder}
             keyboardType="numeric"
+            onFocus={onFieldFocus}
             value={form.dias_alerta_vencimiento != null ? String(form.dias_alerta_vencimiento) : ''}
             onChangeText={(v) => {
               const n = parseInt(v, 10);
@@ -387,6 +446,7 @@ export default function ProductFormFields({
         placeholderTextColor={Colors.placeholder}
         multiline
         numberOfLines={3}
+        onFocus={onFieldFocus}
         value={form.descripcion ?? ''}
         onChangeText={v => set('descripcion', v || undefined)}
         maxLength={DESCRIPCION_MAX}
@@ -400,13 +460,14 @@ export default function ProductFormFields({
         placeholder={t('product.ubicacionPlaceholder')}
         onChange={v => set('ubicacion', v)}
         onAdd={onAddUbicacion}
+        onInputFocus={onFieldFocus}
         showLocationIcon
       />
 
       <Text style={styles.label}>{t('product.imagen')}</Text>
       {form.imagen_url ? (
         <View style={styles.imagePreviewContainer}>
-          <Image source={{ uri: form.imagen_url }} style={styles.imagePreview} resizeMode="cover" />
+          <ProductImage uri={form.imagen_url} style={styles.imagePreview} resizeMode="cover" />
           <TouchableOpacity style={styles.imageChangeBtn} onPress={() => setShowImagePicker(true)} disabled={uploadingImage}>
             {uploadingImage
               ? <ActivityIndicator size="small" color={Colors.primary} />
@@ -483,6 +544,9 @@ const styles = StyleSheet.create({
   },
   alertRow: { flexDirection: 'row', gap: 12 },
   alertField: { flex: 1 },
+  // Reserva dos renglones y apoya el título contra el input: los dos campos quedan a la misma altura aunque un título ocupe más de una línea
+  alertLabelBox: { minHeight: 32, marginTop: 12, justifyContent: 'flex-end' },
+  alertLabel: { lineHeight: 16, marginTop: 0 },
   ruleHint: { fontSize: 11, color: Colors.textSecondary, marginTop: 3 },
   suggestionsBox: {
     marginTop: 4,

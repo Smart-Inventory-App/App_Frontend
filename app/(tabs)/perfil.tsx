@@ -1,23 +1,43 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  ScrollView,
+  KeyboardAvoidingView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import AppTextInput from '@/components/AppTextInput';
+import NumberStepper from '@/components/NumberStepper';
+import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import { router } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import ConfirmModal from '@/components/ConfirmModal';
+import ScreenHeader from '@/components/ScreenHeader';
 import { Colors } from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
 import { changeLanguage, type Language } from '@/i18n';
 import { profileService, UserProfile, UserType } from '@/services/profileService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { truncateLabel } from '@/utils/text';
+import {
+  ALERT_DAYS_MAX,
+  ALERT_DAYS_MIN,
+  CHECK_HOUR_MAX,
+  CHECK_HOUR_MIN,
+  PROFILE_TEXT_MAX,
+  alertDaysOrDefault,
+  checkHourOrDefault,
+  inRange,
+  parseWholeNumber,
+} from '@/utils/profileLimits';
+
+// La hora del chequeo diario se muestra y se elige en hora de Argentina (UTC-3); el servidor la guarda en UTC
+const ARGENTINA_UTC_OFFSET_HOURS = 3;
+const utcToLocal = (utcHour: number) => (utcHour - ARGENTINA_UTC_OFFSET_HOURS + 24) % 24;
+const localToUtc = (localHour: number) => (localHour + ARGENTINA_UTC_OFFSET_HOURS + 24) % 24;
 
 export default function PerfilScreen() {
   const { t, i18n } = useTranslation();
@@ -31,6 +51,8 @@ export default function PerfilScreen() {
   const [username, setUsername] = useState('');
   const [saving, setSaving] = useState(false);
   const [confirmLogoutVisible, setConfirmLogoutVisible] = useState(false);
+  const [pendingLanguage, setPendingLanguage] = useState<Language | null>(null);
+  const [confirmDisableNotifications, setConfirmDisableNotifications] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'error'; msg: string } | null>(null);
 
   const [coverageDaysInput, setCoverageDaysInput] = useState('7');
@@ -39,30 +61,31 @@ export default function PerfilScreen() {
   const [alertCheckHourInput, setAlertCheckHourInput] = useState('8');
   const [userType, setUserType] = useState<UserType>('individuo');
 
-  // Offset en minutos: positivo para zonas oeste de UTC (ej. Buenos Aires = 180)
-  const tzOffsetMinutes = useMemo(() => new Date().getTimezoneOffset(), []);
-  const tzOffsetHours = -tzOffsetMinutes / 60;
-  const tzLabel = `UTC${tzOffsetHours >= 0 ? '+' : ''}${tzOffsetHours}`;
-
-  const utcToLocal = useCallback((utcHour: number) => (utcHour - tzOffsetMinutes / 60 + 24) % 24, [tzOffsetMinutes]);
-  const localToUtc = useCallback((localHour: number) => (localHour + tzOffsetMinutes / 60 + 24) % 24, [tzOffsetMinutes]);
+  // Carga en los campos de edición lo que tiene guardado el perfil
+  const fillForm = useCallback((p: UserProfile) => {
+    // Un nombre más largo que el máximo se edita con sus primeros 20 caracteres
+    setFirstName((p.firstName ?? '').slice(0, PROFILE_TEXT_MAX));
+    setLastName((p.lastName ?? '').slice(0, PROFILE_TEXT_MAX));
+    setUsername((p.username ?? '').slice(0, PROFILE_TEXT_MAX));
+    // Un valor fuera de rango se reemplaza por el de siempre: 7 días y las 5 hs
+    setCoverageDaysInput(String(alertDaysOrDefault(p.coverageDaysThreshold)));
+    setExpiryDaysInput(String(alertDaysOrDefault(p.expiryDaysThreshold)));
+    setAlertCheckHourInput(String(checkHourOrDefault(Math.round(utcToLocal(p.alertCheckHour)))));
+    setUserType(p.userType);
+  }, []);
 
   useFocusEffect(useCallback(() => {
+    // Al volver a la pantalla se ve el perfil, no una edición que quedó a medias
+    setEditing(false);
     setLoading(true);
     profileService.getProfile()
       .then((p) => {
         setProfile(p);
-        setFirstName(p.firstName ?? '');
-        setLastName(p.lastName ?? '');
-        setUsername(p.username ?? '');
-        setCoverageDaysInput(String(p.coverageDaysThreshold));
-        setExpiryDaysInput(String(p.expiryDaysThreshold));
-        setAlertCheckHourInput(String(Math.round(utcToLocal(p.alertCheckHour))));
-        setUserType(p.userType);
+        fillForm(p);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [utcToLocal]));
+  }, [fillForm]));
 
   const handleLogout = async () => {
     setConfirmLogoutVisible(false);
@@ -70,16 +93,44 @@ export default function PerfilScreen() {
     router.replace('/(auth)/login');
   };
 
-  const toggleLanguage = async () => {
-    const next: Language = i18n.language === 'es' ? 'en' : 'es';
-    await changeLanguage(next);
+  // Pide confirmación antes de cambiar al otro idioma
+  const askToggleLanguage = () => {
+    setPendingLanguage(i18n.language === 'es' ? 'en' : 'es');
   };
 
-  const handleSave = async () => {
-    setSaving(true);
+  const confirmLanguageChange = async () => {
+    const next = pendingLanguage;
+    setPendingLanguage(null);
+    if (next) await changeLanguage(next);
+  };
+
+  const handleStartEdit = () => {
+    if (profile) fillForm(profile);
+    setEditing(true);
     setFeedback(null);
+  };
+
+  // Guarda de una vez los datos personales, el tipo de cuenta y la configuración de alertas
+  const handleSave = async () => {
+    setFeedback(null);
+    const coverageDays = inRange(parseWholeNumber(coverageDaysInput), ALERT_DAYS_MIN, ALERT_DAYS_MAX);
+    const expiryDays = inRange(parseWholeNumber(expiryDaysInput), ALERT_DAYS_MIN, ALERT_DAYS_MAX);
+    const hour = inRange(parseWholeNumber(alertCheckHourInput), CHECK_HOUR_MIN, CHECK_HOUR_MAX);
+    if (coverageDays === null || expiryDays === null || hour === null) {
+      setFeedback({ type: 'error', msg: t('profile.invalidSettings') });
+      return;
+    }
+    setSaving(true);
     try {
-      const updated = await profileService.updateProfile(firstName.trim(), lastName.trim(), username.trim() || undefined);
+      const updated = await profileService.updateProfile(
+        firstName.trim(),
+        lastName.trim(),
+        username.trim() || undefined,
+        coverageDays,
+        expiryDays,
+        Math.round(localToUtc(hour)),
+        userType,
+      );
       setProfile(updated);
       setEditing(false);
       setFeedback({ type: 'ok', msg: t('profile.saveSuccess') });
@@ -90,50 +141,8 @@ export default function PerfilScreen() {
     }
   };
 
-  const handleSaveSettings = async () => {
-    const ls = parseInt(coverageDaysInput, 10);
-    const ed = parseInt(expiryDaysInput, 10);
-    const ah = parseInt(alertCheckHourInput, 10);
-    if (isNaN(ls) || ls <= 0 || isNaN(ed) || ed <= 0 || isNaN(ah) || ah < 0 || ah > 23) return;
-    try {
-      const updated = await profileService.updateProfile(
-        profile?.firstName ?? '',
-        profile?.lastName ?? '',
-        profile?.username,
-        ls,
-        ed,
-        Math.round(localToUtc(ah)),
-      );
-      setProfile(updated);
-    } catch {
-      // los inputs numéricos ya se guardan solos en el próximo blur exitoso
-    }
-  };
-
-  const handleChangeUserType = async (next: UserType) => {
-    if (next === userType) return;
-    const previous = userType;
-    setUserType(next);
-    try {
-      const updated = await profileService.updateProfile(
-        profile?.firstName ?? '',
-        profile?.lastName ?? '',
-        profile?.username,
-        undefined,
-        undefined,
-        undefined,
-        next,
-      );
-      setProfile(updated);
-    } catch {
-      setUserType(previous);
-    }
-  };
-
   const handleCancelEdit = () => {
-    setFirstName(profile?.firstName ?? '');
-    setLastName(profile?.lastName ?? '');
-    setUsername(profile?.username ?? '');
+    if (profile) fillForm(profile);
     setEditing(false);
     setFeedback(null);
   };
@@ -180,194 +189,274 @@ export default function PerfilScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Avatar */}
-      <View style={styles.avatarContainer}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{initials}</Text>
-        </View>
-        {!editing && (
-          <TouchableOpacity style={styles.editIconBtn} onPress={() => { setEditing(true); setFeedback(null); }}>
-            <Ionicons name="pencil" size={16} color={Colors.primary} />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Feedback */}
-      {feedback && (
-        <Text style={[styles.feedback, feedback.type === 'ok' ? styles.feedbackOk : styles.feedbackError]}>
-          {feedback.msg}
-        </Text>
-      )}
-
-      {/* Info card */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('profile.editProfile')}</Text>
-
-        <Text style={styles.fieldLabel}>{t('profile.firstName')}</Text>
-        {editing ? (
-          <TextInput
-            style={styles.input}
-            value={firstName}
-            onChangeText={setFirstName}
-            placeholder={t('profile.firstNamePlaceholder')}
-            placeholderTextColor={Colors.placeholder}
-          />
-        ) : (
-          <Text style={styles.fieldValue}>{profile?.firstName || '—'}</Text>
-        )}
-
-        <Text style={styles.fieldLabel}>{t('profile.lastName')}</Text>
-        {editing ? (
-          <TextInput
-            style={styles.input}
-            value={lastName}
-            onChangeText={setLastName}
-            placeholder={t('profile.lastNamePlaceholder')}
-            placeholderTextColor={Colors.placeholder}
-          />
-        ) : (
-          <Text style={styles.fieldValue}>{profile?.lastName || '—'}</Text>
-        )}
-
-        <Text style={styles.fieldLabel}>{t('profile.email')}</Text>
-        <Text style={[styles.fieldValue, styles.fieldReadOnly]}>{profile?.email || '—'}</Text>
-
-        <Text style={styles.fieldLabel}>{t('profile.username')}</Text>
-        {editing ? (
-          <TextInput
-            style={styles.input}
-            value={username}
-            onChangeText={setUsername}
-            placeholder={t('profile.username')}
-            placeholderTextColor={Colors.placeholder}
-            autoCapitalize="none"
-          />
-        ) : (
-          <Text style={styles.fieldValue}>{profile?.username || '—'}</Text>
-        )}
-      </View>
-
-      {/* Edit actions */}
-      {editing && (
-        <View style={styles.editActions}>
-          <TouchableOpacity
-            style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            <Text style={styles.saveBtnText}>{saving ? t('profile.saving') : t('profile.save')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelEdit} disabled={saving}>
-            <Text style={styles.cancelBtnText}>{t('profile.cancel')}</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Settings */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('profile.settings')}</Text>
-
-        <Text style={styles.fieldLabel}>{t('profile.userType')}</Text>
-        <View style={styles.segmentRow}>
-          {(['individuo', 'comercio'] as UserType[]).map((opt) => (
-            <TouchableOpacity
-              key={opt}
-              style={[styles.segmentBtn, userType === opt && styles.segmentBtnActive]}
-              onPress={() => handleChangeUserType(opt)}
-            >
-              <Text style={[styles.segmentBtnText, userType === opt && styles.segmentBtnTextActive]}>
-                {opt === 'individuo' ? t('profile.userTypeIndividuo') : t('profile.userTypeComercio')}
-              </Text>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+      <ScreenHeader title={t('tabs.profile')} onHomePress={() => router.navigate('/(tabs)/')} />
+      <KeyboardAwareScrollView style={styles.container} contentContainerStyle={styles.content}>
+        {/* Avatar */}
+        <View testID="profile-avatar" style={styles.avatarContainer}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initials}</Text>
+          </View>
+          {!editing && (
+            <TouchableOpacity style={styles.editIconBtn} onPress={handleStartEdit}>
+              <Ionicons name="pencil" size={16} color={Colors.primary} />
             </TouchableOpacity>
-          ))}
-        </View>
-        <Text style={styles.segmentHint}>{t('profile.userTypeHint')}</Text>
-
-        <Text style={styles.fieldLabel}>{t('profile.coverageDaysThreshold')}</Text>
-        <View style={styles.settingRow}>
-          <TextInput
-            style={[styles.input, styles.settingInput]}
-            value={coverageDaysInput}
-            onChangeText={setCoverageDaysInput}
-            keyboardType="numeric"
-            returnKeyType="done"
-            onEndEditing={handleSaveSettings}
-            onBlur={handleSaveSettings}
-          />
-          <Text style={styles.settingUnit}>{t('profile.days')}</Text>
+          )}
         </View>
 
-        <Text style={styles.fieldLabel}>{t('profile.expiryDaysThreshold')}</Text>
-        <View style={styles.settingRow}>
-          <TextInput
-            style={[styles.input, styles.settingInput]}
-            value={expiryDaysInput}
-            onChangeText={setExpiryDaysInput}
-            keyboardType="numeric"
-            returnKeyType="done"
-            onEndEditing={handleSaveSettings}
-            onBlur={handleSaveSettings}
-          />
-          <Text style={styles.settingUnit}>{t('profile.days')}</Text>
+        {/* Feedback */}
+        {feedback && (
+          <Text style={[styles.feedback, feedback.type === 'ok' ? styles.feedbackOk : styles.feedbackError]}>
+            {feedback.msg}
+          </Text>
+        )}
+
+        {/* Datos personales */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t('profile.editProfile')}</Text>
+
+          <Text style={styles.fieldLabel}>{t('profile.firstName')}</Text>
+          {editing ? (
+            <>
+              <AppTextInput
+                testID="first-name-input"
+                style={styles.input}
+                value={firstName}
+                onChangeText={setFirstName}
+                maxLength={PROFILE_TEXT_MAX}
+                placeholder={t('profile.firstNamePlaceholder')}
+                placeholderTextColor={Colors.placeholder}
+              />
+              <Text testID="first-name-counter" style={styles.fieldCounter}>{firstName.length}/{PROFILE_TEXT_MAX}</Text>
+            </>
+          ) : (
+            <Text style={styles.fieldValue}>{profile?.firstName ? truncateLabel(profile.firstName, PROFILE_TEXT_MAX) : '—'}</Text>
+          )}
+
+          <Text style={styles.fieldLabel}>{t('profile.lastName')}</Text>
+          {editing ? (
+            <>
+              <AppTextInput
+                testID="last-name-input"
+                style={styles.input}
+                value={lastName}
+                onChangeText={setLastName}
+                maxLength={PROFILE_TEXT_MAX}
+                placeholder={t('profile.lastNamePlaceholder')}
+                placeholderTextColor={Colors.placeholder}
+              />
+              <Text testID="last-name-counter" style={styles.fieldCounter}>{lastName.length}/{PROFILE_TEXT_MAX}</Text>
+            </>
+          ) : (
+            <Text style={styles.fieldValue}>{profile?.lastName ? truncateLabel(profile.lastName, PROFILE_TEXT_MAX) : '—'}</Text>
+          )}
+
+          <Text style={styles.fieldLabel}>{t('profile.email')}</Text>
+          <Text style={[styles.fieldValue, styles.fieldReadOnly]}>{profile?.email || '—'}</Text>
+
+          <Text style={styles.fieldLabel}>{t('profile.username')}</Text>
+          {editing ? (
+            <>
+              <AppTextInput
+                testID="username-input"
+                style={styles.input}
+                value={username}
+                onChangeText={setUsername}
+                maxLength={PROFILE_TEXT_MAX}
+                placeholder={t('profile.username')}
+                placeholderTextColor={Colors.placeholder}
+                autoCapitalize="none"
+              />
+              <Text testID="username-counter" style={styles.fieldCounter}>{username.length}/{PROFILE_TEXT_MAX}</Text>
+            </>
+          ) : (
+            <Text style={styles.fieldValue}>{profile?.username ? truncateLabel(profile.username, PROFILE_TEXT_MAX) : '—'}</Text>
+          )}
         </View>
 
-        <Text style={styles.fieldLabel}>{t('profile.alertCheckHour')}</Text>
-        <View style={styles.settingRow}>
-          <TextInput
-            style={[styles.input, styles.settingInput]}
-            value={alertCheckHourInput}
-            onChangeText={setAlertCheckHourInput}
-            keyboardType="numeric"
-            returnKeyType="done"
-            onEndEditing={handleSaveSettings}
-            onBlur={handleSaveSettings}
-          />
-          <Text style={styles.settingUnit}>{tzLabel}</Text>
+        {/* Configuración: se ve completa y solo se cambia al editar el perfil */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t('profile.settings')}</Text>
+
+          <Text style={styles.fieldLabel}>{t('profile.userType')}</Text>
+          {editing ? (
+            <View style={styles.segmentRow}>
+              {(['individuo', 'comercio'] as UserType[]).map((opt) => (
+                <TouchableOpacity
+                  key={opt}
+                  testID={`user-type-${opt}`}
+                  style={[styles.segmentBtn, userType === opt && styles.segmentBtnActive]}
+                  onPress={() => setUserType(opt)}
+                >
+                  <Text style={[styles.segmentBtnText, userType === opt && styles.segmentBtnTextActive]}>
+                    {opt === 'individuo' ? t('profile.userTypeIndividuo') : t('profile.userTypeComercio')}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <View testID="user-type-display" style={styles.userTypeBox}>
+              <Text style={styles.userTypeBoxText}>
+                {profile?.userType === 'comercio' ? t('profile.userTypeComercio') : t('profile.userTypeIndividuo')}
+              </Text>
+            </View>
+          )}
+          <Text style={styles.segmentHint}>{t('profile.userTypeHint')}</Text>
+
+          <Text style={styles.fieldLabel}>{t('profile.coverageDaysThreshold')}</Text>
+          {editing ? (
+            <>
+              <View style={styles.settingRow}>
+                <NumberStepper
+                  testID="coverage-days-input"
+                  value={coverageDaysInput}
+                  onChange={setCoverageDaysInput}
+                  min={ALERT_DAYS_MIN}
+                  max={ALERT_DAYS_MAX}
+                />
+                <Text style={styles.settingUnit}>{t('profile.days')}</Text>
+              </View>
+              <Text testID="coverage-days-hint" style={styles.rangeHint}>
+                {t('profile.rangeHint', { min: ALERT_DAYS_MIN, max: ALERT_DAYS_MAX })}
+              </Text>
+            </>
+          ) : (
+            <Text testID="coverage-days-value" style={styles.fieldValue}>
+              {alertDaysOrDefault(profile?.coverageDaysThreshold)} {t('profile.days')}
+            </Text>
+          )}
+
+          <Text style={styles.fieldLabel}>{t('profile.expiryDaysThreshold')}</Text>
+          {editing ? (
+            <>
+              <View style={styles.settingRow}>
+                <NumberStepper
+                  testID="expiry-days-input"
+                  value={expiryDaysInput}
+                  onChange={setExpiryDaysInput}
+                  min={ALERT_DAYS_MIN}
+                  max={ALERT_DAYS_MAX}
+                />
+                <Text style={styles.settingUnit}>{t('profile.days')}</Text>
+              </View>
+              <Text testID="expiry-days-hint" style={styles.rangeHint}>
+                {t('profile.rangeHint', { min: ALERT_DAYS_MIN, max: ALERT_DAYS_MAX })}
+              </Text>
+            </>
+          ) : (
+            <Text testID="expiry-days-value" style={styles.fieldValue}>
+              {alertDaysOrDefault(profile?.expiryDaysThreshold)} {t('profile.days')}
+            </Text>
+          )}
+
+          <Text style={styles.fieldLabel}>{t('profile.alertCheckHour')}</Text>
+          {editing ? (
+            <>
+              <View style={styles.settingRow}>
+                <NumberStepper
+                  testID="alert-hour-input"
+                  value={alertCheckHourInput}
+                  onChange={setAlertCheckHourInput}
+                  min={CHECK_HOUR_MIN}
+                  max={CHECK_HOUR_MAX}
+                />
+                <Text style={styles.settingUnit}>{t('profile.argentinaTime')}</Text>
+              </View>
+              <Text testID="alert-hour-hint" style={styles.rangeHint}>
+                {t('profile.rangeHint', { min: CHECK_HOUR_MIN, max: CHECK_HOUR_MAX })}
+              </Text>
+            </>
+          ) : (
+            <Text testID="alert-hour-value" style={styles.fieldValue}>
+              {profile ? checkHourOrDefault(Math.round(utcToLocal(profile.alertCheckHour))) : ''} {t('profile.argentinaTime')}
+            </Text>
+          )}
         </View>
-      </View>
 
-      {/* Language */}
-      <TouchableOpacity style={styles.rowBtn} onPress={toggleLanguage}>
-        <Ionicons name="language-outline" size={20} color={Colors.textSecondary} />
-        <Text style={styles.rowBtnText}>
-          {t('profile.language')}: {i18n.language === 'es' ? '🇦🇷 Español' : '🇺🇸 English'}
-        </Text>
-        <Ionicons name="chevron-forward" size={16} color={Colors.placeholder} />
-      </TouchableOpacity>
+        {/* Guardar y cancelar, debajo de todos los campos */}
+        {editing && (
+          <View style={styles.editActions}>
+            <TouchableOpacity
+              style={[styles.saveBtn, saving && { opacity: 0.6 }]}
+              onPress={handleSave}
+              disabled={saving}
+            >
+              <Text style={styles.saveBtnText}>{saving ? t('profile.saving') : t('profile.save')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelEdit} disabled={saving}>
+              <Text style={styles.cancelBtnText}>{t('profile.cancel')}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-      {/* Notifications */}
-      <TouchableOpacity style={styles.rowBtn} onPress={handleActivateNotifications}>
-        <Ionicons name="notifications-outline" size={20} color={Colors.textSecondary} />
-        <Text style={styles.rowBtnText}>
-          {t('profile.notifications')}: {notificationsEnabled ? t('profile.enabled') : t('profile.disabled')}
-        </Text>
-        <Ionicons name="chevron-forward" size={16} color={Colors.placeholder} />
-      </TouchableOpacity>
+        {/* Idioma, notificaciones y cerrar sesión: no están mientras se edita el perfil */}
+        {!editing && (
+          <>
+            <TouchableOpacity style={styles.rowBtn} onPress={askToggleLanguage}>
+              <Ionicons name="language-outline" size={20} color={Colors.textSecondary} />
+              <Text style={styles.rowBtnText}>
+                {t('profile.language')}: {i18n.language === 'es' ? '🇦🇷 Español' : '🇺🇸 English'}
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={Colors.placeholder} />
+            </TouchableOpacity>
 
-      {/* Logout */}
-      <TouchableOpacity style={styles.logoutBtn} onPress={() => setConfirmLogoutVisible(true)}>
-        <Ionicons name="log-out-outline" size={20} color={Colors.error} />
-        <Text style={styles.logoutText}>{t('profile.logout')}</Text>
-      </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.rowBtn}
+              onPress={() => (notificationsEnabled ? setConfirmDisableNotifications(true) : handleActivateNotifications())}
+            >
+              <Ionicons name="notifications-outline" size={20} color={Colors.textSecondary} />
+              <Text style={styles.rowBtnText}>
+                {t('profile.notifications')}: {notificationsEnabled ? t('profile.enabled') : t('profile.disabled')}
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={Colors.placeholder} />
+            </TouchableOpacity>
 
-      <ConfirmModal
-        visible={confirmLogoutVisible}
-        message={t('profile.logoutConfirm')}
-        confirmLabel={t('profile.logoutConfirmAction')}
-        cancelLabel={t('common.cancel')}
-        onConfirm={handleLogout}
-        onCancel={() => setConfirmLogoutVisible(false)}
-      />
-    </ScrollView>
+            <TouchableOpacity style={styles.logoutBtn} onPress={() => setConfirmLogoutVisible(true)}>
+              <Ionicons name="log-out-outline" size={20} color={Colors.error} />
+              <Text style={styles.logoutText}>{t('profile.logout')}</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        <ConfirmModal
+          visible={pendingLanguage !== null}
+          message={t('profile.languageConfirm', { language: pendingLanguage === 'en' ? 'English' : 'Español' })}
+          confirmLabel={t('profile.confirm')}
+          cancelLabel={t('common.cancel')}
+          onConfirm={confirmLanguageChange}
+          onCancel={() => setPendingLanguage(null)}
+        />
+
+        <ConfirmModal
+          visible={confirmDisableNotifications}
+          message={t('profile.disableNotificationsConfirm')}
+          confirmLabel={t('profile.confirm')}
+          cancelLabel={t('common.cancel')}
+          onConfirm={() => {
+            setConfirmDisableNotifications(false);
+            handleActivateNotifications();
+          }}
+          onCancel={() => setConfirmDisableNotifications(false)}
+        />
+
+        <ConfirmModal
+          visible={confirmLogoutVisible}
+          message={t('profile.logoutConfirm')}
+          confirmLabel={t('profile.logoutConfirmAction')}
+          cancelLabel={t('common.cancel')}
+          onConfirm={handleLogout}
+          onCancel={() => setConfirmLogoutVisible(false)}
+        />
+          </KeyboardAwareScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f2f3f6' },
-  content: { padding: 20, paddingBottom: 40, alignItems: 'center' },
+  content: { padding: 20, paddingTop: 8, paddingBottom: 40, alignItems: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  avatarContainer: { position: 'relative', marginTop: 32, marginBottom: 8 },
+  avatarContainer: { position: 'relative', marginTop: 0, marginBottom: 4 },
   avatar: {
     width: 80,
     height: 80,
@@ -467,7 +556,20 @@ const styles = StyleSheet.create({
   segmentBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   segmentBtnText: { fontSize: 14, color: Colors.textSecondary },
   segmentBtnTextActive: { color: '#fff', fontWeight: '600' },
+  // Tipo de cuenta cuando no se edita: del tamaño de un botón y de todo el ancho, pero solo resalta el dato
+  userTypeBox: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 4,
+    backgroundColor: Colors.primary,
+  },
+  userTypeBoxText: { fontSize: 14, color: '#fff', fontWeight: '600' },
   segmentHint: { fontSize: 12, color: Colors.placeholder, marginTop: 6 },
   settingInput: { width: 80, marginTop: 0 },
+  // Contador de letras bajo el campo («18/20») y aclaración del rango de los campos numéricos
+  fieldCounter: { alignSelf: 'flex-end', fontSize: 11, color: Colors.placeholder, marginTop: 2 },
+  rangeHint: { fontSize: 11, color: Colors.textSecondary, marginTop: 4 },
   settingUnit: { fontSize: 13, color: Colors.textSecondary },
 });
