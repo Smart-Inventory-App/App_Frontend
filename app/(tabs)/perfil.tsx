@@ -461,6 +461,7 @@ export default function PerfilScreen() {
           message={t('profile.languageConfirm', { language: pendingLanguage === 'en' ? 'English' : 'Español' })}
           confirmLabel={t('profile.confirm')}
           cancelLabel={t('common.cancel')}
+          confirmTone="primary"
           onConfirm={confirmLanguageChange}
           onCancel={() => setPendingLanguage(null)}
         />
@@ -470,6 +471,7 @@ export default function PerfilScreen() {
           message={t('profile.disableNotificationsConfirm')}
           confirmLabel={t('profile.confirm')}
           cancelLabel={t('common.cancel')}
+          confirmTone="primary"
           onConfirm={() => {
             setConfirmDisableNotifications(false);
             handleActivateNotifications();

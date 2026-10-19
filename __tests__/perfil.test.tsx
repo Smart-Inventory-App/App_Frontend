@@ -712,3 +712,32 @@ describe('PerfilScreen - the hour of the daily check', () => {
     expect(screen.queryByText(/se van a revisar/)).toBeNull();
   });
 });
+
+describe('PerfilScreen - color of the confirm buttons', () => {
+  const background = () => StyleSheet.flatten(screen.getByTestId('confirm-accept').props.style).backgroundColor;
+
+  it('is the teal of the app when confirming a change of language', async () => {
+    const { Colors } = require('../src/constants/colors');
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    fireEvent.press(screen.getByText(/Idioma:/));
+    expect(background()).toBe(Colors.primary);
+  });
+
+  it('is the teal of the app when confirming to turn the notifications off', async () => {
+    const { Colors } = require('../src/constants/colors');
+    await AsyncStorage.setItem('notificationsEnabled', JSON.stringify(true));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText(/Activadas/)).toBeTruthy());
+    fireEvent.press(screen.getByText(/Notificaciones:/));
+    expect(background()).toBe(Colors.primary);
+  });
+
+  it('stays red when confirming to log out', async () => {
+    const { Colors } = require('../src/constants/colors');
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    fireEvent.press(screen.getByText('Cerrar sesión'));
+    expect(background()).toBe(Colors.error);
+  });
+});
