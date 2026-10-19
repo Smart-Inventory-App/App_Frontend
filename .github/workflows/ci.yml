@@ -61,6 +61,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -79,6 +81,22 @@ jobs:
 
       - name: Install EAS CLI
         run: npm install -g eas-cli
+
+      - name: Set app version
+        env:
+          BASELINE_COMMITS: 72
+        run: |
+          count=$(git rev-list --first-parent --count HEAD)
+          patch=$((count - BASELINE_COMMITS))
+          node <<EOF
+          const fs = require('fs');
+          const app = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+          const [major, minor] = app.expo.version.split('.');
+          app.expo.version = [major, minor, $patch].join('.');
+          fs.writeFileSync('app.json', JSON.stringify(app, null, 2) + '\n');
+          console.log('App version: ' + app.expo.version);
+          EOF
+          echo "App version: $(node -p "require('./app.json').expo.version")" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build Android production
         run: eas build --platform android --profile production --non-interactive
