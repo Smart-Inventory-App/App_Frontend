@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  ScrollView,
+  KeyboardAvoidingView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import AppTextInput from '@/components/AppTextInput';
+import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import { router } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -180,186 +181,188 @@ export default function PerfilScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Avatar */}
-      <View style={styles.avatarContainer}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{initials}</Text>
-        </View>
-        {!editing && (
-          <TouchableOpacity style={styles.editIconBtn} onPress={() => { setEditing(true); setFeedback(null); }}>
-            <Ionicons name="pencil" size={16} color={Colors.primary} />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Feedback */}
-      {feedback && (
-        <Text style={[styles.feedback, feedback.type === 'ok' ? styles.feedbackOk : styles.feedbackError]}>
-          {feedback.msg}
-        </Text>
-      )}
-
-      {/* Info card */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('profile.editProfile')}</Text>
-
-        <Text style={styles.fieldLabel}>{t('profile.firstName')}</Text>
-        {editing ? (
-          <TextInput
-            style={styles.input}
-            value={firstName}
-            onChangeText={setFirstName}
-            placeholder={t('profile.firstNamePlaceholder')}
-            placeholderTextColor={Colors.placeholder}
-          />
-        ) : (
-          <Text style={styles.fieldValue}>{profile?.firstName || '—'}</Text>
-        )}
-
-        <Text style={styles.fieldLabel}>{t('profile.lastName')}</Text>
-        {editing ? (
-          <TextInput
-            style={styles.input}
-            value={lastName}
-            onChangeText={setLastName}
-            placeholder={t('profile.lastNamePlaceholder')}
-            placeholderTextColor={Colors.placeholder}
-          />
-        ) : (
-          <Text style={styles.fieldValue}>{profile?.lastName || '—'}</Text>
-        )}
-
-        <Text style={styles.fieldLabel}>{t('profile.email')}</Text>
-        <Text style={[styles.fieldValue, styles.fieldReadOnly]}>{profile?.email || '—'}</Text>
-
-        <Text style={styles.fieldLabel}>{t('profile.username')}</Text>
-        {editing ? (
-          <TextInput
-            style={styles.input}
-            value={username}
-            onChangeText={setUsername}
-            placeholder={t('profile.username')}
-            placeholderTextColor={Colors.placeholder}
-            autoCapitalize="none"
-          />
-        ) : (
-          <Text style={styles.fieldValue}>{profile?.username || '—'}</Text>
-        )}
-      </View>
-
-      {/* Edit actions */}
-      {editing && (
-        <View style={styles.editActions}>
-          <TouchableOpacity
-            style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            <Text style={styles.saveBtnText}>{saving ? t('profile.saving') : t('profile.save')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelEdit} disabled={saving}>
-            <Text style={styles.cancelBtnText}>{t('profile.cancel')}</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Settings */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('profile.settings')}</Text>
-
-        <Text style={styles.fieldLabel}>{t('profile.userType')}</Text>
-        <View style={styles.segmentRow}>
-          {(['individuo', 'comercio'] as UserType[]).map((opt) => (
-            <TouchableOpacity
-              key={opt}
-              style={[styles.segmentBtn, userType === opt && styles.segmentBtnActive]}
-              onPress={() => handleChangeUserType(opt)}
-            >
-              <Text style={[styles.segmentBtnText, userType === opt && styles.segmentBtnTextActive]}>
-                {opt === 'individuo' ? t('profile.userTypeIndividuo') : t('profile.userTypeComercio')}
-              </Text>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+      <KeyboardAwareScrollView style={styles.container} contentContainerStyle={styles.content}>
+        {/* Avatar */}
+        <View style={styles.avatarContainer}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initials}</Text>
+          </View>
+          {!editing && (
+            <TouchableOpacity style={styles.editIconBtn} onPress={() => { setEditing(true); setFeedback(null); }}>
+              <Ionicons name="pencil" size={16} color={Colors.primary} />
             </TouchableOpacity>
-          ))}
-        </View>
-        <Text style={styles.segmentHint}>{t('profile.userTypeHint')}</Text>
-
-        <Text style={styles.fieldLabel}>{t('profile.coverageDaysThreshold')}</Text>
-        <View style={styles.settingRow}>
-          <TextInput
-            style={[styles.input, styles.settingInput]}
-            value={coverageDaysInput}
-            onChangeText={setCoverageDaysInput}
-            keyboardType="numeric"
-            returnKeyType="done"
-            onEndEditing={handleSaveSettings}
-            onBlur={handleSaveSettings}
-          />
-          <Text style={styles.settingUnit}>{t('profile.days')}</Text>
+          )}
         </View>
 
-        <Text style={styles.fieldLabel}>{t('profile.expiryDaysThreshold')}</Text>
-        <View style={styles.settingRow}>
-          <TextInput
-            style={[styles.input, styles.settingInput]}
-            value={expiryDaysInput}
-            onChangeText={setExpiryDaysInput}
-            keyboardType="numeric"
-            returnKeyType="done"
-            onEndEditing={handleSaveSettings}
-            onBlur={handleSaveSettings}
-          />
-          <Text style={styles.settingUnit}>{t('profile.days')}</Text>
+        {/* Feedback */}
+        {feedback && (
+          <Text style={[styles.feedback, feedback.type === 'ok' ? styles.feedbackOk : styles.feedbackError]}>
+            {feedback.msg}
+          </Text>
+        )}
+
+        {/* Info card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t('profile.editProfile')}</Text>
+
+          <Text style={styles.fieldLabel}>{t('profile.firstName')}</Text>
+          {editing ? (
+            <AppTextInput
+              style={styles.input}
+              value={firstName}
+              onChangeText={setFirstName}
+              placeholder={t('profile.firstNamePlaceholder')}
+              placeholderTextColor={Colors.placeholder}
+            />
+          ) : (
+            <Text style={styles.fieldValue}>{profile?.firstName || '—'}</Text>
+          )}
+
+          <Text style={styles.fieldLabel}>{t('profile.lastName')}</Text>
+          {editing ? (
+            <AppTextInput
+              style={styles.input}
+              value={lastName}
+              onChangeText={setLastName}
+              placeholder={t('profile.lastNamePlaceholder')}
+              placeholderTextColor={Colors.placeholder}
+            />
+          ) : (
+            <Text style={styles.fieldValue}>{profile?.lastName || '—'}</Text>
+          )}
+
+          <Text style={styles.fieldLabel}>{t('profile.email')}</Text>
+          <Text style={[styles.fieldValue, styles.fieldReadOnly]}>{profile?.email || '—'}</Text>
+
+          <Text style={styles.fieldLabel}>{t('profile.username')}</Text>
+          {editing ? (
+            <AppTextInput
+              style={styles.input}
+              value={username}
+              onChangeText={setUsername}
+              placeholder={t('profile.username')}
+              placeholderTextColor={Colors.placeholder}
+              autoCapitalize="none"
+            />
+          ) : (
+            <Text style={styles.fieldValue}>{profile?.username || '—'}</Text>
+          )}
         </View>
 
-        <Text style={styles.fieldLabel}>{t('profile.alertCheckHour')}</Text>
-        <View style={styles.settingRow}>
-          <TextInput
-            style={[styles.input, styles.settingInput]}
-            value={alertCheckHourInput}
-            onChangeText={setAlertCheckHourInput}
-            keyboardType="numeric"
-            returnKeyType="done"
-            onEndEditing={handleSaveSettings}
-            onBlur={handleSaveSettings}
-          />
-          <Text style={styles.settingUnit}>{tzLabel}</Text>
+        {/* Edit actions */}
+        {editing && (
+          <View style={styles.editActions}>
+            <TouchableOpacity
+              style={[styles.saveBtn, saving && { opacity: 0.6 }]}
+              onPress={handleSave}
+              disabled={saving}
+            >
+              <Text style={styles.saveBtnText}>{saving ? t('profile.saving') : t('profile.save')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelEdit} disabled={saving}>
+              <Text style={styles.cancelBtnText}>{t('profile.cancel')}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Settings */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t('profile.settings')}</Text>
+
+          <Text style={styles.fieldLabel}>{t('profile.userType')}</Text>
+          <View style={styles.segmentRow}>
+            {(['individuo', 'comercio'] as UserType[]).map((opt) => (
+              <TouchableOpacity
+                key={opt}
+                style={[styles.segmentBtn, userType === opt && styles.segmentBtnActive]}
+                onPress={() => handleChangeUserType(opt)}
+              >
+                <Text style={[styles.segmentBtnText, userType === opt && styles.segmentBtnTextActive]}>
+                  {opt === 'individuo' ? t('profile.userTypeIndividuo') : t('profile.userTypeComercio')}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.segmentHint}>{t('profile.userTypeHint')}</Text>
+
+          <Text style={styles.fieldLabel}>{t('profile.coverageDaysThreshold')}</Text>
+          <View style={styles.settingRow}>
+            <AppTextInput
+              style={[styles.input, styles.settingInput]}
+              value={coverageDaysInput}
+              onChangeText={setCoverageDaysInput}
+              keyboardType="numeric"
+              returnKeyType="done"
+              onEndEditing={handleSaveSettings}
+              onBlur={handleSaveSettings}
+            />
+            <Text style={styles.settingUnit}>{t('profile.days')}</Text>
+          </View>
+
+          <Text style={styles.fieldLabel}>{t('profile.expiryDaysThreshold')}</Text>
+          <View style={styles.settingRow}>
+            <AppTextInput
+              style={[styles.input, styles.settingInput]}
+              value={expiryDaysInput}
+              onChangeText={setExpiryDaysInput}
+              keyboardType="numeric"
+              returnKeyType="done"
+              onEndEditing={handleSaveSettings}
+              onBlur={handleSaveSettings}
+            />
+            <Text style={styles.settingUnit}>{t('profile.days')}</Text>
+          </View>
+
+          <Text style={styles.fieldLabel}>{t('profile.alertCheckHour')}</Text>
+          <View style={styles.settingRow}>
+            <AppTextInput
+              style={[styles.input, styles.settingInput]}
+              value={alertCheckHourInput}
+              onChangeText={setAlertCheckHourInput}
+              keyboardType="numeric"
+              returnKeyType="done"
+              onEndEditing={handleSaveSettings}
+              onBlur={handleSaveSettings}
+            />
+            <Text style={styles.settingUnit}>{tzLabel}</Text>
+          </View>
         </View>
-      </View>
 
-      {/* Language */}
-      <TouchableOpacity style={styles.rowBtn} onPress={toggleLanguage}>
-        <Ionicons name="language-outline" size={20} color={Colors.textSecondary} />
-        <Text style={styles.rowBtnText}>
-          {t('profile.language')}: {i18n.language === 'es' ? '🇦🇷 Español' : '🇺🇸 English'}
-        </Text>
-        <Ionicons name="chevron-forward" size={16} color={Colors.placeholder} />
-      </TouchableOpacity>
+        {/* Language */}
+        <TouchableOpacity style={styles.rowBtn} onPress={toggleLanguage}>
+          <Ionicons name="language-outline" size={20} color={Colors.textSecondary} />
+          <Text style={styles.rowBtnText}>
+            {t('profile.language')}: {i18n.language === 'es' ? '🇦🇷 Español' : '🇺🇸 English'}
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color={Colors.placeholder} />
+        </TouchableOpacity>
 
-      {/* Notifications */}
-      <TouchableOpacity style={styles.rowBtn} onPress={handleActivateNotifications}>
-        <Ionicons name="notifications-outline" size={20} color={Colors.textSecondary} />
-        <Text style={styles.rowBtnText}>
-          {t('profile.notifications')}: {notificationsEnabled ? t('profile.enabled') : t('profile.disabled')}
-        </Text>
-        <Ionicons name="chevron-forward" size={16} color={Colors.placeholder} />
-      </TouchableOpacity>
+        {/* Notifications */}
+        <TouchableOpacity style={styles.rowBtn} onPress={handleActivateNotifications}>
+          <Ionicons name="notifications-outline" size={20} color={Colors.textSecondary} />
+          <Text style={styles.rowBtnText}>
+            {t('profile.notifications')}: {notificationsEnabled ? t('profile.enabled') : t('profile.disabled')}
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color={Colors.placeholder} />
+        </TouchableOpacity>
 
-      {/* Logout */}
-      <TouchableOpacity style={styles.logoutBtn} onPress={() => setConfirmLogoutVisible(true)}>
-        <Ionicons name="log-out-outline" size={20} color={Colors.error} />
-        <Text style={styles.logoutText}>{t('profile.logout')}</Text>
-      </TouchableOpacity>
+        {/* Logout */}
+        <TouchableOpacity style={styles.logoutBtn} onPress={() => setConfirmLogoutVisible(true)}>
+          <Ionicons name="log-out-outline" size={20} color={Colors.error} />
+          <Text style={styles.logoutText}>{t('profile.logout')}</Text>
+        </TouchableOpacity>
 
-      <ConfirmModal
-        visible={confirmLogoutVisible}
-        message={t('profile.logoutConfirm')}
-        confirmLabel={t('profile.logoutConfirmAction')}
-        cancelLabel={t('common.cancel')}
-        onConfirm={handleLogout}
-        onCancel={() => setConfirmLogoutVisible(false)}
-      />
-    </ScrollView>
+        <ConfirmModal
+          visible={confirmLogoutVisible}
+          message={t('profile.logoutConfirm')}
+          confirmLabel={t('profile.logoutConfirmAction')}
+          cancelLabel={t('common.cancel')}
+          onConfirm={handleLogout}
+          onCancel={() => setConfirmLogoutVisible(false)}
+        />
+          </KeyboardAwareScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

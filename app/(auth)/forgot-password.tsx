@@ -4,12 +4,12 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
 } from 'react-native';
+import AppTextInput from '@/components/AppTextInput';
+import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { authService } from '../../src/services/authService';
@@ -37,14 +37,14 @@ export default function ForgotPasswordScreen() {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={styles.container}>
         <Image source={require('../../assets/icon.png')} style={styles.logo} />
         <Text style={styles.titleSmart}>Smart</Text>
         <Text style={styles.titleInventory}>Inventory</Text>
 
         <Text style={styles.description}>{t('forgotPassword.description')}</Text>
 
-        <TextInput
+        <AppTextInput
           style={styles.input}
           placeholder="email@example.com"
           placeholderTextColor={Colors.placeholder}
@@ -66,7 +66,7 @@ export default function ForgotPasswordScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.backLink}>{t('forgotPassword.backToLogin')}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </KeyboardAvoidingView>
   );
 }

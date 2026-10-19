@@ -19,6 +19,7 @@ import { productService } from '@/services/productService';
 import { Product, ProductCreate } from '@/types/product';
 import { isValidBarcode } from '@/utils/barcode';
 import { truncateLabel } from '@/utils/text';
+import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import ProductFormFields from '@/components/ProductFormFields';
 import BottomSheetModal from '@/components/BottomSheetModal';
 import ConfirmModal from '@/components/ConfirmModal';
@@ -330,7 +331,7 @@ export default function InventarioScreen() {
             <Ionicons name="close" size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
         </View>
-        <ScrollView contentContainerStyle={styles.modalScrollContent}>
+        <KeyboardAwareScrollView contentContainerStyle={styles.modalScrollContent}>
           <ProductFormFields
             form={editForm}
             onChange={setEditForm}
@@ -341,7 +342,7 @@ export default function InventarioScreen() {
             marcaOptions={marcas}
             onAddMarca={marca => setExtraMarcas(prev => [...new Set([...prev, marca])])}
           />
-        </ScrollView>
+        </KeyboardAwareScrollView>
         <TouchableOpacity
           style={[styles.saveBtn, saving && { opacity: 0.6 }]}
           onPress={handleSaveEdit}

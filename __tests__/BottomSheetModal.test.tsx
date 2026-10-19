@@ -1,5 +1,5 @@
 import React from 'react';
-import { Animated, Modal, Text } from 'react-native';
+import { Animated, KeyboardAvoidingView, Modal, Text } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import BottomSheetModal from '../src/components/BottomSheetModal';
 
@@ -25,6 +25,11 @@ describe('BottomSheetModal', () => {
     // un fundido para el fondo y un deslizamiento aparte para la hoja
     expect(timing.mock.calls.filter(([, config]) => config.toValue === 1)).toHaveLength(2);
     timing.mockRestore();
+  });
+
+  it('lifts the sheet above the keyboard so its fields stay visible', () => {
+    const { UNSAFE_getByType } = render(sheet(true));
+    expect(UNSAFE_getByType(KeyboardAvoidingView).props.behavior).toBe('padding');
   });
 
   it('calls onRequestClose when tapping the backdrop or pressing back, but not when tapping the sheet', () => {

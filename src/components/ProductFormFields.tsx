@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView,
   Image, ActivityIndicator, Alert,
@@ -9,6 +9,7 @@ import { Colors } from '@/constants/colors';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
 import { pickFromGallery, pickFromCamera } from '@/services/imageService';
 import BottomSheetModal from '@/components/BottomSheetModal';
+import { useFieldFocus } from '@/components/KeyboardAwareScrollView';
 import DatePickerModal from '@/components/DatePickerModal';
 import { applySuggestionToForm } from '@/utils/ocrDraft';
 import { BARCODE_MAX_DIGITS, describeBarcodeLengths, onlyDigits } from '@/utils/barcode';
@@ -48,15 +49,28 @@ interface OptionPickerProps {
   onChange: (value: string | undefined) => void;
   onAdd?: (value: string) => void;
   showLocationIcon?: boolean;
+  onInputFocus?: () => void;
 }
 
 // Campo de selección por chips (categoría, marca, ubicación) con alta de valores nuevos.
 function OptionPicker({
-  label, required, testKey, options, value, placeholder, onChange, onAdd, showLocationIcon,
+  label, required, testKey, options, value, placeholder, onChange, onAdd, showLocationIcon, onInputFocus,
 }: OptionPickerProps) {
   const [adding, setAdding] = useState(false);
+  const chipsRef = useRef<ScrollView>(null);
   const [draft, setDraft] = useState('');
   const similar = useMemo(() => findSimilarOptions(draft, options), [draft, options]);
+
+  // La opción elegida va primero; al deseleccionarla vuelve a su lugar original (el orden de `options`).
+  const ordered = useMemo(
+    () => (value && options.includes(value) ? [value, ...options.filter(o => o !== value)] : options),
+    [options, value],
+  );
+
+  // Vuelve al principio del renglón para que la opción elegida quede a la vista.
+  useEffect(() => {
+    chipsRef.current?.scrollTo?.({ x: 0, animated: true });
+  }, [value]);
 
   const close = () => {
     setAdding(false);
@@ -81,6 +95,7 @@ function OptionPicker({
     <>
       <Text style={styles.label}>{label}{required ? ' *' : ''}</Text>
       <ScrollView
+        ref={chipsRef}
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.chipsScroll}
@@ -92,7 +107,7 @@ function OptionPicker({
             <Ionicons name="add" size={20} color={Colors.primary} />
           </TouchableOpacity>
         )}
-        {options.map(option => (
+        {ordered.map(option => (
           <TouchableOpacity
             key={option}
             style={[styles.chip, value === option && styles.chipActive]}
@@ -114,6 +129,7 @@ function OptionPicker({
               value={draft}
               onChangeText={setDraft}
               autoFocus
+              onFocus={onInputFocus}
               maxLength={OPTION_MAX}
               onSubmitEditing={handleConfirm}
             />
@@ -164,6 +180,8 @@ export default function ProductFormFields({
   suggestNombre,
 }: Props) {
   const { t } = useTranslation();
+  // Dentro de un KeyboardAwareScrollView, avisa qué campo se está completando para mostrarlo sobre el teclado
+  const onFieldFocus = useFieldFocus() ?? undefined;
   const [vencText, setVencText] = useState(() => isoToDisplay(form.vencimiento));
   const [showCalendar, setShowCalendar] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -242,7 +260,7 @@ export default function ProductFormFields({
         placeholderTextColor={Colors.placeholder}
         value={form.nombre ?? ''}
         onChangeText={v => set('nombre', v)}
-        onFocus={() => setNombreFocused(true)}
+        onFocus={() => { setNombreFocused(true); onFieldFocus?.(); }}
         onBlur={() => setTimeout(() => setNombreFocused(false), 150)}
         maxLength={NOMBRE_MAX}
       />
@@ -277,6 +295,7 @@ export default function ProductFormFields({
         placeholder={t('product.categoriaPlaceholder')}
         onChange={v => set('categoria', v)}
         onAdd={onAddCategoria}
+        onInputFocus={onFieldFocus}
       />
 
       <Text style={styles.label}>{t('product.stock')} *</Text>
@@ -286,6 +305,7 @@ export default function ProductFormFields({
         placeholderTextColor={Colors.placeholder}
         keyboardType="numeric"
         maxLength={STOCK_MAX_DIGITS}
+        onFocus={onFieldFocus}
         value={form.stock !== undefined ? String(form.stock) : ''}
         onChangeText={v => {
           const digits = v.replace(/[^0-9]/g, '');
@@ -301,6 +321,7 @@ export default function ProductFormFields({
         placeholder={t('product.optional')}
         onChange={v => set('marca', v)}
         onAdd={onAddMarca}
+        onInputFocus={onFieldFocus}
       />
 
       <Text style={styles.label}>{t('product.vencimiento')}</Text>
@@ -312,6 +333,7 @@ export default function ProductFormFields({
           placeholderTextColor={Colors.placeholder}
           keyboardType="number-pad"
           maxLength={10}
+          onFocus={onFieldFocus}
           value={vencText}
           onChangeText={handleVencimientoChange}
         />
@@ -334,6 +356,7 @@ export default function ProductFormFields({
         placeholderTextColor={Colors.placeholder}
         keyboardType="number-pad"
         maxLength={BARCODE_MAX_DIGITS}
+        onFocus={onFieldFocus}
         value={form.codigo_barras ?? ''}
         onChangeText={v => set('codigo_barras', onlyDigits(v) || undefined)}
       />
@@ -349,6 +372,7 @@ export default function ProductFormFields({
             placeholder={t('product.defaultPlaceholder')}
             placeholderTextColor={Colors.placeholder}
             keyboardType="numeric"
+            onFocus={onFieldFocus}
             value={form.stock_minimo != null ? String(form.stock_minimo) : ''}
             onChangeText={(v) => {
               const n = parseInt(v, 10);
@@ -368,6 +392,7 @@ export default function ProductFormFields({
             placeholder={t('product.defaultPlaceholder')}
             placeholderTextColor={Colors.placeholder}
             keyboardType="numeric"
+            onFocus={onFieldFocus}
             value={form.dias_alerta_vencimiento != null ? String(form.dias_alerta_vencimiento) : ''}
             onChangeText={(v) => {
               const n = parseInt(v, 10);
@@ -391,6 +416,7 @@ export default function ProductFormFields({
         placeholderTextColor={Colors.placeholder}
         multiline
         numberOfLines={3}
+        onFocus={onFieldFocus}
         value={form.descripcion ?? ''}
         onChangeText={v => set('descripcion', v || undefined)}
         maxLength={DESCRIPCION_MAX}
@@ -404,6 +430,7 @@ export default function ProductFormFields({
         placeholder={t('product.ubicacionPlaceholder')}
         onChange={v => set('ubicacion', v)}
         onAdd={onAddUbicacion}
+        onInputFocus={onFieldFocus}
         showLocationIcon
       />
 

@@ -4,13 +4,13 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import AppTextInput from '@/components/AppTextInput';
+import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import { Ionicons } from '@expo/vector-icons';
 import { GoogleSignin, isErrorWithCode, statusCodes } from '@react-native-google-signin/google-signin';
 import { useTranslation } from 'react-i18next';
@@ -108,14 +108,14 @@ export default function LoginScreen() {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={styles.container}>
         <Image source={require('../../assets/icon.png')} style={styles.logo} />
         <Text style={styles.titleSmart}>Smart</Text>
         <Text style={styles.titleInventory}>Inventory</Text>
 
         {step === 'email' ? (
           <>
-            <TextInput
+            <AppTextInput
               style={styles.input}
               placeholder={t('login.emailPlaceholder')}
               placeholderTextColor={Colors.placeholder}
@@ -161,7 +161,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <View style={styles.inputWrapper}>
-              <TextInput
+              <AppTextInput
                 style={[styles.input, styles.inputWithIcon, !!error && styles.inputError]}
                 placeholder={t('login.passwordPlaceholder')}
                 placeholderTextColor={Colors.placeholder}
@@ -190,7 +190,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
       {!!flashKey && <TopBanner message={t(flashKey as any)} onDismiss={dismissFlash} autoDismissMs={5000} />}
     </KeyboardAvoidingView>
   );

@@ -4,13 +4,13 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import AppTextInput from '@/components/AppTextInput';
+import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { authService } from '../../src/services/authService';
@@ -99,13 +99,13 @@ export default function ChangePasswordScreen() {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={styles.container}>
         <Image source={require('../../assets/icon.png')} style={styles.logo} />
         <Text style={styles.titleSmart}>Smart</Text>
         <Text style={styles.titleInventory}>Inventory</Text>
 
         <Text style={styles.label}>{t('changePassword.newPassword')}</Text>
-        <TextInput
+        <AppTextInput
           style={styles.input}
           placeholder="••••••••"
           placeholderTextColor={Colors.placeholder}
@@ -115,7 +115,7 @@ export default function ChangePasswordScreen() {
         />
 
         <Text style={styles.label}>{t('changePassword.repeatPassword')}</Text>
-        <TextInput
+        <AppTextInput
           style={styles.input}
           placeholder="••••••••"
           placeholderTextColor={Colors.placeholder}
@@ -145,7 +145,7 @@ export default function ChangePasswordScreen() {
         >
           <Text style={styles.buttonText}>{loading ? t('changePassword.changing') : t('changePassword.changePassword')}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </KeyboardAvoidingView>
   );
 }

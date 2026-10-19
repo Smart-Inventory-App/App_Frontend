@@ -4,13 +4,14 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import AppTextInput from '@/components/AppTextInput';
+import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { authService } from '../../src/services/authService';
@@ -82,7 +83,7 @@ export default function VerifyCodeScreen() {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={styles.container}>
         <Image source={require('../../assets/icon.png')} style={styles.logo} />
         <Text style={styles.titleSmart}>Smart</Text>
         <Text style={styles.titleInventory}>Inventory</Text>
@@ -91,7 +92,7 @@ export default function VerifyCodeScreen() {
 
         <View style={styles.codeRow}>
           {digits.map((d, i) => (
-            <TextInput
+            <AppTextInput
               key={i}
               ref={(r) => { inputRefs.current[i] = r; }}
               style={[styles.digitBox, !!error && styles.digitBoxError]}
@@ -123,7 +124,7 @@ export default function VerifyCodeScreen() {
         <TouchableOpacity onPress={handleBackToLogin} style={styles.backToLogin}>
           <Text style={styles.backToLoginText}>{t('verifyCode.backToLogin')}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </KeyboardAvoidingView>
   );
 }

@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Modal, Platform, Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { Animated, Dimensions, KeyboardAvoidingView, Modal, Platform, Pressable, StyleProp, StyleSheet, ViewStyle } from 'react-native';
 
 interface Props {
   visible: boolean;
@@ -48,13 +48,14 @@ export default function BottomSheetModal({
 
   return (
     <Modal visible={mounted} transparent animationType="none" onRequestClose={onRequestClose}>
-      <View style={styles.container}>
+      {/* Con el teclado abierto la hoja sube y se achica para que sus campos queden a la vista */}
+      <KeyboardAvoidingView behavior="padding" style={styles.container}>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: fade }]} />
         <Pressable testID={overlayTestID} style={StyleSheet.absoluteFill} onPress={onRequestClose} />
         <Animated.View testID={sheetTestID} style={[sheetStyle, { transform: [{ translateY }] }]}>
           {children}
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

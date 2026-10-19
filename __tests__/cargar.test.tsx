@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import CargarScreen from '../app/(tabs)/cargar';
@@ -27,13 +27,16 @@ jest.mock('@/services/productService', () => ({
 
 jest.mock('@/components/ProductFormFields', () => {
   const { TextInput: RNTextInput, Text: RNText } = require('react-native');
+  const { useFieldFocus } = require('@/components/KeyboardAwareScrollView');
   return function MockProductFormFields({ form, onChange }: any) {
+    const onFieldFocus = useFieldFocus();
     return (
       <>
         <RNText testID="mock-form-json">{JSON.stringify(form)}</RNText>
         <RNTextInput
           testID="mock-form-nombre"
           value={form.nombre ?? ''}
+          onFocus={onFieldFocus}
           onChangeText={(v: string) => onChange({ ...form, nombre: v, categoria: 'Lacteos', stock: 1 })}
         />
         <RNTextInput
@@ -435,6 +438,70 @@ describe('CargarScreen - toque en sugerencias con el teclado abierto', () => {
   it('deja que el primer toque llegue a las sugerencias sin cerrar el teclado (Android)', () => {
     render(<CargarScreen />);
     expect(screen.UNSAFE_getByType(ScrollView).props.keyboardShouldPersistTaps).toBe('handled');
+  });
+});
+
+describe('CargarScreen - teclado en la entrada', () => {
+  const handlers: Record<string, () => void> = {};
+  const originalState = (TextInput as any).State;
+
+  beforeEach(() => {
+    jest.spyOn(Keyboard, 'addListener').mockImplementation(((event: string, cb: () => void) => {
+      handlers[event] = cb;
+      return { remove: jest.fn() };
+    }) as any);
+  });
+
+  afterEach(() => {
+    (TextInput as any).State = originalState;
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
+
+  it('reserva el lugar del teclado también en Android', () => {
+    render(<CargarScreen />);
+    expect(screen.UNSAFE_getByType(KeyboardAvoidingView).props.behavior).toBe('padding');
+  });
+
+  it('agrega espacio al final mientras el teclado está abierto, para poder subir los últimos campos', () => {
+    render(<CargarScreen />);
+    const padding = () => StyleSheet.flatten(screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle).paddingBottom;
+    expect(padding()).toBe(40);
+    act(() => { handlers.keyboardDidShow(); });
+    expect(padding()).toBeGreaterThan(40);
+    act(() => { handlers.keyboardDidHide(); });
+    expect(padding()).toBe(40);
+  });
+
+  it('desplaza la pantalla para que el campo enfocado quede por encima del teclado', () => {
+    jest.useFakeTimers();
+    render(<CargarScreen />);
+    const scroll = screen.UNSAFE_getByType(ScrollView).instance as any;
+    scroll.getInnerViewRef = jest.fn(() => ({}));
+    scroll.scrollTo = jest.fn();
+    (TextInput as any).State = {
+      currentlyFocusedInput: () => ({ measureLayout: (_inner: unknown, ok: (x: number, y: number) => void) => ok(0, 500) }),
+    };
+
+    // el teclado todavía no está abierto: espera a que aparezca
+    fireEvent(screen.getByTestId('mock-form-nombre'), 'focus');
+    expect(scroll.scrollTo).not.toHaveBeenCalled();
+    act(() => { handlers.keyboardDidShow(); });
+    act(() => { jest.advanceTimersByTime(150); });
+    expect(scroll.scrollTo).toHaveBeenCalledWith({ y: 380, animated: true });
+
+    // con el teclado ya abierto, al cambiar de campo se desplaza enseguida
+    scroll.scrollTo.mockClear();
+    fireEvent(screen.getByTestId('mock-form-nombre'), 'focus');
+    expect(scroll.scrollTo).toHaveBeenCalledWith({ y: 380, animated: true });
+  });
+
+  it('no falla si no se puede medir el campo enfocado', () => {
+    render(<CargarScreen />);
+    (TextInput as any).State = { currentlyFocusedInput: () => null };
+    fireEvent(screen.getByTestId('mock-form-nombre'), 'focus');
+    act(() => { handlers.keyboardDidShow(); });
+    expect(screen.getByTestId('mock-form-nombre')).toBeTruthy();
   });
 });
 

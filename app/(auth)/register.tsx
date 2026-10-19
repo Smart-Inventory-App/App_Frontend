@@ -4,13 +4,13 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import AppTextInput from '@/components/AppTextInput';
+import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
@@ -110,7 +110,7 @@ export default function RegisterScreen() {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={styles.container}>
         <Image source={require('../../assets/icon.png')} style={styles.logo} />
         <Text style={styles.titleSmart}>Smart</Text>
         <Text style={styles.titleInventory}>Inventory</Text>
@@ -119,7 +119,7 @@ export default function RegisterScreen() {
           <Text style={styles.label}>{t('register.emailLabel')}</Text>
           {emailTaken && <Text style={styles.takenBadge}>{t('register.emailTaken')}</Text>}
         </View>
-        <TextInput
+        <AppTextInput
           style={[styles.input, emailTaken && styles.inputError]}
           placeholder="email@example.com"
           placeholderTextColor={Colors.placeholder}
@@ -134,7 +134,7 @@ export default function RegisterScreen() {
         </View>
 
         <Text style={styles.label}>{t('register.passwordLabel')}</Text>
-        <TextInput
+        <AppTextInput
           style={styles.input}
           placeholder="••••••••"
           placeholderTextColor={Colors.placeholder}
@@ -144,7 +144,7 @@ export default function RegisterScreen() {
         />
 
         <Text style={styles.label}>{t('register.repeatPasswordLabel')}</Text>
-        <TextInput
+        <AppTextInput
           style={styles.input}
           placeholder="••••••••"
           placeholderTextColor={Colors.placeholder}
@@ -177,7 +177,7 @@ export default function RegisterScreen() {
         <TouchableOpacity onPress={handleBackToLogin} style={styles.backToLogin}>
           <Text style={styles.backToLoginText}>{t('register.backToLogin')}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </KeyboardAvoidingView>
   );
 }

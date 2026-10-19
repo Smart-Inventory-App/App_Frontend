@@ -1,11 +1,8 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import {
   KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -16,6 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
+import AppTextInput from '@/components/AppTextInput';
+import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import ProductFormFields from '@/components/ProductFormFields';
 import ScreenHeader from '@/components/ScreenHeader';
 import { isValidBarcode } from '@/utils/barcode';
@@ -249,7 +248,7 @@ export default function CargarScreen() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior="padding"
     >
       <ScreenHeader
         title={t('product.loadTitle')}
@@ -276,7 +275,7 @@ export default function CargarScreen() {
           </View>
         }
       />
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView style={styles.container} contentContainerStyle={styles.content}>
         {direction === 'entrada' ? (
           <>
           <TouchableOpacity style={styles.scanBtn} onPress={() => setScanVisible(true)} testID="open-scan-modal">
@@ -298,7 +297,7 @@ export default function CargarScreen() {
         ) : (
           <View style={styles.container}>
             <Text style={styles.label}>{t('product.salidaProducto')} *</Text>
-            <TextInput
+            <AppTextInput
               style={styles.input}
               placeholder={t('product.salidaProductoPlaceholder')}
               placeholderTextColor={Colors.placeholder}
@@ -328,7 +327,7 @@ export default function CargarScreen() {
             )}
 
             <Text style={styles.label}>{t('product.salidaCantidad')} *</Text>
-            <TextInput
+            <AppTextInput
               style={styles.input}
               placeholder="0"
               placeholderTextColor={Colors.placeholder}
@@ -362,7 +361,7 @@ export default function CargarScreen() {
               <Text style={styles.labelInRow}>{t('product.historialNotaPlaceholder')}</Text>
               <Text testID="salida-nota-counter" style={styles.counter}>{salidaNota.length}/{SALIDA_NOTA_MAX}</Text>
             </View>
-            <TextInput
+            <AppTextInput
               testID="input-salida-nota"
               style={[styles.input, styles.multiline]}
               placeholder={t('product.salidaNotaPlaceholder')}
@@ -389,7 +388,7 @@ export default function CargarScreen() {
               : direction === 'entrada' ? t('product.saveProduct') : t('product.salidaSubmit')}
           </Text>
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAwareScrollView>
       <ScanModal
         visible={scanVisible}
         onClose={() => setScanVisible(false)}

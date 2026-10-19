@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Image, Alert, StyleSheet } from 'react-native';
 import ProductFormFields from '../src/components/ProductFormFields';
+import { FieldFocusContext } from '../src/components/KeyboardAwareScrollView';
 import { pickFromCamera, pickFromGallery } from '@/services/imageService';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
 
@@ -478,6 +479,36 @@ describe('ProductFormFields - labels and placeholders', () => {
     expect(flat('alert-label-box-dias').minHeight).toBe(flat('alert-label-box-stock-minimo').minHeight);
     expect(flat('alert-label-box-stock-minimo').justifyContent).toBe('flex-end');
     expect(flat('alert-label-box-dias').justifyContent).toBe('flex-end');
+  });
+
+  it('puts the selected option first and sends it back to its place when deselected', () => {
+    render(<Wrapper categoriaOptions={['Lácteos', 'Limpieza', 'Bebidas']} />);
+    const order = () => {
+      const tree = JSON.stringify(screen.toJSON());
+      return ['Lácteos', 'Limpieza', 'Bebidas'].sort((a, b) => tree.indexOf(a) - tree.indexOf(b));
+    };
+    expect(order()).toEqual(['Lácteos', 'Limpieza', 'Bebidas']);
+    fireEvent.press(screen.getByText('Bebidas'));
+    expect(order()).toEqual(['Bebidas', 'Lácteos', 'Limpieza']);
+    fireEvent.press(screen.getByText('Bebidas'));
+    expect(order()).toEqual(['Lácteos', 'Limpieza', 'Bebidas']);
+  });
+
+  it('tells the screen when any text field is focused', () => {
+    const onFieldFocus = jest.fn();
+    render(
+      <FieldFocusContext.Provider value={onFieldFocus}>
+        <Wrapper />
+      </FieldFocusContext.Provider>,
+    );
+    const ids = ['input-vencimiento', 'input-codigo-barras', 'input-descripcion'];
+    ids.forEach(id => fireEvent(screen.getByTestId(id), 'focus'));
+    fireEvent(screen.getByPlaceholderText('ej. Leche entera 1L'), 'focus');
+    fireEvent(screen.getByPlaceholderText('0'), 'focus');
+    screen.getAllByPlaceholderText('Default').forEach(input => fireEvent(input, 'focus'));
+    fireEvent.press(screen.getByTestId('add-categoria'));
+    fireEvent(screen.getByTestId('input-categoria'), 'focus');
+    expect(onFieldFocus).toHaveBeenCalledTimes(ids.length + 2 + 2 + 1);
   });
 
   it('shows "Default" in the alert rule fields', () => {

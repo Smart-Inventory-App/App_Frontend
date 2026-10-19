@@ -2,13 +2,13 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import AppTextInput from '@/components/AppTextInput';
+import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import BottomSheetModal from '@/components/BottomSheetModal';
@@ -142,7 +142,7 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
       ) : events.length === 0 ? (
         <Text style={styles.emptyText}>{t('product.historialEmpty')}</Text>
       ) : (
-        <ScrollView style={{ maxHeight: 420 }}>
+        <KeyboardAwareScrollView style={{ maxHeight: 420 }}>
           {events.map(event => {
             const isEditing = editingId === event.id;
             return (
@@ -150,7 +150,7 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
                 {isEditing ? (
                   <View style={styles.editForm}>
                     <Text style={styles.editLabel}>{t('product.historialUnidades')}</Text>
-                    <TextInput
+                    <AppTextInput
                       style={styles.editInput}
                       keyboardType="numeric"
                       value={editQuantity}
@@ -182,7 +182,7 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
                       <Text style={styles.editLabel}>{t('product.historialMotivo')}</Text>
                       <Text testID="historial-note-counter" style={styles.editCounter}>{editNote.length}/{NOTE_MAX}</Text>
                     </View>
-                    <TextInput
+                    <AppTextInput
                       style={styles.editInput}
                       placeholder={t('product.historialNotaPlaceholder')}
                       placeholderTextColor={Colors.placeholder}
@@ -243,7 +243,7 @@ export default function HistorialModal({ product, visible, onClose, onChanged }:
               </View>
             );
           })}
-        </ScrollView>
+        </KeyboardAwareScrollView>
       )}
       <ConfirmModal
         visible={!!eventToDelete}

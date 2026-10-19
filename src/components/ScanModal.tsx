@@ -4,10 +4,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import AppTextInput from '@/components/AppTextInput';
+import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
@@ -464,7 +465,7 @@ export default function ScanModal({
           {barcodeValue ? t('scan.barcodeTitle') : t('scan.barcodeNone')}
         </Text>
         <Text style={styles.label}>{t('product.codigoBarras')}</Text>
-        <TextInput
+        <AppTextInput
           style={styles.input}
           keyboardType="number-pad"
           maxLength={BARCODE_MAX_DIGITS}
@@ -524,7 +525,7 @@ export default function ScanModal({
           {expiryRead ? t('scan.expiryTitle', { date: expiryRead }) : t('scan.expiryNoDate')}
         </Text>
         <Text style={styles.label}>{t('product.vencimiento')}</Text>
-        <TextInput
+        <AppTextInput
           style={styles.input}
           keyboardType="number-pad"
           maxLength={10}
@@ -559,7 +560,7 @@ export default function ScanModal({
               <Text style={styles.warningText}>{t('scan.receiptNoMatch')}</Text>
             )}
             <View style={styles.receiptLineRow}>
-              <TextInput
+              <AppTextInput
                 style={[styles.input, styles.receiptQuantityInput]}
                 keyboardType="numeric"
                 value={String(line.quantity)}
@@ -596,7 +597,7 @@ export default function ScanModal({
             </TouchableOpacity>
             {activeSearchIndex === index && (
               <View>
-                <TextInput
+                <AppTextInput
                   style={styles.input}
                   value={lineSearchQuery}
                   onChangeText={setLineSearchQuery}
@@ -684,9 +685,9 @@ export default function ScanModal({
           <Ionicons name="close" size={24} color={Colors.textPrimary} />
         </TouchableOpacity>
       </View>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={styles.content}>
         {renderStep()}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </BottomSheetModal>
   );
 }
