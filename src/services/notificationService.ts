@@ -1,5 +1,18 @@
 import { Platform } from "react-native";
-import api from "./api";
+import authApi from "./authApi";
+
+// Canal por defecto de Android. Debe coincidir con "defaultChannel" del plugin
+// expo-notifications en app.json, que es el canal que usan los push de FCM.
+const ANDROID_CHANNEL_ID = "default";
+
+// En Android 13+ el diálogo de permiso de notificaciones no aparece hasta que existe un canal.
+async function ensureAndroidChannel(Notifications: typeof import("expo-notifications")): Promise<void> {
+  if (Platform.OS !== "android") return;
+  await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
+    name: "Alertas",
+    importance: Notifications.AndroidImportance.MAX,
+  });
+}
 
 // getFirebaseToken: web usa el SDK de Firebase, nativo usa expo-notifications
 export async function getFirebaseToken(): Promise<string | null> {
@@ -9,10 +22,10 @@ export async function getFirebaseToken(): Promise<string | null> {
   return getNativeDeviceToken();
 }
 
-// Registra el token en el backend (endpoint autenticado)
+// Registra el token en el servicio de auth (endpoint autenticado)
 export async function registerTokenWithBackend(token: string): Promise<void> {
   try {
-    await api.patch("/auth/firebase-token", { firebase_token: token });
+    await authApi.patch("/auth/firebase-token", { firebase_token: token });
   } catch {
     // No crítico — el usuario sigue logueado aunque falle
   }
@@ -22,6 +35,8 @@ export async function registerTokenWithBackend(token: string): Promise<void> {
 async function getNativeDeviceToken(): Promise<string | null> {
   try {
     const Notifications = await import("expo-notifications");
+
+    await ensureAndroidChannel(Notifications);
 
     const perms = (await Notifications.getPermissionsAsync()) as any;
     let granted: boolean = perms.granted ?? perms.status === "granted";
@@ -36,7 +51,9 @@ async function getNativeDeviceToken(): Promise<string | null> {
     // getDevicePushTokenAsync devuelve el FCM token en Android
     const tokenData = await Notifications.getDevicePushTokenAsync();
     return tokenData.data ?? null;
-  } catch {
+  } catch (error) {
+    // Sin google-services.json en el build, Android falla acá (FirebaseApp sin inicializar)
+    console.warn("[push] No se pudo obtener el token FCM:", error);
     return null;
   }
 }
@@ -64,6 +81,7 @@ export function setupForegroundHandler(): void {
         shouldShowList: true,
       }),
     });
+    void ensureAndroidChannel(Notifications);
   });
 }
 
