@@ -294,10 +294,9 @@ export default function InventarioScreen() {
 
   const hasActiveFilters = !!(searchInput || selectedCategoria || selectedUbicacion);
 
-  return (
-    <View style={styles.container}>
-      <ScreenHeader title={t('inventory.title')} onHomePress={() => router.navigate('/(tabs)/')} />
-
+  // Todo lo que está arriba de las entradas se desliza junto con la lista: solo el banner queda fijo
+  const listHeader = (
+    <>
       <TouchableOpacity
         testID="open-stock-total"
         style={styles.stockTotalBtn}
@@ -323,9 +322,11 @@ export default function InventarioScreen() {
         )}
       </View>
 
-      <View style={styles.sortRow}>
-        <Ionicons name="swap-vertical-outline" size={14} color={Colors.textSecondary} />
-        <Text style={styles.sortLabel}>{t('inventory.sortBy')}</Text>
+      <View testID="sort-row" style={styles.sortRow}>
+        <View style={styles.sortLabelRow}>
+          <Ionicons name="swap-vertical-outline" size={14} color={Colors.textSecondary} />
+          <Text testID="sort-label" style={styles.sortLabel}>{t('inventory.sortBy')}</Text>
+        </View>
         <ScrollView
           ref={sortChipsRef}
           horizontal
@@ -375,36 +376,45 @@ export default function InventarioScreen() {
           onSelect={setSelectedUbicacion}
         />
       )}
+      {/* Margen debajo de los filtros para que las entradas no queden pegadas */}
+      <View testID="list-header-gap" style={styles.headerGap} />
+    </>
+  );
 
-      {loading ? (
-        <ActivityIndicator color={Colors.primary} style={{ marginTop: 40 }} />
-      ) : products.length === 0 ? (
-        <View style={styles.empty}>
-          <Ionicons name="cube-outline" size={48} color={Colors.placeholder} />
-          <Text style={styles.emptyText}>
-            {hasActiveFilters ? t('inventory.noResults') : t('inventory.empty')}
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={products}
-          keyExtractor={item => String(item.id)}
-          renderItem={renderItem}
-          contentContainerStyle={{ padding: 16 }}
-          ListFooterComponent={hasMore ? (
-            <TouchableOpacity
-              testID="inventory-load-more"
-              style={[styles.loadMoreBtn, loadingMore && styles.loadMoreBtnDisabled]}
-              disabled={loadingMore}
-              onPress={loadMore}
-            >
-              {loadingMore
-                ? <ActivityIndicator testID="inventory-more-loading" size="small" color={Colors.primary} />
-                : <Text style={styles.loadMoreText}>{t('inventory.loadMore')}</Text>}
-            </TouchableOpacity>
-          ) : null}
-        />
-      )}
+  return (
+    <View style={styles.container}>
+      <ScreenHeader title={t('inventory.title')} onHomePress={() => router.navigate('/(tabs)/')} />
+
+      <FlatList
+        data={loading ? [] : products}
+        keyExtractor={item => String(item.id)}
+        renderItem={renderItem}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 16 }}
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={loading ? (
+          <ActivityIndicator color={Colors.primary} style={{ marginTop: 40 }} />
+        ) : (
+          <View style={styles.empty}>
+            <Ionicons name="cube-outline" size={48} color={Colors.placeholder} />
+            <Text style={styles.emptyText}>
+              {hasActiveFilters ? t('inventory.noResults') : t('inventory.empty')}
+            </Text>
+          </View>
+        )}
+        ListFooterComponent={hasMore && !loading ? (
+          <TouchableOpacity
+            testID="inventory-load-more"
+            style={[styles.loadMoreBtn, loadingMore && styles.loadMoreBtnDisabled]}
+            disabled={loadingMore}
+            onPress={loadMore}
+          >
+            {loadingMore
+              ? <ActivityIndicator testID="inventory-more-loading" size="small" color={Colors.primary} />
+              : <Text style={styles.loadMoreText}>{t('inventory.loadMore')}</Text>}
+          </TouchableOpacity>
+        ) : null}
+      />
 
       {/* Tocar afuera de la hoja (o el botón atrás) cierra sin guardar */}
       <BottomSheetModal
@@ -485,6 +495,7 @@ export default function InventarioScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f2f3f6' },
+  headerGap: { height: 14 },
   stockTotalBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -512,9 +523,8 @@ const styles = StyleSheet.create({
   },
   searchIcon: { marginRight: 8 },
   searchInput: { flex: 1, fontSize: 14, color: Colors.textPrimary },
+  // "Ordenar:" arriba y los cuatro botones de orden debajo
   sortRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 6,
     gap: 6,
@@ -522,6 +532,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#eee',
     marginBottom: 4,
   },
+  sortLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   sortLabel: {
     fontSize: 12,
     color: Colors.textSecondary,
@@ -549,6 +560,7 @@ const styles = StyleSheet.create({
     // Un poco más bajas que las entradas de las demás listas de la app
     paddingVertical: 8,
     paddingHorizontal: 12,
+    marginHorizontal: 16,
     marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
@@ -565,6 +577,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
     backgroundColor: '#fff',
+    marginHorizontal: 16,
     marginTop: 4,
   },
   loadMoreBtnDisabled: { opacity: 0.6 },
@@ -578,7 +591,7 @@ const styles = StyleSheet.create({
   labelGreen: { backgroundColor: '#2db7a3' },
   labelYellow: { backgroundColor: '#fbbc05' },
   labelRed: { backgroundColor: '#e5484d' },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  empty: { alignItems: 'center', justifyContent: 'center', gap: 12, paddingTop: 60 },
   emptyText: { color: Colors.textSecondary, fontSize: 15 },
   modalSheet: {
     backgroundColor: '#fff',

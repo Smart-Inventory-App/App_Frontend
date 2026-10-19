@@ -77,8 +77,8 @@ export default function AlertasScreen() {
         <View style={styles.alertSummary}>
           {Object.entries(alertsSummary).map(([key, value]) => (
             <View key={key} testID={`alert-summary-${key}`} style={[styles.alertSummaryItem, alertContainer[key as keyof typeof alertContainer]]}>
-              <Text style={[styles.alertSummaryItemValue, { color: alertTextColor[key as keyof typeof alertTextColor]}]}>{value}</Text>
-              <Text style={[styles.alertSummaryItemText, { color: alertTextColor[key as keyof typeof alertTextColor]}]}>{key === "critical" ? "Críticas" : key === "warning" ? "Advertencias" : "Info"}</Text>
+              <Text testID={`alert-summary-value-${key}`} style={[styles.alertSummaryItemValue, { color: alertTextColor[key as keyof typeof alertTextColor]}]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{value}</Text>
+              <Text testID={`alert-summary-text-${key}`} style={[styles.alertSummaryItemText, { color: alertTextColor[key as keyof typeof alertTextColor]}]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{key === "critical" ? "Críticas" : key === "warning" ? "Advertencias" : "Info"}</Text>
             </View>
           ))}
         </View>
@@ -121,8 +121,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   alertSummaryItem: { alignItems: 'center', justifyContent: 'center', flex: 1, paddingVertical: 14, paddingHorizontal: 6 },
-  alertSummaryItemValue: { fontSize: 28, lineHeight: 34, fontFamily: 'Figtree_400Regular' },
-  alertSummaryItemText: { fontSize: 16, lineHeight: 22, marginTop: 2, fontFamily: 'Figtree_400Regular' },
+  alertSummaryItemValue: { alignSelf: 'stretch', textAlign: 'center', fontSize: 28, lineHeight: 34, fontFamily: 'Figtree_400Regular' },
+  // El texto se achica solo si el cuadrado es angosto, para que "Advertencias" entre siempre en un renglón
+  alertSummaryItemText: { alignSelf: 'stretch', textAlign: 'center', fontSize: 16, lineHeight: 22, marginTop: 2, fontFamily: 'Figtree_400Regular' },
   criticalContainer: { backgroundColor: '#e5484d8f', borderBottomLeftRadius: 10, borderTopLeftRadius: 10 },
   warningContainer: { backgroundColor: '#fbbc059d', marginHorizontal: 4 },
   infoContainer: { backgroundColor: '#2db7a352', borderBottomRightRadius: 10, borderTopRightRadius: 10 },

@@ -120,24 +120,32 @@ describe('HomeScreen - header and greeting', () => {
   });
 
   it('says "Bienvenido," on one line and the name on the line below', async () => {
-    await load({ profile: { username: 'ana' } });
+    await load({ profile: { firstName: 'Ana' } });
     expect(screen.getByTestId('home-greeting').props.children).toBe('Bienvenido,');
-    expect(screen.getByTestId('home-name').props.children).toBe('ana');
+    expect(screen.getByTestId('home-name').props.children).toBe('Ana');
     expect(at('home-greeting')).toBeLessThan(at('home-name'));
   });
 
-  it('falls back to the first name when there is no username', async () => {
-    await load({ profile: { firstName: 'Ana' } });
+  it('greets with the name of the person, never with the username', async () => {
+    await load({ profile: { firstName: 'Ana', username: 'anita99' } });
     expect(screen.getByTestId('home-name').props.children).toBe('Ana');
+    expect(screen.queryByText('anita99')).toBeNull();
+  });
+
+  it('does not greet with the username when the person has no name', async () => {
+    await load({ profile: { username: 'anita99' } });
+    expect(screen.queryByTestId('home-name')).toBeNull();
+    expect(screen.getByTestId('home-greeting').props.children).toBe('Bienvenido');
+    expect(screen.queryByText('anita99')).toBeNull();
   });
 
   it('cuts a name longer than 20 characters and adds "..."', async () => {
-    await load({ profile: { username: 'Nombre de usuario larguisimo de verdad' } });
+    await load({ profile: { firstName: 'Nombre de usuario larguisimo de verdad' } });
     expect(screen.getByTestId('home-name').props.children).toBe('Nombre de usuario la...');
   });
 
   it('keeps a name of exactly 20 characters whole', async () => {
-    await load({ profile: { username: '12345678901234567890' } });
+    await load({ profile: { firstName: '12345678901234567890' } });
     expect(screen.getByTestId('home-name').props.children).toBe('12345678901234567890');
   });
 
@@ -148,26 +156,26 @@ describe('HomeScreen - header and greeting', () => {
   });
 
   it('says "Tu estado," when the user leaves the home and comes back', async () => {
-    const { unmount } = await load({ profile: { username: 'ana' } });
+    const { unmount } = await load({ profile: { firstName: 'Ana' } });
     expect(screen.getByTestId('home-greeting').props.children).toBe('Bienvenido,');
     unmount();
 
-    await load({ profile: { username: 'ana' } });
+    await load({ profile: { firstName: 'Ana' } });
     expect(screen.getByTestId('home-greeting').props.children).toBe('Tu estado,');
-    expect(screen.getByTestId('home-name').props.children).toBe('ana');
+    expect(screen.getByTestId('home-name').props.children).toBe('Ana');
   });
 
   it('says "Bienvenido," again after a new login', async () => {
-    const { unmount } = await load({ profile: { username: 'ana' } });
+    const { unmount } = await load({ profile: { firstName: 'Ana' } });
     unmount();
     resetWelcome();
 
-    await load({ profile: { username: 'ana' } });
+    await load({ profile: { firstName: 'Ana' } });
     expect(screen.getByTestId('home-greeting').props.children).toBe('Bienvenido,');
   });
 
   it('is a banner of the teal of the app with rounded bottom corners, and the greeting in white', async () => {
-    await load({ profile: { username: 'ana' } });
+    await load({ profile: { firstName: 'Ana' } });
     const style = StyleSheet.flatten(screen.getByTestId('home-header').props.style);
     expect(style.borderBottomLeftRadius).toBeGreaterThan(0);
     expect(style.backgroundColor).toBe(Colors.primary);

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, FlatList, StyleSheet } from 'react-native';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { Ionicons } from '@expo/vector-icons';
 import InventarioScreen from '../app/(tabs)/inventario';
 import { productService } from '@/services/productService';
@@ -400,17 +400,77 @@ describe('InventarioScreen - header, sort row and filters', () => {
     expect(screen.getByText('Inventario')).toBeTruthy();
   });
 
-  it('aligns the sort chips vertically with the "Ordenar:" label (no extra bottom padding)', async () => {
+  it('puts the "Ordenar:" label above the four sort buttons', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    expect(StyleSheet.flatten(screen.getByTestId('sort-row').props.style).flexDirection).toBeUndefined();
+    const whole = JSON.stringify(screen.toJSON());
+    const tree = whole.slice(whole.indexOf('sort-row'));
+    const at = (text: string) => tree.indexOf(text);
+    expect(at('sort-label')).toBeLessThan(at('Nombre'));
+    expect(at('Nombre')).toBeLessThan(at('Stock'));
+    expect(at('Stock')).toBeLessThan(at('Vencimiento'));
+    expect(at('Vencimiento')).toBeLessThan(at('Categoría'));
+    within(screen.getByTestId('sort-row')).getByText('Ordenar:');
+  });
+
+  it('keeps the four sort buttons in one row, starting at the left margin', async () => {
     mockedProducts.getProducts.mockResolvedValue([product()]);
     const { UNSAFE_getAllByType } = render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
-    const { ScrollView, StyleSheet } = require('react-native');
+    const { ScrollView } = require('react-native');
     const sortScroll = UNSAFE_getAllByType(ScrollView).find(
       (s: any) => StyleSheet.flatten(s.props.contentContainerStyle)?.alignItems === 'center',
     );
     const style = StyleSheet.flatten(sortScroll.props.contentContainerStyle);
-    expect(style.paddingBottom).toBe(0);
+    expect(style.flexDirection).toBe('row');
     expect(style.paddingLeft).toBe(0);
+  });
+
+  it('scrolls the whole screen, leaving only the banner fixed at the top', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const list = within(screen.UNSAFE_getByType(FlatList));
+    // dentro de la lista que se desliza: el botón de stock total, la búsqueda, el orden y los filtros
+    expect(list.getByTestId('open-stock-total')).toBeTruthy();
+    expect(list.getByPlaceholderText('Buscar por nombre o marca...')).toBeTruthy();
+    expect(list.getByTestId('sort-row')).toBeTruthy();
+    expect(list.getByTestId('filter-search-categoria')).toBeTruthy();
+    // el banner, en cambio, queda afuera
+    expect(list.queryByTestId('screen-header')).toBeNull();
+    expect(screen.getByTestId('screen-header')).toBeTruthy();
+  });
+
+  it('leaves a margin below the location filter so the entries do not look stuck to it', async () => {
+    mockedProducts.getFilterOptions.mockResolvedValue({ categorias: ['Lacteos'], ubicaciones: ['Heladera'], marcas: [] });
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const gap = StyleSheet.flatten(screen.getByTestId('list-header-gap').props.style);
+    expect(gap.height).toBeGreaterThanOrEqual(12);
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('filter-search-ubicacion')).toBeLessThan(tree.indexOf('list-header-gap'));
+    expect(tree.indexOf('list-header-gap')).toBeLessThan(tree.indexOf('product-item-1'));
+  });
+
+  it('keeps the search field mounted while the products load, so typing is not interrupted', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const input = screen.getByPlaceholderText('Buscar por nombre o marca...');
+    fireEvent.changeText(input, 'lec');
+    expect(screen.getByPlaceholderText('Buscar por nombre o marca...')).toBe(input);
+  });
+
+  it('shows the loading indicator and the empty state under the filters, not instead of them', async () => {
+    mockedProducts.getProducts.mockResolvedValue([]);
+    render(<InventarioScreen />);
+    expect(screen.getByTestId('sort-row')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('No tenés productos cargados')).toBeTruthy());
+    expect(screen.getByTestId('sort-row')).toBeTruthy();
+    expect(screen.getByTestId('open-stock-total')).toBeTruthy();
   });
 
   it('has no horizontal swipe in the category and location filters: a search button comes first instead', async () => {
