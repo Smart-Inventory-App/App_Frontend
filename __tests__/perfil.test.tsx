@@ -7,12 +7,13 @@ import { profileService, UserProfile } from '@/services/profileService';
 import { changeLanguage } from '@/i18n';
 
 const mockReplace = jest.fn();
+const mockNavigate = jest.fn();
 const mockLogout = jest.fn();
 
 jest.mock('expo-router', () => {
   const ReactActual = require('react');
   return {
-    router: { replace: (...args: any[]) => mockReplace(...args) },
+    router: { replace: (...args: any[]) => mockReplace(...args), navigate: (...args: any[]) => mockNavigate(...args) },
     useFocusEffect: (cb: () => void) => ReactActual.useEffect(cb, [cb]),
   };
 });
@@ -248,5 +249,26 @@ describe('PerfilScreen', () => {
     expect(mockLogout).toHaveBeenCalled();
     expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
     expect(screen.queryByText('¿Estás seguro que querés cerrar sesión?')).toBeNull();
+  });
+});
+
+describe('PerfilScreen - header', () => {
+  it('shows the home icon on the left and "Perfil" on the right, and the icon goes home', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile());
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Perfil')).toBeTruthy());
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('header-home')).toBeLessThan(tree.indexOf('"Perfil"'));
+    fireEvent.press(screen.getByTestId('header-home'));
+    expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/');
+  });
+
+  it('puts the banner above the rest of the profile', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile());
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByTestId('screen-header')).toBeTruthy());
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('screen-header')).toBeLessThan(tree.indexOf('Cerrar sesión'));
+    expect(tree.indexOf('screen-header')).toBeLessThan(tree.indexOf('ana'));
   });
 });

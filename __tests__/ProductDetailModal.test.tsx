@@ -31,7 +31,7 @@ describe('ProductDetailModal', () => {
 
   it('shows all the data of the product, as it was loaded', () => {
     render(<ProductDetailModal product={FULL} onClose={jest.fn()} />);
-    expect(screen.getByText('Información del producto')).toBeTruthy();
+    expect(screen.getByText('Información del Producto')).toBeTruthy();
     expect(text('detail-nombre')).toBe('Leche entera');
     expect(text('detail-marca')).toEqual('La Serenísima');
     expect(text('detail-categoria')).toEqual('Lácteos');

@@ -247,7 +247,7 @@ describe('HomeScreen - cards', () => {
 describe('HomeScreen - latest changes and recent products', () => {
   it('shows the latest changes first and the recent products below', async () => {
     await load({ changes: [change()], products: [product({ id: 2, nombre: 'Yogur' })] });
-    expect(screen.getByText('Últimos cambios')).toBeTruthy();
+    expect(screen.getByText('Últimos Cambios')).toBeTruthy();
     expect(screen.getByText('Productos Recientes')).toBeTruthy();
     expect(at('home-section-changes')).toBeLessThan(at('change-row-event-1'));
     expect(at('change-row-event-1')).toBeLessThan(at('home-section-recent'));
@@ -380,7 +380,7 @@ describe('HomeScreen - numbers, row sizes, dates and arrows', () => {
     expect(router.navigate).toHaveBeenCalledWith('/(tabs)/inventario');
   });
 
-  it('has an arrow on the right of "Últimos cambios"', async () => {
+  it('has an arrow on the right of "Últimos Cambios"', async () => {
     await load({ changes: [change()] });
     const tree = JSON.stringify(screen.toJSON());
     expect(tree.indexOf('home-section-changes')).toBeLessThan(tree.indexOf('home-changes-more'));
@@ -436,5 +436,36 @@ describe('HomeScreen - empty lists', () => {
     await load({ products: [product({ id: 2, nombre: 'Yogur' })] });
     expect(screen.getByText('No hiciste cambios aún')).toBeTruthy();
     expect(screen.queryByText('No tenés productos cargados')).toBeNull();
+  });
+});
+
+describe('HomeScreen - titles and the stock part of the entries', () => {
+  it('keeps "Últimos Cambios" as the title of the section of the home', async () => {
+    await load({ changes: [change()] });
+    expect(screen.getByText('Últimos Cambios')).toBeTruthy();
+    expect(screen.queryByText('Historial de Cambios')).toBeNull();
+    expect(StyleSheet.flatten(screen.getByTestId('home-section-changes').props.style).textTransform).toBe('uppercase');
+  });
+
+  it('opens the product information when the stock part of a change is tapped', async () => {
+    await load({ changes: [change()] });
+    fireEvent.press(screen.getByTestId('change-stock-event-1'));
+    expect(screen.getByTestId('product-detail-card')).toBeTruthy();
+    expect(screen.getByText('Información del Producto')).toBeTruthy();
+    expect(screen.getByTestId('detail-nombre').props.children).toBe('Leche');
+  });
+
+  it('opens the product information when the stock of a recent product is tapped', async () => {
+    await load({ products: [product({ id: 2, nombre: 'Yogur', stock: 9 })] });
+    fireEvent.press(screen.getByText('Stock: 9'));
+    expect(screen.getByTestId('detail-nombre').props.children).toBe('Yogur');
+  });
+
+  it('calls the history window "Historial de Cambios" and the information window "Información del Producto"', async () => {
+    await load({ changes: [change()] });
+    fireEvent.press(screen.getByTestId('home-changes-more'));
+    await waitFor(() => expect(screen.getByText('Historial de Cambios')).toBeTruthy());
+    fireEvent.press(screen.getAllByTestId('change-stock-event-1')[1]);
+    expect(screen.getByText('Información del Producto')).toBeTruthy();
   });
 });

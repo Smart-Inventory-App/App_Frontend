@@ -51,7 +51,7 @@ beforeEach(() => {
 describe('ChangesHistoryModal - window', () => {
   it('renders nothing while hidden and does not ask for changes', () => {
     render(<ChangesHistoryModal visible={false} onClose={jest.fn()} />);
-    expect(screen.queryByText('Últimos cambios')).toBeNull();
+    expect(screen.queryByText('Historial de Cambios')).toBeNull();
     expect(mockedProducts.getRecentChanges).not.toHaveBeenCalled();
   });
 
@@ -63,7 +63,8 @@ describe('ChangesHistoryModal - window', () => {
     expect(modal.props.transparent).toBeFalsy();
     expect(modal.props.statusBarTranslucent).toBe(true);
     expect(modal.props.navigationBarTranslucent).toBe(true);
-    expect(screen.getByText('Últimos cambios')).toBeTruthy();
+    expect(screen.getByText('Historial de Cambios')).toBeTruthy();
+    expect(screen.queryByText('Últimos Cambios')).toBeNull();
     fireEvent.press(screen.getByTestId('changes-history-back'));
     expect(onClose).toHaveBeenCalledTimes(1);
     modal.props.onRequestClose();
@@ -277,5 +278,15 @@ describe('ChangesHistoryModal - product information', () => {
     await waitFor(() => expect(rows()).toHaveLength(1));
     fireEvent.press(screen.getByTestId('product-image-button'));
     expect(screen.getByTestId('zoom-image').props.source).toEqual({ uri: 'https://cdn/a.jpg' });
+  });
+
+  it('opens the product information when the stock part of an entry is tapped', async () => {
+    mockedProducts.getRecentChanges.mockResolvedValue([change(1, { producto: lot(1, { nombre: 'Leche' }) })]);
+    open();
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    fireEvent.press(screen.getByTestId('change-stock-event-1'));
+    expect(screen.getByText('Información del Producto')).toBeTruthy();
+    expect(screen.getByTestId('detail-nombre').props.children).toBe('Leche');
+    expect(screen.queryByTestId('detail-total-button')).toBeNull();
   });
 });

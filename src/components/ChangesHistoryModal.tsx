@@ -83,7 +83,7 @@ export default function ChangesHistoryModal({ visible, onClose, generalRules }: 
     >
       <View style={styles.screen}>
         <ScreenHeader
-          title={t('home.lastChanges')}
+          title={t('home.history')}
           left={
             <TouchableOpacity testID="changes-history-back" accessibilityLabel={t('home.back')} onPress={onClose}>
               <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />

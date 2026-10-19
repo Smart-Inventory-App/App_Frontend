@@ -7,9 +7,12 @@ import { productService } from '@/services/productService';
 import { profileService } from '@/services/profileService';
 import { Product } from '@/types/product';
 
+const mockNavigate = jest.fn();
+
 jest.mock('expo-router', () => {
   const ReactActual = require('react');
   return {
+    router: { navigate: (...args: any[]) => mockNavigate(...args) },
     useFocusEffect: (cb: () => void) => ReactActual.useEffect(cb, [cb]),
   };
 });
@@ -582,5 +585,17 @@ describe('InventarioScreen - stock total', () => {
     fireEvent.press(screen.getByTestId('mock-stock-total-close'));
     fireEvent.press(screen.getByTestId('open-stock-total'));
     expect(screen.getByTestId('mock-stock-total-initial').props.children).toBe('none');
+  });
+});
+
+describe('InventarioScreen - header', () => {
+  it('has the home icon on the left and "Inventario" on the right, and the icon goes home', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('header-home')).toBeLessThan(tree.indexOf('"Inventario"'));
+    fireEvent.press(screen.getByTestId('header-home'));
+    expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/');
   });
 });

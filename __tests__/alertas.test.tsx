@@ -4,9 +4,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import AlertasScreen from '../app/(tabs)/alertas';
 import { alertService, Alert } from '@/services/alertService';
 
+const mockNavigate = jest.fn();
+
 jest.mock('expo-router', () => {
   const ReactActual = require('react');
   return {
+    router: { navigate: (...args: any[]) => mockNavigate(...args) },
     useFocusEffect: (cb: () => void) => ReactActual.useEffect(cb, [cb]),
   };
 });
@@ -95,5 +98,17 @@ describe('AlertasScreen - shared header', () => {
     render(<AlertasScreen />);
     expect(screen.getByTestId('screen-header')).toBeTruthy();
     expect(screen.getByText('Centro de Alertas')).toBeTruthy();
+  });
+});
+
+describe('AlertasScreen - header', () => {
+  it('has the home icon on the left and "Centro de Alertas" on the right, and the icon goes home', async () => {
+    mockedAlerts.getAlerts.mockResolvedValue([]);
+    render(<AlertasScreen />);
+    await waitFor(() => expect(mockedAlerts.getSummaryAlerts).toHaveBeenCalled());
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('header-home')).toBeLessThan(tree.indexOf('Centro de Alertas'));
+    fireEvent.press(screen.getByTestId('header-home'));
+    expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/');
   });
 });

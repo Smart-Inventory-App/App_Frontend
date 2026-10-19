@@ -6,12 +6,20 @@ import CargarScreen from '../app/(tabs)/cargar';
 import { productService } from '@/services/productService';
 
 const mockReplace = jest.fn();
+const mockNavigate = jest.fn();
+
+// Limpiezas de los efectos de foco: llamarlas simula que el usuario se va de la pantalla
+const mockFocusCleanups: Array<() => void> = [];
 
 jest.mock('expo-router', () => {
   const ReactActual = require('react');
   return {
-    router: { replace: (...args: any[]) => mockReplace(...args) },
-    useFocusEffect: (cb: () => void) => ReactActual.useEffect(cb, [cb]),
+    router: { replace: (...args: any[]) => mockReplace(...args), navigate: (...args: any[]) => mockNavigate(...args) },
+    useFocusEffect: (cb: () => void | (() => void)) => ReactActual.useEffect(() => {
+      const cleanup = cb();
+      if (typeof cleanup === 'function') mockFocusCleanups.push(cleanup);
+      return cleanup;
+    }, [cb]),
   };
 });
 
@@ -125,6 +133,7 @@ const mockedProducts = productService as jest.Mocked<typeof productService>;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockFocusCleanups.length = 0;
   mockedProducts.getDefaults.mockResolvedValue({});
   mockedProducts.getFilterOptions.mockResolvedValue({ categorias: [], ubicaciones: [], marcas: [] });
   mockedProducts.suggestProducts.mockResolvedValue([]);
@@ -423,49 +432,75 @@ describe('CargarScreen - salida limits and reason format', () => {
 });
 
 describe('CargarScreen - shared header', () => {
-  it('puts the Entrada/Salida switch inside the banner, on the right of the title, keeping the banner height', () => {
+  it('keeps only the home icon and the title in the banner, with the Entrada/Salida switch below it', () => {
     render(<CargarScreen />);
     const { within } = require('@testing-library/react-native');
     const header = screen.getByTestId('screen-header');
-    expect(within(header).getByText('Flujo de producto')).toBeTruthy();
-    expect(within(header).getByText('Entrada')).toBeTruthy();
-    expect(within(header).getByText('Salida')).toBeTruthy();
+    expect(within(header).getByText('Flujo de Producto')).toBeTruthy();
+    expect(within(header).queryByText('Entrada')).toBeNull();
+    expect(within(header).queryByText('Salida')).toBeNull();
     expect(StyleSheet.flatten(header.props.style).height).toBe(92);
-    // el título va primero y el selector después: queda a la derecha
+    // banner, después el selector y después el botón "Ingresar producto existente"
     const tree = JSON.stringify(screen.toJSON());
-    expect(tree.indexOf('Flujo de producto')).toBeLessThan(tree.indexOf('Entrada'));
+    expect(tree.indexOf('screen-header')).toBeLessThan(tree.indexOf('direction-row'));
+    expect(tree.indexOf('direction-row')).toBeLessThan(tree.indexOf('open-existing-modal'));
   });
 
-  it('keeps the switch working from the banner', () => {
+  it('has the title on the right of the banner, now that nothing else is next to it', () => {
+    render(<CargarScreen />);
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('header-home')).toBeLessThan(tree.indexOf('Flujo de Producto'));
+    expect(StyleSheet.flatten(screen.getByTestId('screen-header').props.style).justifyContent).toBe('space-between');
+  });
+
+  it('keeps the switch working from below the banner', () => {
     render(<CargarScreen />);
     fireEvent.press(screen.getByText('Salida'));
     expect(screen.getByText('Registrar salida')).toBeTruthy();
     fireEvent.press(screen.getByText('Entrada'));
     expect(screen.getByText('Guardar producto')).toBeTruthy();
   });
+
+  it('keeps the switch above the first button of each tab', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByText('Salida'));
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('direction-row')).toBeLessThan(tree.indexOf('open-exit-scan-modal'));
+  });
 });
 
-describe('CargarScreen - big Entrada/Salida buttons', () => {
-  it('writes the buttons a bit smaller than the title and keeps the banner height', () => {
+describe('CargarScreen - Entrada/Salida buttons', () => {
+  it('are two buttons of the same width that share the row below the banner', () => {
     render(<CargarScreen />);
-    const flat = (node: any) => StyleSheet.flatten(node.props.style);
-    const title = screen.getByText('Flujo de producto');
-    const entrada = screen.getByText('Entrada');
-    expect(flat(entrada).fontSize).toBe(18);
-    expect(flat(entrada).fontSize).toBeLessThan(flat(title).fontSize);
-    expect(flat(screen.getByTestId('screen-header')).height).toBe(92);
-    // el botón entra en el renglón del banner (28 px)
-    expect(StyleSheet.flatten(screen.getByTestId('direction-entrada').props.style).height).toBe(28);
+    const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
+    expect(flat('direction-row').flexDirection).toBe('row');
+    expect(flat('direction-entrada').flex).toBe(1);
+    expect(flat('direction-salida').flex).toBe(1);
   });
 
-  it('shrinks the button text before cutting the title, and sits a bit away from the right edge', () => {
+  it('are big enough to be pressed easily', () => {
+    render(<CargarScreen />);
+    const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
+    expect(flat('direction-entrada').height).toBeGreaterThanOrEqual(40);
+    expect(flat('direction-salida').height).toBeGreaterThanOrEqual(40);
+  });
+
+  it('paint the active one in its color: teal for Entrada, red for Salida', () => {
+    const { Colors } = require('../src/constants/colors');
+    render(<CargarScreen />);
+    const bg = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style).backgroundColor;
+    expect(bg('direction-entrada')).toBe(Colors.primary);
+    expect(bg('direction-salida')).not.toBe(Colors.error);
+    fireEvent.press(screen.getByTestId('direction-salida'));
+    expect(bg('direction-salida')).toBe(Colors.error);
+    expect(bg('direction-entrada')).not.toBe(Colors.primary);
+  });
+
+  it('shrink their text instead of cutting it', () => {
     render(<CargarScreen />);
     const entrada = screen.getByText('Entrada');
     expect(entrada.props.adjustsFontSizeToFit).toBe(true);
     expect(entrada.props.numberOfLines).toBe(1);
-    expect(StyleSheet.flatten(screen.getByText('Flujo de producto').props.style).flexShrink).toBe(0);
-    expect(StyleSheet.flatten(screen.getByTestId('direction-row').props.style).marginRight).toBeGreaterThan(0);
-    expect(StyleSheet.flatten(screen.getByTestId('direction-row').props.style).gap).toBe(12);
   });
 });
 
@@ -874,5 +909,93 @@ describe('CargarScreen - salida: datos informativos del producto elegido', () =>
     await pickByName({ id: 6, nombre: 'Pan', categoria: 'Panaderia', stock: 7 });
     expect(StyleSheet.flatten(screen.getByTestId('salida-selected-stock').props.style).color).toBe(Colors.primary);
     expect(StyleSheet.flatten(screen.getByTestId('salida-selected-categoria').props.style).color).not.toBe(Colors.primary);
+  });
+});
+
+describe('CargarScreen - home button', () => {
+  it('has the home icon on the left and "Flujo de Producto" on the right, and the icon goes home', () => {
+    render(<CargarScreen />);
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('header-home')).toBeLessThan(tree.indexOf('Flujo de Producto'));
+    fireEvent.press(screen.getByTestId('header-home'));
+    expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/');
+  });
+});
+
+describe('CargarScreen - the success window does not stay', () => {
+  const leaveScreen = () => act(() => { mockFocusCleanups.forEach(cleanup => cleanup()); });
+
+  const reachEntrySuccess = () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-scan-success-created'));
+    expect(screen.getByText('¡Listo!')).toBeTruthy();
+  };
+
+  it('is gone when the user leaves for another screen and comes back to Cargar', () => {
+    reachEntrySuccess();
+    leaveScreen();
+    expect(screen.queryByText('¡Listo!')).toBeNull();
+    expect(screen.getByText('Guardar producto')).toBeTruthy();
+  });
+
+  it('is gone after a registered exit too', async () => {
+    mockedProducts.registerEvent.mockResolvedValue({ event_type: 'consumed', quantity: 1, remaining_stock: 2 });
+    mockedProducts.suggestProducts.mockResolvedValue([{ id: 1, nombre: 'Leche', categoria: 'Lacteos', stock: 3 } as any]);
+    jest.useFakeTimers();
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByText('Salida'));
+    fireEvent.changeText(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado'), 'lech');
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(300);
+    });
+    jest.useRealTimers();
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    fireEvent.press(screen.getByText('Leche'));
+    fireEvent.changeText(screen.getByPlaceholderText('0'), '1');
+    await act(async () => {
+      fireEvent.press(screen.getByText('Registrar salida'));
+    });
+    expect(screen.getByText('Se registró la salida correctamente')).toBeTruthy();
+    leaveScreen();
+    expect(screen.queryByText('Se registró la salida correctamente')).toBeNull();
+    expect(screen.getByText('Registrar salida')).toBeTruthy();
+  });
+
+  it('is gone as soon as "Ver inventario" is pressed, and the inventory opens', () => {
+    reachEntrySuccess();
+    fireEvent.press(screen.getByText('Ver inventario'));
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/inventario');
+    expect(screen.queryByText('¡Listo!')).toBeNull();
+  });
+
+  it('is gone when leaving with the home icon of another screen too, which is the same as leaving this one', () => {
+    reachEntrySuccess();
+    leaveScreen();
+    leaveScreen();
+    expect(screen.queryByText('¡Listo!')).toBeNull();
+  });
+
+  it('leaves the form the user is filling in alone when there is no success window', () => {
+    render(<CargarScreen />);
+    fireEvent.changeText(screen.getByTestId('mock-form-nombre'), 'Leche');
+    leaveScreen();
+    expect(screen.getByTestId('mock-form-nombre').props.value).toBe('Leche');
+  });
+
+  it('starts a clean form after the success window was left behind', () => {
+    render(<CargarScreen />);
+    fireEvent.changeText(screen.getByTestId('mock-form-nombre'), 'Leche');
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-scan-success-created'));
+    leaveScreen();
+    expect(screen.getByTestId('mock-form-nombre').props.value).toBe('');
+  });
+
+  it('still lets the user load another product from the success window', () => {
+    reachEntrySuccess();
+    fireEvent.press(screen.getByText('Cargar otro'));
+    expect(screen.queryByText('¡Listo!')).toBeNull();
+    expect(screen.getByText('Guardar producto')).toBeTruthy();
   });
 });

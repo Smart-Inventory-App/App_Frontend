@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
@@ -256,7 +256,7 @@ export default function InventarioScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title={t('inventory.title')} />
+      <ScreenHeader title={t('inventory.title')} onHomePress={() => router.navigate('/(tabs)/')} />
 
       <TouchableOpacity
         testID="open-stock-total"

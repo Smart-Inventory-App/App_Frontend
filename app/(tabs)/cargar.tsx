@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
   KeyboardAvoidingView,
   StyleSheet,
@@ -183,6 +183,16 @@ export default function CargarScreen() {
     setError(null);
   };
 
+  // La ventana de "se registró correctamente" no tiene que seguir apareciendo la próxima vez que el usuario vuelva a
+  // Cargar: al irse a otra pantalla (inicio, inventario, alertas o perfil) se limpia, si estaba mostrándose.
+  const successRef = useRef(false);
+  successRef.current = success;
+  const resetAfterSuccessRef = useRef(handleLoadAnother);
+  resetAfterSuccessRef.current = handleLoadAnother;
+  useFocusEffect(useCallback(() => () => {
+    if (successRef.current) resetAfterSuccessRef.current();
+  }, []));
+
   const handleScanSuccess = (kind: ScanSuccessKind) => {
     setScanSuccessKind(kind);
     setMerged(kind === 'merged');
@@ -249,7 +259,10 @@ export default function CargarScreen() {
         </Text>
         <TouchableOpacity
           style={styles.submitBtn}
-          onPress={() => router.replace('/(tabs)/inventario')}
+          onPress={() => {
+            handleLoadAnother();
+            router.replace('/(tabs)/inventario');
+          }}
         >
           <Text style={styles.submitBtnText}>{t('product.goToInventory')}</Text>
         </TouchableOpacity>
@@ -267,31 +280,28 @@ export default function CargarScreen() {
       style={{ flex: 1 }}
       behavior="padding"
     >
-      <ScreenHeader
-        title={t('product.loadTitle')}
-        keepTitleWhole
-        right={
-          <View testID="direction-row" style={styles.directionRow}>
-            <TouchableOpacity
-              testID="direction-entrada"
-            style={[styles.directionBtn, direction === 'entrada' && styles.directionBtnActive]}
-              onPress={() => handleSelectDirection('entrada')}
-            >
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.directionBtnText, direction === 'entrada' && styles.directionBtnTextActive]}>
-                {t('product.entrada')}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.directionBtn, direction === 'salida' && styles.directionBtnActiveSalida]}
-              onPress={() => handleSelectDirection('salida')}
-            >
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.directionBtnText, direction === 'salida' && styles.directionBtnTextActive]}>
-                {t('product.salida')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        }
-      />
+      <ScreenHeader title={t('product.loadTitle')} onHomePress={() => router.navigate('/(tabs)/')} />
+      {/* Entrada / Salida: debajo del banner y encima de todo lo demás, como dos botones del mismo ancho */}
+      <View testID="direction-row" style={styles.directionRow}>
+        <TouchableOpacity
+          testID="direction-entrada"
+          style={[styles.directionBtn, direction === 'entrada' && styles.directionBtnActive]}
+          onPress={() => handleSelectDirection('entrada')}
+        >
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.directionBtnText, direction === 'entrada' && styles.directionBtnTextActive]}>
+            {t('product.entrada')}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          testID="direction-salida"
+          style={[styles.directionBtn, direction === 'salida' && styles.directionBtnActiveSalida]}
+          onPress={() => handleSelectDirection('salida')}
+        >
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.directionBtnText, direction === 'salida' && styles.directionBtnTextActive]}>
+            {t('product.salida')}
+          </Text>
+        </TouchableOpacity>
+      </View>
       <KeyboardAwareScrollView style={styles.container} contentContainerStyle={styles.content}>
         {direction === 'entrada' ? (
           <>
@@ -470,19 +480,27 @@ export default function CargarScreen() {
 
 const styles = StyleSheet.create({
   // Un poco corridos hacia la izquierda; si no entran, los textos se achican antes que el título
-  directionRow: { flexShrink: 1, flexDirection: 'row', gap: 12, marginRight: 10 },
-  // Texto un poco más chico que el título (22) y botón que no supera el renglón del banner (28 px)
-  directionBtn: {
-    flexShrink: 1,
-    height: 28,
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-    borderRadius: 14,
+  directionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 14,
     backgroundColor: '#f2f3f6',
   },
-  directionBtnActive: { backgroundColor: Colors.primary },
-  directionBtnActiveSalida: { backgroundColor: Colors.error },
-  directionBtnText: { fontSize: 18, lineHeight: 24, fontWeight: '600', color: Colors.textSecondary },
+  directionBtn: {
+    flex: 1,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRadius: 22,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+  },
+  directionBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  directionBtnActiveSalida: { backgroundColor: Colors.error, borderColor: Colors.error },
+  directionBtnText: { fontSize: 17, lineHeight: 24, fontWeight: '600', color: Colors.textSecondary },
   directionBtnTextActive: { color: '#fff' },
   container: { flex: 1, backgroundColor: '#f2f3f6' },
   scanBtn: {

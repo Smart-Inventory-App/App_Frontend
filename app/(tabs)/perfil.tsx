@@ -14,6 +14,7 @@ import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import ConfirmModal from '@/components/ConfirmModal';
+import ScreenHeader from '@/components/ScreenHeader';
 import { Colors } from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
 import { changeLanguage, type Language } from '@/i18n';
@@ -182,6 +183,7 @@ export default function PerfilScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+      <ScreenHeader title={t('tabs.profile')} onHomePress={() => router.navigate('/(tabs)/')} />
       <KeyboardAwareScrollView style={styles.container} contentContainerStyle={styles.content}>
         {/* Avatar */}
         <View style={styles.avatarContainer}>

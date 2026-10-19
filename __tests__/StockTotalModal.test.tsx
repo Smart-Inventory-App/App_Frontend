@@ -80,7 +80,7 @@ afterEach(() => {
 describe('StockTotalModal - window', () => {
   it('renders nothing while hidden', () => {
     render(<StockTotalModal visible={false} onClose={jest.fn()} />);
-    expect(screen.queryByText('Stock total de producto')).toBeNull();
+    expect(screen.queryByText('Stock Total de Producto')).toBeNull();
   });
 
   it('is a full screen window with the title and a back button', () => {
@@ -90,7 +90,7 @@ describe('StockTotalModal - window', () => {
     expect(modal.props.transparent).toBeFalsy();
     expect(modal.props.statusBarTranslucent).toBe(true);
     expect(modal.props.navigationBarTranslucent).toBe(true);
-    expect(screen.getByText('Stock total de producto')).toBeTruthy();
+    expect(screen.getByText('Stock Total de Producto')).toBeTruthy();
     fireEvent.press(screen.getByTestId('stock-total-back'));
     expect(onClose).toHaveBeenCalledTimes(1);
     modal.props.onRequestClose();

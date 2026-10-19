@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import DynamicList from '@/components/DynamicAlert';
 import ScreenHeader from '@/components/ScreenHeader';
 import { Alert, alertService } from '@/services/alertService';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 
 export default function AlertasScreen() {
   const [] = useFonts({Figtree_400Regular, Roboto_500Medium})
@@ -67,7 +67,7 @@ export default function AlertasScreen() {
   }
   return (
     <>
-      <ScreenHeader title="Centro de Alertas" />
+      <ScreenHeader title="Centro de Alertas" onHomePress={() => router.navigate('/(tabs)/')} />
       <ScrollView style={{margin: 16}}>
         <View style={styles.alertSummary}>
           {Object.entries(alertsSummary).map(([key, value]) => (
