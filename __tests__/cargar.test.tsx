@@ -140,10 +140,19 @@ beforeEach(() => {
 });
 
 describe('CargarScreen - entrada (manual)', () => {
-  it('loads filter options and defaults on focus', async () => {
+  it('loads the filter options on focus', async () => {
     render(<CargarScreen />);
     await waitFor(() => expect(mockedProducts.getFilterOptions).toHaveBeenCalled());
-    expect(mockedProducts.getDefaults).toHaveBeenCalled();
+  });
+
+  it('does not preselect the categoria and ubicacion used in the previous action', async () => {
+    mockedProducts.getDefaults.mockResolvedValue({ last_categoria: 'Lacteos', last_ubicacion: 'Heladera' });
+    render(<CargarScreen />);
+    await waitFor(() => expect(mockedProducts.getFilterOptions).toHaveBeenCalled());
+    expect(mockedProducts.getDefaults).not.toHaveBeenCalled();
+    const form = JSON.parse(screen.getByTestId('mock-form-json').props.children);
+    expect(form.categoria).toBeUndefined();
+    expect(form.ubicacion).toBeUndefined();
   });
 
   it('shows a validation error when submitting an empty form', async () => {
@@ -244,12 +253,11 @@ describe('CargarScreen - entrada (manual)', () => {
     mockedProducts.getDefaults.mockResolvedValue({ last_categoria: 'Lacteos', last_ubicacion: 'Heladera' });
     mockedProducts.createProduct.mockResolvedValue({ id: 1, merged: false } as any);
     render(<CargarScreen />);
-    await waitFor(() => expect(mockedProducts.getDefaults).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockedProducts.getFilterOptions).toHaveBeenCalled());
     fireEvent.changeText(screen.getByTestId('mock-form-nombre'), 'Leche');
     await act(async () => {
       fireEvent.press(screen.getByText('Guardar producto'));
     });
-    mockedProducts.getDefaults.mockClear();
     await act(async () => {
       fireEvent.press(screen.getByText('Cargar otro'));
     });

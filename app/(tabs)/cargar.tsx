@@ -55,18 +55,6 @@ export default function CargarScreen() {
   const [salidaMotivo, setSalidaMotivo] = useState<ExitReason>('consumed');
   const [salidaNota, setSalidaNota] = useState('');
 
-  const applyDefaults = useCallback(() => {
-    productService.getDefaults()
-      .then(({ last_categoria, last_ubicacion }) => {
-        setForm(prev => ({
-          ...prev,
-          categoria: prev.categoria ?? last_categoria ?? undefined,
-          ubicacion: prev.ubicacion ?? last_ubicacion ?? undefined,
-        }));
-      })
-      .catch(() => {});
-  }, []);
-
   useFocusEffect(useCallback(() => {
     productService.getFilterOptions()
       .then(({ categorias, ubicaciones, marcas }) => {
@@ -75,8 +63,8 @@ export default function CargarScreen() {
         setMarcaOptions(marcas);
       })
       .catch(() => {});
-    applyDefaults();
-  }, [applyDefaults]));
+    // Los campos no se completan con lo elegido en la acción anterior: empiezan siempre vacíos
+  }, []));
 
   useEffect(() => {
     if (salidaSelected) return;
