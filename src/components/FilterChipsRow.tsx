@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../constants/colors';
 import { findSimilarOptions } from '../utils/optionSearch';
+import { selectedFirst } from '../utils/selectedFirst';
 import { truncateLabel } from '../utils/text';
 
 interface Props {
@@ -17,6 +18,8 @@ interface Props {
 }
 
 const MAX_SUGGESTIONS = 8;
+// Unas tres opciones y media: se ve que hay más para desplazar y no quedan debajo del teclado
+const SUGGESTIONS_MAX_HEIGHT = 136;
 
 // Fila de filtro: un botón con lupa, "Todas" y las opciones que entran en el renglón.
 // Las que no entran se encuentran con la lupa, que abre un campo de texto en el mismo renglón.
@@ -28,9 +31,7 @@ export default function FilterChipsRow({
   const matches = useMemo(() => findSimilarOptions(query, options, MAX_SUGGESTIONS), [query, options]);
 
   // La opción elegida va primero, así nunca queda escondida fuera del renglón.
-  const ordered = selected && options.includes(selected)
-    ? [selected, ...options.filter(o => o !== selected)]
-    : options;
+  const ordered = selectedFirst(options, o => o === selected);
 
   const closeSearch = () => {
     setSearching(false);
@@ -60,12 +61,18 @@ export default function FilterChipsRow({
               maxLength={20}
               onSubmitEditing={() => { if (matches.length > 0) pick(matches[0]); }}
             />
-            <TouchableOpacity testID={`filter-search-close-${testKey}`} style={styles.squareBtn} onPress={closeSearch}>
+            <TouchableOpacity testID={`filter-search-close-${testKey}`} style={[styles.squareBtn, styles.searchCloseBtn]} onPress={closeSearch}>
               <Ionicons name="close" size={20} color={Colors.primary} />
             </TouchableOpacity>
           </View>
           {matches.length > 0 && (
-            <View style={styles.suggestionsBox}>
+            // Alto acotado: con el teclado abierto la lista tiene que entrar en lo que queda visible (el resto se desplaza)
+            <ScrollView
+              testID={`filter-matches-${testKey}`}
+              style={styles.suggestionsBox}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+            >
               {matches.map(option => (
                 <TouchableOpacity
                   key={option}
@@ -77,7 +84,7 @@ export default function FilterChipsRow({
                   <Text style={styles.suggestionText}>{truncateLabel(option)}</Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
           )}
         </>
       ) : (
@@ -157,19 +164,24 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   chipText: { fontSize: 13, color: Colors.textSecondary },
   chipTextActive: { color: '#fff', fontWeight: '600' },
+  // Sin alto fijo: con la letra más grande del sistema (p. ej. en un Galaxy A54) el texto no se recorta
   searchInput: {
     flex: 1,
-    height: 36,
+    minHeight: 44,
     borderWidth: 1,
     borderColor: Colors.inputBorder,
     borderRadius: 8,
     paddingHorizontal: 10,
+    paddingVertical: 10,
+    textAlignVertical: 'center',
     fontSize: 14,
     color: Colors.textPrimary,
     backgroundColor: '#fafafa',
   },
+  searchCloseBtn: { width: 44, height: 44 },
   suggestionsBox: {
     marginTop: 4,
+    maxHeight: SUGGESTIONS_MAX_HEIGHT,
     borderWidth: 1,
     borderColor: Colors.inputBorder ?? '#ddd',
     borderRadius: 8,

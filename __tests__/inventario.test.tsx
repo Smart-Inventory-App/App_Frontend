@@ -349,6 +349,24 @@ describe('InventarioScreen - long values', () => {
 });
 
 describe('InventarioScreen - header, sort row and filters', () => {
+  it('puts the chosen sort criterion first and sends it back to its place when it is cleared', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const before = (a: string, b: string) => {
+      const tree = JSON.stringify(screen.toJSON());
+      return tree.indexOf(`"${a}"`) < tree.indexOf(`"${b}"`);
+    };
+    expect(before('Nombre', 'Stock')).toBe(true);
+
+    await act(async () => { fireEvent.press(screen.getByText('Stock')); });
+    expect(before('Stock', 'Nombre')).toBe(true);
+
+    await act(async () => { fireEvent.press(screen.getByText('Stock ↑')); });
+    await act(async () => { fireEvent.press(screen.getByText('Stock ↓')); });
+    expect(before('Nombre', 'Stock')).toBe(true);
+  });
+
   it('uses the shared header with the inventory title', async () => {
     mockedProducts.getProducts.mockResolvedValue([product()]);
     render(<InventarioScreen />);

@@ -31,6 +31,7 @@ import BottomSheetModal from '@/components/BottomSheetModal';
 import ProductFormFields from '@/components/ProductFormFields';
 import { BARCODE_MAX_DIGITS, isValidBarcode, onlyDigits } from '@/utils/barcode';
 import { displayToIso, formatDateDigits, isoToDisplay } from '@/utils/dateInput';
+import { selectedFirst } from '@/utils/selectedFirst';
 
 // La lista de productos con el código muestra 3,5 filas: la mitad de la cuarta invita a deslizar
 const BARCODE_ROW_HEIGHT = 60;
@@ -484,7 +485,7 @@ export default function ScanModal({
               nestedScrollEnabled
               keyboardShouldPersistTaps="handled"
             >
-            {barcodeProducts.map(p => (
+            {selectedFirst(barcodeProducts, p => p.id === barcodeSelectedId).map(p => (
               <TouchableOpacity
                 key={p.id}
                 style={[styles.productRow, barcodeSelectedId === p.id && styles.productRowActive]}
@@ -579,7 +580,7 @@ export default function ScanModal({
             </View>
             {line.draft.coincidencias.length > 0 && (
               <View style={styles.chipsContent}>
-                {line.draft.coincidencias.map(match => (
+                {selectedFirst(line.draft.coincidencias, m => m.id === line.productId).map(match => (
                   <TouchableOpacity
                     key={match.id}
                     style={[styles.chip, line.productId === match.id && styles.chipActive]}

@@ -16,6 +16,7 @@ import { applySuggestionToForm } from '@/utils/ocrDraft';
 import { BARCODE_MAX_DIGITS, describeBarcodeLengths, onlyDigits } from '@/utils/barcode';
 import { displayToIso, formatDateDigits, isoToDisplay } from '@/utils/dateInput';
 import { findSimilarOptions } from '@/utils/optionSearch';
+import { selectedFirst } from '@/utils/selectedFirst';
 import { truncateLabel } from '@/utils/text';
 
 const NOMBRE_MAX = 20;
@@ -63,10 +64,7 @@ function OptionPicker({
   const similar = useMemo(() => findSimilarOptions(draft, options), [draft, options]);
 
   // La opción elegida va primero; al deseleccionarla vuelve a su lugar original (el orden de `options`).
-  const ordered = useMemo(
-    () => (value && options.includes(value) ? [value, ...options.filter(o => o !== value)] : options),
-    [options, value],
-  );
+  const ordered = useMemo(() => selectedFirst(options, o => o === value), [options, value]);
 
   // Vuelve al principio del renglón para que la opción elegida quede a la vista.
   useEffect(() => {

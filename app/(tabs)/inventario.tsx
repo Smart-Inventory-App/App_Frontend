@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -20,6 +20,7 @@ import { isValidBarcode } from '@/utils/barcode';
 import { truncateLabel } from '@/utils/text';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import ProductImage from '@/components/ProductImage';
+import { selectedFirst } from '@/utils/selectedFirst';
 import ProductFormFields from '@/components/ProductFormFields';
 import BottomSheetModal from '@/components/BottomSheetModal';
 import ConfirmModal from '@/components/ConfirmModal';
@@ -27,6 +28,8 @@ import FilterChipsRow from '@/components/FilterChipsRow';
 import HistorialModal from '@/components/HistorialModal';
 import ScreenHeader from '@/components/ScreenHeader';
 import TopBanner from '@/components/TopBanner';
+
+const SORT_FIELDS = ['nombre', 'stock', 'vencimiento', 'categoria'] as const;
 
 export default function InventarioScreen() {
   const { t } = useTranslation();
@@ -101,6 +104,13 @@ export default function InventarioScreen() {
   }, [filterOptions.marcas, extraMarcas]);
 
   const handleSearch = (text: string) => setSearchInput(text);
+
+  // El criterio elegido va primero; al quitarlo vuelve a su lugar original
+  const sortFields = useMemo(() => selectedFirst([...SORT_FIELDS], f => f === sortField), [sortField]);
+  const sortChipsRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    sortChipsRef.current?.scrollTo?.({ x: 0, animated: true });
+  }, [sortField]);
 
   const handleSort = (field: typeof sortField) => {
     if (sortField === field) {
@@ -248,12 +258,13 @@ export default function InventarioScreen() {
         <Ionicons name="swap-vertical-outline" size={14} color={Colors.textSecondary} />
         <Text style={styles.sortLabel}>{t('inventory.sortBy')}</Text>
         <ScrollView
+          ref={sortChipsRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.chipsScroll}
           contentContainerStyle={[styles.chipsContent, styles.sortChipsContent]}
         >
-          {(['nombre', 'stock', 'vencimiento', 'categoria'] as const).map(field => {
+          {sortFields.map(field => {
             const active = sortField === field;
             const arrow = active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
             return (

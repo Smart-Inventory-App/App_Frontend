@@ -56,6 +56,21 @@ describe('FilterChipsRow', () => {
     expect(tree.indexOf('Bebidas')).toBeLessThan(tree.indexOf('Lácteos'));
   });
 
+  it('sends the option back to its original place when it is deselected', () => {
+    const order = () => {
+      const tree = JSON.stringify(screen.toJSON());
+      return OPTIONS.slice().sort((a, b) => tree.indexOf(a) - tree.indexOf(b));
+    };
+    const { rerender } = render(
+      <FilterChipsRow testKey="categoria" label="Categoría" allLabel="Todas" searchPlaceholder="Buscar categoría" options={OPTIONS} selected="Bebidas" onSelect={jest.fn()} />,
+    );
+    expect(order()).toEqual(['Bebidas', 'Lácteos', 'Limpieza', 'Almacén']);
+    rerender(
+      <FilterChipsRow testKey="categoria" label="Categoría" allLabel="Todas" searchPlaceholder="Buscar categoría" options={OPTIONS} selected={null} onSelect={jest.fn()} />,
+    );
+    expect(order()).toEqual(OPTIONS);
+  });
+
   it('opens a text field in the same row when the magnifier is pressed, and closes it again', () => {
     setup();
     expect(screen.queryByTestId('filter-search-input-categoria')).toBeNull();
@@ -79,6 +94,25 @@ describe('FilterChipsRow', () => {
     fireEvent.press(screen.getByTestId('filter-match-categoria-Lácteos'));
     expect(onSelect).toHaveBeenCalledWith('Lácteos');
     expect(screen.queryByTestId('filter-search-input-categoria')).toBeNull();
+  });
+
+  it('does not cut the typed text: the search field has no fixed height and grows with the system font', () => {
+    setup();
+    fireEvent.press(screen.getByTestId('filter-search-categoria'));
+    const input = StyleSheet.flatten(screen.getByTestId('filter-search-input-categoria').props.style);
+    expect(input.height).toBeUndefined();
+    expect(input.minHeight).toBe(44);
+    expect(input.paddingVertical).toBeGreaterThan(0);
+    expect(StyleSheet.flatten(screen.getByTestId('filter-search-close-categoria').props.style)).toMatchObject({ width: 44, height: 44 });
+  });
+
+  it('keeps the suggestions short enough to stay above the keyboard, and tappable with it open', () => {
+    setup();
+    fireEvent.press(screen.getByTestId('filter-search-categoria'));
+    fireEvent.changeText(screen.getByTestId('filter-search-input-categoria'), 'l');
+    const list = screen.getByTestId('filter-matches-categoria');
+    expect(list.props.keyboardShouldPersistTaps).toBe('handled');
+    expect(StyleSheet.flatten(list.props.style).maxHeight).toBe(136);
   });
 
   it('shows no suggestions when nothing matches or nothing was typed', () => {

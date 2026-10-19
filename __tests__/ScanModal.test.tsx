@@ -434,6 +434,29 @@ describe('ScanModal - receipt review flow', () => {
     expect(mockedOcr.submitSalida).toHaveBeenCalledWith([{ product_id: 5, quantity: 3 }], 'Kiosco Don Juan');
   });
 
+  it('shows the chosen match first and sends it back to its place when the line is excluded', async () => {
+    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
+    const result = receiptResult();
+    result.items[0].coincidencias.push({ id: 6, nombre: 'Yogur Descremado', score: 0.6, por_codigo: false, stock: 4 });
+    mockedOcr.scan.mockResolvedValue({ status: 'done', doc_type: 'receipt', result } as ScanState);
+
+    setup();
+    fireEvent.press(screen.getByTestId('doc-type-receipt'));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('scan-source-camera'));
+    });
+
+    const firstIs = (a: string, b: string) => {
+      const tree = JSON.stringify(screen.toJSON());
+      return tree.indexOf(a) < tree.indexOf(b);
+    };
+    expect(firstIs('Yogur Ser', 'Yogur Descremado')).toBe(true);
+    fireEvent.press(screen.getByText('Yogur Descremado (60%)'));
+    expect(firstIs('Yogur Descremado', 'Yogur Ser')).toBe(true);
+    fireEvent.press(screen.getByTestId('receipt-toggle-0'));
+    expect(firstIs('Yogur Ser', 'Yogur Descremado')).toBe(true);
+  });
+
   it('selects a match chip for a line with several candidates', async () => {
     mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
     const result = receiptResult();
@@ -606,6 +629,20 @@ describe('ScanModal - barcode review flow', () => {
       codigo_barras: '7791234567898', stock: 12,
     });
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('shows the picked product first, and puts it back in its place when it is unpicked', async () => {
+    await scanBarcode('7791234567898', [YOGUR, { ...YOGUR, id: 10 }]);
+    await waitFor(() => expect(screen.getByTestId('barcode-product-9')).toBeTruthy());
+    const firstIs = (id: number, other: number) => {
+      const tree = JSON.stringify(screen.toJSON());
+      return tree.indexOf(`barcode-product-${id}`) < tree.indexOf(`barcode-product-${other}`);
+    };
+    expect(firstIs(9, 10)).toBe(true);
+    fireEvent.press(screen.getByTestId('barcode-product-10'));
+    expect(firstIs(10, 9)).toBe(true);
+    fireEvent.press(screen.getByTestId('barcode-product-10'));
+    expect(firstIs(9, 10)).toBe(true);
   });
 
   it('lets the user unpick a product, and then only the barcode is loaded', async () => {
