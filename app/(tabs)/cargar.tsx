@@ -101,6 +101,10 @@ export default function CargarScreen() {
   const handleSubmit = async () => {
     const validationError = validate();
     if (validationError) {
+      // Con una fecha de vencimiento mal cargada se borra solo ese campo para que el usuario la escriba de nuevo
+      if (validationError === t('product.validationVencimiento')) {
+        setForm(prev => ({ ...prev, vencimiento: undefined }));
+      }
       setError(validationError);
       return;
     }

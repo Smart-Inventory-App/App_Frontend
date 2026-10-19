@@ -459,6 +459,18 @@ describe('ProductFormFields - labels and placeholders', () => {
     expect(screen.getByTestId('input-descripcion').props.placeholder).toBe('Opcional');
   });
 
+  it('starts the Categoría, Marca and Ubicación placeholders with a capital letter', () => {
+    render(<Wrapper />);
+    fireEvent.press(screen.getByTestId('add-categoria'));
+    expect(screen.getByTestId('input-categoria').props.placeholder).toBe('Ej. Lácteos');
+    fireEvent.press(screen.getByTestId('confirm-categoria'));
+    fireEvent.press(screen.getByTestId('add-marca'));
+    expect(screen.getByTestId('input-marca').props.placeholder).toBe('Opcional');
+    fireEvent.press(screen.getByTestId('confirm-marca'));
+    fireEvent.press(screen.getByTestId('add-ubicacion'));
+    expect(screen.getByTestId('input-ubicacion').props.placeholder).toBe('Ej. Heladera, Alacena A, Freezer');
+  });
+
   it('shows "Default" in the alert rule fields', () => {
     render(<Wrapper />);
     expect(screen.getAllByPlaceholderText('Default')).toHaveLength(2);

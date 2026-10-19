@@ -276,6 +276,7 @@ export default function ScanModal({
   const handleConfirmExpiry = () => {
     const iso = displayToIso(expiryText);
     if (!iso) {
+      setExpiryText('');
       setConfirmError(t('product.validationVencimiento'));
       return;
     }

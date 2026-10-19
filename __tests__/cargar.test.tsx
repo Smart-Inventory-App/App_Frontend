@@ -37,6 +37,11 @@ jest.mock('@/components/ProductFormFields', () => {
           onChangeText={(v: string) => onChange({ ...form, nombre: v, categoria: 'Lacteos', stock: 1 })}
         />
         <RNTextInput
+          testID="mock-form-vencimiento"
+          value={form.vencimiento ?? ''}
+          onChangeText={(v: string) => onChange({ ...form, vencimiento: v })}
+        />
+        <RNTextInput
           testID="mock-form-codigo-barras"
           value={form.codigo_barras ?? ''}
           onChangeText={(v: string) => onChange({ ...form, codigo_barras: v })}
@@ -430,6 +435,21 @@ describe('CargarScreen - toque en sugerencias con el teclado abierto', () => {
   it('deja que el primer toque llegue a las sugerencias sin cerrar el teclado (Android)', () => {
     render(<CargarScreen />);
     expect(screen.UNSAFE_getByType(ScrollView).props.keyboardShouldPersistTaps).toBe('handled');
+  });
+});
+
+describe('CargarScreen - fecha de vencimiento inválida', () => {
+  it('muestra el mensaje y borra solo la fecha, sin tocar el resto del formulario', async () => {
+    render(<CargarScreen />);
+    fireEvent.changeText(screen.getByTestId('mock-form-nombre'), 'Leche');
+    fireEvent.changeText(screen.getByTestId('mock-form-vencimiento'), '31/02/2026');
+    await act(async () => {
+      fireEvent.press(screen.getByText('Guardar producto'));
+    });
+    expect(screen.getByText('Fecha de vencimiento inválida. Ingresa el día y el mes con 2 dígitos y el año con 4 dígitos. Por ejemplo: 05/03/2027')).toBeTruthy();
+    expect(screen.getByTestId('mock-form-vencimiento').props.value).toBe('');
+    expect(screen.getByTestId('mock-form-nombre').props.value).toBe('Leche');
+    expect(mockedProducts.createProduct).not.toHaveBeenCalled();
   });
 });
 

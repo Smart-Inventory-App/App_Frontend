@@ -734,9 +734,11 @@ describe('ScanModal - expiry_date review flow', () => {
     const { onApplyToForm } = await scanExpiry('2026-05-01');
     fireEvent.changeText(screen.getByTestId('expiry-input'), '3102');
     fireEvent.press(screen.getByTestId('expiry-confirm'));
-    expect(screen.getByText('Fecha inválida, usá el formato DD/MM/AAAA')).toBeTruthy();
+    expect(screen.getByText('Fecha de vencimiento inválida. Ingresa el día y el mes con 2 dígitos y el año con 4 dígitos. Por ejemplo: 05/03/2027')).toBeTruthy();
+    expect(screen.getByTestId('expiry-input').props.value).toBe('');
     fireEvent.changeText(screen.getByTestId('expiry-input'), '31022027');
     fireEvent.press(screen.getByTestId('expiry-confirm'));
+    expect(screen.getByTestId('expiry-input').props.value).toBe('');
     expect(onApplyToForm).not.toHaveBeenCalled();
   });
 
