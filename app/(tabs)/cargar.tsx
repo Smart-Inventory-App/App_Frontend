@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { ExitReason, ProductCreate, ProductSuggestion } from '@/types/product';
+import { isoToDisplay } from '@/utils/dateInput';
 import { EXIT_REASONS, EXIT_REASON_LABEL_KEY } from '@/utils/exitReasons';
 import AppTextInput from '@/components/AppTextInput';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
@@ -331,14 +332,29 @@ export default function CargarScreen() {
             />
             {salidaSelected && (
               <View testID="salida-selected-info" style={styles.selectedInfo}>
+                <View style={styles.infoCell}>
+                  <Text style={styles.infoLabel}>{t('product.categoria')}</Text>
+                  <Text testID="salida-selected-categoria" style={styles.infoValue}>{salidaSelected.categoria}</Text>
+                </View>
                 {salidaSelected.marca ? (
-                  <Text testID="salida-selected-marca" style={styles.selectedInfoText}>
-                    {t('product.salidaMarcaInfo', { marca: salidaSelected.marca })}
-                  </Text>
+                  <View style={styles.infoCell}>
+                    <Text style={styles.infoLabel}>{t('product.marca')}</Text>
+                    <Text testID="salida-selected-marca" style={styles.infoValue}>{salidaSelected.marca}</Text>
+                  </View>
                 ) : null}
-                <Text testID="salida-selected-stock" style={styles.selectedInfoText}>
-                  {t('product.salidaStockInfo', { stock: salidaSelected.stock })}
-                </Text>
+                <View style={styles.infoCell}>
+                  <Text style={styles.infoLabel}>{t('product.salidaStockActual')}</Text>
+                  <Text testID="salida-selected-stock" style={[styles.infoValue, styles.infoValueStrong]}>{String(salidaSelected.stock)}</Text>
+                </View>
+                <View style={styles.infoCell}>
+                  <Text style={styles.infoLabel}>{t('product.vencimiento')}</Text>
+                  <Text
+                    testID="salida-selected-vencimiento"
+                    style={[styles.infoValue, !salidaSelected.vencimiento && styles.infoValueEmpty]}
+                  >
+                    {salidaSelected.vencimiento ? isoToDisplay(salidaSelected.vencimiento) : t('scan.productNoExpiry')}
+                  </Text>
+                </View>
               </View>
             )}
             {!salidaSelected && salidaSuggestions.length > 0 && (
@@ -517,8 +533,23 @@ const styles = StyleSheet.create({
   },
   suggestionText: { fontSize: 14, color: Colors.textPrimary },
   suggestionSubtext: { fontSize: 11, color: Colors.textSecondary, marginTop: 1 },
-  selectedInfo: { marginTop: 6, gap: 2 },
-  selectedInfoText: { fontSize: 13, color: Colors.textSecondary },
+  // Datos del producto elegido: una tarjeta breve con dos columnas
+  selectedInfo: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#e8e8ee',
+  },
+  infoCell: { width: '50%', paddingVertical: 4 },
+  infoLabel: { fontSize: 11, fontWeight: '600', color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4 },
+  infoValue: { fontSize: 14, color: Colors.textPrimary, marginTop: 1 },
+  infoValueStrong: { fontWeight: '700', color: Colors.primary },
+  infoValueEmpty: { color: Colors.placeholder },
   chipsContent: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
   chip: {
     paddingHorizontal: 14,

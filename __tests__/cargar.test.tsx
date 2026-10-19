@@ -739,8 +739,9 @@ describe('CargarScreen - salida: motivos y escaneo', () => {
     fireEvent.press(screen.getByTestId('mock-existing-select'));
     expect(screen.queryByTestId('mock-existing-modal')).toBeNull();
     expect(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado').props.value).toBe('Yogur');
-    expect(screen.getByTestId('salida-selected-marca').props.children).toBe('Marca: Ser');
-    expect(screen.getByTestId('salida-selected-stock').props.children).toBe('Stock actual: 5');
+    expect(screen.getByTestId('salida-selected-marca').props.children).toBe('Ser');
+    expect(screen.getByTestId('salida-selected-stock').props.children).toBe('5');
+    expect(screen.getByTestId('salida-selected-categoria').props.children).toBe('Lacteos');
     fireEvent.changeText(screen.getByPlaceholderText('0'), '2');
     fireEvent.press(screen.getByText('Vendido'));
     await act(async () => {
@@ -810,8 +811,9 @@ describe('CargarScreen - salida: datos informativos del producto elegido', () =>
   it('shows only the name in the field, with the brand and the stock below it', async () => {
     await pickByName({ id: 1, nombre: 'Leche', marca: 'La Serenísima', categoria: 'Lacteos', stock: 12 });
     expect(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado').props.value).toBe('Leche');
-    expect(screen.getByTestId('salida-selected-marca').props.children).toBe('Marca: La Serenísima');
-    expect(screen.getByTestId('salida-selected-stock').props.children).toBe('Stock actual: 12');
+    expect(screen.getByTestId('salida-selected-categoria').props.children).toBe('Lacteos');
+    expect(screen.getByTestId('salida-selected-marca').props.children).toBe('La Serenísima');
+    expect(screen.getByTestId('salida-selected-stock').props.children).toBe('12');
   });
 
   it('places the info right below the field and above the stock to take out', async () => {
@@ -824,7 +826,9 @@ describe('CargarScreen - salida: datos informativos del producto elegido', () =>
   it('shows just the stock when the product has no brand', async () => {
     await pickByName({ id: 2, nombre: 'Agua', categoria: 'Bebidas', stock: 3 });
     expect(screen.queryByTestId('salida-selected-marca')).toBeNull();
-    expect(screen.getByTestId('salida-selected-stock').props.children).toBe('Stock actual: 3');
+    expect(screen.queryByText('Marca')).toBeNull();
+    expect(screen.getByTestId('salida-selected-categoria').props.children).toBe('Bebidas');
+    expect(screen.getByTestId('salida-selected-stock').props.children).toBe('3');
   });
 
   it('shows no info until a product is chosen, and hides it when the name is edited', async () => {
@@ -840,7 +844,35 @@ describe('CargarScreen - salida: datos informativos del producto elegido', () =>
     fireEvent.press(screen.getByTestId('open-exit-scan-modal'));
     fireEvent.press(screen.getByTestId('mock-existing-select'));
     expect(screen.getByPlaceholderText('Buscá un producto que ya tenés cargado').props.value).toBe('Yogur');
-    expect(screen.getByTestId('salida-selected-marca').props.children).toBe('Marca: Ser');
-    expect(screen.getByTestId('salida-selected-stock').props.children).toBe('Stock actual: 5');
+    expect(screen.getByTestId('salida-selected-marca').props.children).toBe('Ser');
+    expect(screen.getByTestId('salida-selected-stock').props.children).toBe('5');
+  });
+
+  it('shows the expiry date as DD/MM/AAAA, or says there is none', async () => {
+    await pickByName({ id: 3, nombre: 'Yogur', marca: 'Ser', categoria: 'Lacteos', stock: 4, vencimiento: '2027-03-05' });
+    expect(screen.getByTestId('salida-selected-vencimiento').props.children).toBe('05/03/2027');
+  });
+
+  it('says "Sin vencimiento" when the product does not expire', async () => {
+    await pickByName({ id: 4, nombre: 'Sal', categoria: 'Almacen', stock: 9 });
+    expect(screen.getByTestId('salida-selected-vencimiento').props.children).toBe('Sin vencimiento');
+  });
+
+  it('shows the four data in order, category, brand, current stock and expiry, as a short card', async () => {
+    await pickByName({ id: 5, nombre: 'Queso', marca: 'Ser', categoria: 'Lacteos', stock: 2, vencimiento: '2027-01-01' });
+    const tree = JSON.stringify(screen.toJSON());
+    const at = (id: string) => tree.indexOf(`"${id}"`);
+    expect(at('salida-selected-categoria')).toBeLessThan(at('salida-selected-marca'));
+    expect(at('salida-selected-marca')).toBeLessThan(at('salida-selected-stock'));
+    expect(at('salida-selected-stock')).toBeLessThan(at('salida-selected-vencimiento'));
+    ['Categoría', 'Marca', 'Stock actual', 'Vencimiento'].forEach(label => expect(screen.getByText(label)).toBeTruthy());
+    expect(StyleSheet.flatten(screen.getByTestId('salida-selected-info').props.style)).toMatchObject({ flexDirection: 'row', flexWrap: 'wrap' });
+  });
+
+  it('highlights the current stock with the main color of the app', async () => {
+    const { Colors } = require('../src/constants/colors');
+    await pickByName({ id: 6, nombre: 'Pan', categoria: 'Panaderia', stock: 7 });
+    expect(StyleSheet.flatten(screen.getByTestId('salida-selected-stock').props.style).color).toBe(Colors.primary);
+    expect(StyleSheet.flatten(screen.getByTestId('salida-selected-categoria').props.style).color).not.toBe(Colors.primary);
   });
 });
