@@ -157,7 +157,7 @@ describe('PerfilScreen', () => {
     expect(screen.queryByTestId('user-type-comercio')).toBeNull();
     expect(screen.getByTestId('coverage-days-value').props.children.join('')).toBe('7 días');
     expect(screen.getByTestId('expiry-days-value').props.children.join('')).toBe('7 días');
-    expect(screen.getByTestId('alert-hour-value').props.children.join('')).toBe('5 hs Hora Argentina (UTC -3)');
+    expect(screen.getByTestId('alert-hour-value').props.children).toBe('05:00 hs · Hora de Argentina (UTC-3)');
   });
 
   it('shows the account type in a highlighted box as wide as the screen, which is not a button', async () => {
@@ -263,10 +263,10 @@ describe('PerfilScreen', () => {
     mockedProfileService.getProfile.mockResolvedValue(baseProfile({ alertCheckHour: 11 }));
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByTestId('alert-hour-value')).toBeTruthy());
-    expect(screen.getByTestId('alert-hour-value').props.children.join('')).toBe('8 hs Hora Argentina (UTC -3)');
+    expect(screen.getByTestId('alert-hour-value').props.children).toBe('08:00 hs · Hora de Argentina (UTC-3)');
     startEditing();
     expect(screen.getByTestId('alert-hour-input').props.value).toBe('8');
-    expect(screen.getByText('hs Hora Argentina (UTC -3)')).toBeTruthy();
+    expect(screen.getByText('Hora de Argentina (UTC-3)')).toBeTruthy();
   });
 
   it('asks for confirmation before changing the language, and changes it once confirmed', async () => {
@@ -556,7 +556,7 @@ describe('PerfilScreen - limits of the fields', () => {
     mockedProfileService.getProfile.mockResolvedValue(baseProfile({ alertCheckHour: undefined as any }));
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByTestId('alert-hour-value')).toBeTruthy());
-    expect(screen.getByTestId('alert-hour-value').props.children.join('')).toBe('5 hs Hora Argentina (UTC -3)');
+    expect(screen.getByTestId('alert-hour-value').props.children).toBe('05:00 hs · Hora de Argentina (UTC-3)');
     startEditing();
     expect(screen.getByTestId('alert-hour-input').props.value).toBe('5');
   });
@@ -675,5 +675,40 @@ describe('PerfilScreen - permission of the notifications', () => {
     expect(screen.getByText(/Desactivadas/)).toBeTruthy();
     fireEvent.press(screen.getByText('Continuar'));
     expect(screen.queryByText(NOTICE)).toBeNull();
+  });
+});
+
+describe('PerfilScreen - the hour of the daily check', () => {
+  it('shows the hour with two digits, saying it is Argentine time, with nothing else under it', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByTestId('alert-hour-value')).toBeTruthy());
+    expect(screen.getByTestId('alert-hour-value').props.children).toBe('05:00 hs · Hora de Argentina (UTC-3)');
+    expect(screen.queryByTestId('alert-hour-utc')).toBeNull();
+    expect(screen.queryByText(/hs UTC/)).toBeNull();
+  });
+
+  it('shows hours past noon too, as saved in UTC and as Argentine time', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ alertCheckHour: 22 }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByTestId('alert-hour-value')).toBeTruthy());
+    expect(screen.getByTestId('alert-hour-value').props.children).toBe('19:00 hs · Hora de Argentina (UTC-3)');
+  });
+
+  it('wraps the hours around midnight', async () => {
+    mockedProfileService.getProfile.mockResolvedValue(baseProfile({ alertCheckHour: 1 }));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByTestId('alert-hour-value')).toBeTruthy());
+    expect(screen.getByTestId('alert-hour-value').props.children).toBe('22:00 hs · Hora de Argentina (UTC-3)');
+  });
+
+  it('shows only the range hint under the field while editing, with no message about when the alerts are checked', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    startEditing();
+    expect(screen.getByTestId('alert-hour-hint').props.children).toBe('Se aceptan números entre 0 y 23 (inclusive).');
+    expect(screen.queryByTestId('alert-hour-preview')).toBeNull();
+    fireEvent.changeText(screen.getByTestId('alert-hour-input'), '20');
+    expect(screen.queryByTestId('alert-hour-preview')).toBeNull();
+    expect(screen.queryByText(/se van a revisar/)).toBeNull();
   });
 });

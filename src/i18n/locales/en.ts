@@ -94,7 +94,7 @@ export default {
     cancel: 'Cancel',
     saveSuccess: 'Profile updated',
     saveError: 'Could not update profile',
-    argentinaTime: 'hs Argentina Time (UTC -3)',
+    argentinaTime: 'Argentina time (UTC-3)',
     languageConfirm: 'The language will be changed to {{language}}.',
     disableNotificationsConfirm: 'Are you sure you want to turn off notifications?',
     notificationsSettingsNotice: 'To turn on the notifications of the app, go to Settings and grant the permissions',

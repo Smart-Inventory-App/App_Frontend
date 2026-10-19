@@ -94,7 +94,7 @@ export default {
     cancel: 'Cancelar',
     saveSuccess: 'Perfil actualizado',
     saveError: 'No se pudo actualizar el perfil',
-    argentinaTime: 'hs Hora Argentina (UTC -3)',
+    argentinaTime: 'Hora de Argentina (UTC-3)',
     languageConfirm: 'Se va a cambiar el idioma a {{language}}.',
     disableNotificationsConfirm: '¿Estás seguro de desactivar las notificaciones?',
     confirm: 'Confirmar',

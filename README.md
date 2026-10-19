@@ -164,7 +164,7 @@ Límites de los campos (los mismos que valida el backend, en `src/utils/profileL
 
 - **Nombre, apellido y usuario: hasta 20 caracteres**, con un contador debajo mientras se edita («18/20»). Si el valor guardado es más largo, se muestran sus primeros 20 caracteres seguidos de «...» y se edita con esos 20.
 - **Días de alerta de stock y de próximo a vencer: números de 2 a 90** (inclusive). Si el valor guardado está fuera de ese rango se usa el **7**.
-- **Hora del chequeo diario: números de 0 a 23** (inclusive). Si no es una hora válida se usa la **5**.
+- **Hora del chequeo diario: números de 0 a 23** (inclusive), **en hora de Argentina (UTC-3)**. Si no es una hora válida se usa la **5**. El servidor guarda la hora en UTC (se suman 3 horas: las 05:00 de Argentina se guardan como 8), así que el perfil muestra la hora con dos dígitos (`05:00 hs · Hora de Argentina (UTC-3)`). Es la hora de Argentina, no la del reloj del teléfono.
 - Cada campo numérico (`src/components/NumberStepper.tsx`) permite escribir el número y tiene dos botones pegados al borde (subir y bajar) que se detienen en los extremos, y debajo un mensaje con el rango aceptado.
 
 **Imágenes.** Al tocar una imagen se abre a pantalla completa: se acerca y se aleja **pellizcando con dos dedos** (el zoom se hace desde donde están los dedos) y, ya acercada, se arrastra con uno o dos dedos para ver cada parte; no hay zoom con doble toque. Al cargar una imagen de un producto (cámara o galería) no se ofrece recortarla: se muestra una ventana de confirmación con la imagen elegida y recién al confirmar se sube (`src/services/imageService.ts` elige y sube en dos pasos).

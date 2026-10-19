@@ -35,3 +35,6 @@ export function stepValue(text: string, direction: 1 | -1, min: number, max: num
   if (current === null) return direction === 1 ? min : max;
   return Math.min(max, Math.max(min, current + direction));
 }
+
+/** La hora con dos dígitos y los minutos en cero: 5 -> "05:00". */
+export const formatHour = (hour: number): string => `${String(hour).padStart(2, '0')}:00`;

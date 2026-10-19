@@ -32,6 +32,7 @@ import {
   PROFILE_TEXT_MAX,
   alertDaysOrDefault,
   checkHourOrDefault,
+  formatHour,
   inRange,
   parseWholeNumber,
 } from '@/utils/profileLimits';
@@ -405,7 +406,7 @@ export default function PerfilScreen() {
             </>
           ) : (
             <Text testID="alert-hour-value" style={styles.fieldValue}>
-              {profile ? checkHourOrDefault(Math.round(utcToLocal(profile.alertCheckHour))) : ''} {t('profile.argentinaTime')}
+              {profile ? `${formatHour(checkHourOrDefault(Math.round(utcToLocal(profile.alertCheckHour))))} hs · ${t('profile.argentinaTime')}` : ''}
             </Text>
           )}
         </View>
