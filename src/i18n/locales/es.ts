@@ -117,6 +117,7 @@ export default {
     notifications: 'Notificaciones',
     enabled: 'Activadas',
     disabled: 'Desactivadas',
+    notificationsSettingsNotice: 'Para activar las notificaciones de la aplicación, ve a Ajustes y otorga los permisos',
     notificationsError: 'No se pudieron activar las notificaciones',
     utc: 'hs UTC',
   },

@@ -1,18 +1,6 @@
 import { Platform } from "react-native";
 import authApi from "./authApi";
-
-// Canal por defecto de Android. Debe coincidir con "defaultChannel" del plugin
-// expo-notifications en app.json, que es el canal que usan los push de FCM.
-const ANDROID_CHANNEL_ID = "default";
-
-// En Android 13+ el diálogo de permiso de notificaciones no aparece hasta que existe un canal.
-async function ensureAndroidChannel(Notifications: typeof import("expo-notifications")): Promise<void> {
-  if (Platform.OS !== "android") return;
-  await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
-    name: "Alertas",
-    importance: Notifications.AndroidImportance.MAX,
-  });
-}
+import { ensureAndroidChannel } from "./notificationPermission";
 
 // getFirebaseToken: web usa el SDK de Firebase, nativo usa expo-notifications
 export async function getFirebaseToken(): Promise<string | null> {

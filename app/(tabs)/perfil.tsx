@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,11 +15,13 @@ import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import ConfirmModal from '@/components/ConfirmModal';
+import NoticeModal from '@/components/NoticeModal';
 import ScreenHeader from '@/components/ScreenHeader';
 import { Colors } from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
 import { changeLanguage, type Language } from '@/i18n';
 import { profileService, UserProfile, UserType } from '@/services/profileService';
+import { ensureNotificationPermission, getNotificationPermission } from '@/services/notificationPermission';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { truncateLabel } from '@/utils/text';
 import {
@@ -53,6 +55,8 @@ export default function PerfilScreen() {
   const [confirmLogoutVisible, setConfirmLogoutVisible] = useState(false);
   const [pendingLanguage, setPendingLanguage] = useState<Language | null>(null);
   const [confirmDisableNotifications, setConfirmDisableNotifications] = useState(false);
+  // Aviso de que el permiso de notificaciones solo se da desde los Ajustes del teléfono
+  const [settingsNoticeVisible, setSettingsNoticeVisible] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'error'; msg: string } | null>(null);
 
   const [coverageDaysInput, setCoverageDaysInput] = useState('7');
@@ -147,20 +151,46 @@ export default function PerfilScreen() {
     setFeedback(null);
   };
 
-  useEffect(() => {
+  // Deja el botón en «Desactivadas» (en el teléfono y en el servidor, si se puede)
+  const turnNotificationsOff = async () => {
+    setNotificationsEnabled(false);
+    try {
+      await AsyncStorage.setItem('notificationsEnabled', JSON.stringify(false));
+      await profileService.deactivateNotifications();
+    } catch {
+      // el botón ya quedó apagado; el servidor se pone al día la próxima vez
+    }
+  };
+
+  // Cada vez que se vuelve al perfil: si el botón dice «Activadas» pero el teléfono no tiene el permiso, se pide
+  useFocusEffect(useCallback(() => {
     const loadNotificationsStatus = async () => {
       try {
         const saved = await AsyncStorage.getItem('notificationsEnabled');
-        if (saved !== null) {
-          setNotificationsEnabled(JSON.parse(saved));
+        if (saved === null) return;
+        const enabled = JSON.parse(saved);
+        setNotificationsEnabled(enabled);
+        if (!enabled) return;
+
+        if ((await getNotificationPermission()).granted) return;
+        const permission = await ensureNotificationPermission();
+        if (permission === 'granted') {
+          // Con el permiso recién dado se vuelve a registrar el teléfono para recibir las notificaciones
+          await profileService.activateNotifications();
+          return;
         }
+        // Sin permiso no hay notificaciones: el botón pasa a «Desactivadas»
+        await turnNotificationsOff();
+        // Si el usuario eligió que nunca se permitan, solo se pueden activar desde los Ajustes
+        if (permission === 'blocked') setSettingsNoticeVisible(true);
       } catch (error) {
         console.error('Error loading notifications status:', error);
       }
     };
 
     loadNotificationsStatus();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []));
 
   const handleActivateNotifications = async () => {
     try {
@@ -169,6 +199,13 @@ export default function PerfilScreen() {
         setNotificationsEnabled(false);
         await AsyncStorage.setItem('notificationsEnabled', JSON.stringify(false));
       } else {
+        // Antes de activar se pide el permiso del teléfono; si ya no se puede pedir, se explica cómo darlo
+        const permission = await ensureNotificationPermission();
+        if (permission === 'blocked') {
+          setSettingsNoticeVisible(true);
+          return;
+        }
+        if (permission === 'denied') return;
         const notificationsActivated = await profileService.activateNotifications();
         setNotificationsEnabled(notificationsActivated);
         await AsyncStorage.setItem('notificationsEnabled', JSON.stringify(true));
@@ -437,6 +474,13 @@ export default function PerfilScreen() {
             handleActivateNotifications();
           }}
           onCancel={() => setConfirmDisableNotifications(false)}
+        />
+
+        <NoticeModal
+          visible={settingsNoticeVisible}
+          message={t('profile.notificationsSettingsNotice')}
+          buttonLabel={t('common.continue')}
+          onContinue={() => setSettingsNoticeVisible(false)}
         />
 
         <ConfirmModal

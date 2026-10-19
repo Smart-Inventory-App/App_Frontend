@@ -169,6 +169,8 @@ Límites de los campos (los mismos que valida el backend, en `src/utils/profileL
 
 **Imágenes.** Al tocar una imagen se abre a pantalla completa: se acerca y se aleja **pellizcando con dos dedos** (el zoom se hace desde donde están los dedos) y, ya acercada, se arrastra con uno o dos dedos para ver cada parte; no hay zoom con doble toque. Al cargar una imagen de un producto (cámara o galería) no se ofrece recortarla: se muestra una ventana de confirmación con la imagen elegida y recién al confirmar se sube (`src/services/imageService.ts` elige y sube en dos pasos).
 
+**Permiso de notificaciones.** Al activar las notificaciones desde el perfil se pide el permiso del teléfono (`src/services/notificationPermission.ts`). Si el botón dice «Activadas» pero el teléfono no tiene el permiso, la solicitud aparece al entrar al perfil; si el usuario la rechaza, el botón pasa a «Desactivadas». Si eligió que nunca se permitan, el sistema ya no muestra la solicitud y la app avisa: «Para activar las notificaciones de la aplicación, ve a Ajustes y otorga los permisos», con un botón Continuar.
+
 **Recuperar contraseña.** «Olvidé mi contraseña» abre la pantalla con el mail del login ya completado.
 
 ---

@@ -97,6 +97,7 @@ export default {
     argentinaTime: 'hs Argentina Time (UTC -3)',
     languageConfirm: 'The language will be changed to {{language}}.',
     disableNotificationsConfirm: 'Are you sure you want to turn off notifications?',
+    notificationsSettingsNotice: 'To turn on the notifications of the app, go to Settings and grant the permissions',
     confirm: 'Confirm',
     invalidSettings: 'Check the values: days must be between 2 and 90 and the hour between 0 and 23',
     rangeHint: 'Numbers between {{min}} and {{max}} (inclusive) are accepted.',

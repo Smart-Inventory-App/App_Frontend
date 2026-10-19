@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import PerfilScreen from '../app/(tabs)/perfil';
 import { profileService, UserProfile } from '@/services/profileService';
 import { changeLanguage } from '@/i18n';
+import { ensureNotificationPermission, getNotificationPermission } from '@/services/notificationPermission';
 
 const mockReplace = jest.fn();
 const mockNavigate = jest.fn();
@@ -22,6 +23,11 @@ jest.mock('expo-router', () => {
     },
   };
 });
+
+jest.mock('@/services/notificationPermission', () => ({
+  getNotificationPermission: jest.fn(),
+  ensureNotificationPermission: jest.fn(),
+}));
 
 jest.mock('@/context/AuthContext', () => ({
   useAuth: () => ({ logout: mockLogout }),
@@ -69,6 +75,9 @@ beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
   mockedProfileService.getProfile.mockResolvedValue(baseProfile());
+  // Por defecto el teléfono ya dio el permiso de notificaciones
+  (getNotificationPermission as jest.Mock).mockResolvedValue({ granted: true, canAskAgain: true });
+  (ensureNotificationPermission as jest.Mock).mockResolvedValue('granted');
   jest.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -550,5 +559,121 @@ describe('PerfilScreen - limits of the fields', () => {
     expect(screen.getByTestId('alert-hour-value').props.children.join('')).toBe('5 hs Hora Argentina (UTC -3)');
     startEditing();
     expect(screen.getByTestId('alert-hour-input').props.value).toBe('5');
+  });
+});
+
+describe('PerfilScreen - permission of the notifications', () => {
+  const NOTICE = 'Para activar las notificaciones de la aplicación, ve a Ajustes y otorga los permisos';
+  const ungranted = () => (getNotificationPermission as jest.Mock).mockResolvedValue({ granted: false, canAskAgain: true });
+
+  const openWithEnabled = async () => {
+    await AsyncStorage.setItem('notificationsEnabled', JSON.stringify(true));
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+  };
+
+  it('does not ask for anything when the button says "Activadas" and the phone already gave the permission', async () => {
+    await openWithEnabled();
+    expect(screen.getByText(/Activadas/)).toBeTruthy();
+    expect(ensureNotificationPermission).not.toHaveBeenCalled();
+  });
+
+  it('does not check the permission when the button says "Desactivadas"', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    expect(getNotificationPermission).not.toHaveBeenCalled();
+  });
+
+  it('shows the request of the system when the button says "Activadas" but the permission was not given', async () => {
+    ungranted();
+    await openWithEnabled();
+    await waitFor(() => expect(ensureNotificationPermission).toHaveBeenCalledTimes(1));
+  });
+
+  it('keeps the notifications on, registering the phone again, when the user gives the permission', async () => {
+    ungranted();
+    mockedProfileService.activateNotifications.mockResolvedValue(true);
+    await openWithEnabled();
+    await waitFor(() => expect(mockedProfileService.activateNotifications).toHaveBeenCalled());
+    expect(screen.getByText(/Activadas/)).toBeTruthy();
+    expect(screen.queryByText(NOTICE)).toBeNull();
+  });
+
+  it('turns the button to "Desactivadas" when the user refuses the request, without any notice', async () => {
+    ungranted();
+    (ensureNotificationPermission as jest.Mock).mockResolvedValue('denied');
+    mockedProfileService.deactivateNotifications.mockResolvedValue(true);
+    await openWithEnabled();
+    await waitFor(() => expect(screen.getByText(/Desactivadas/)).toBeTruthy());
+    await expect(AsyncStorage.getItem('notificationsEnabled')).resolves.toBe('false');
+    expect(mockedProfileService.deactivateNotifications).toHaveBeenCalled();
+    expect(screen.queryByText(NOTICE)).toBeNull();
+  });
+
+  it('tells the user to go to Settings, with a "Continuar" button, when the permission was blocked for good', async () => {
+    ungranted();
+    (ensureNotificationPermission as jest.Mock).mockResolvedValue('blocked');
+    mockedProfileService.deactivateNotifications.mockResolvedValue(true);
+    await openWithEnabled();
+    await waitFor(() => expect(screen.getByText(NOTICE)).toBeTruthy());
+    expect(screen.getByText(/Desactivadas/)).toBeTruthy();
+    fireEvent.press(screen.getByText('Continuar'));
+    expect(screen.queryByText(NOTICE)).toBeNull();
+  });
+
+  it('still turns the button off when the server can not be reached', async () => {
+    ungranted();
+    (ensureNotificationPermission as jest.Mock).mockResolvedValue('denied');
+    mockedProfileService.deactivateNotifications.mockRejectedValue(new Error('down'));
+    await openWithEnabled();
+    await waitFor(() => expect(screen.getByText(/Desactivadas/)).toBeTruthy());
+  });
+
+  it('checks again every time the user comes back to the profile', async () => {
+    await openWithEnabled();
+    expect(getNotificationPermission).toHaveBeenCalledTimes(1);
+    ungranted();
+    (ensureNotificationPermission as jest.Mock).mockResolvedValue('denied');
+    mockedProfileService.deactivateNotifications.mockResolvedValue(true);
+    await act(async () => { mockFocusCallback(); });
+    await waitFor(() => expect(screen.getByText(/Desactivadas/)).toBeTruthy());
+  });
+
+  it('asks for the permission before turning the notifications on, and turns them on when it is given', async () => {
+    mockedProfileService.activateNotifications.mockResolvedValue(true);
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(screen.getByText(/Notificaciones:/));
+    });
+    expect(ensureNotificationPermission).toHaveBeenCalledTimes(1);
+    expect(mockedProfileService.activateNotifications).toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByText(/Activadas/)).toBeTruthy());
+  });
+
+  it('does not turn the notifications on, nor say anything, when the user refuses the request', async () => {
+    (ensureNotificationPermission as jest.Mock).mockResolvedValue('denied');
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(screen.getByText(/Notificaciones:/));
+    });
+    expect(mockedProfileService.activateNotifications).not.toHaveBeenCalled();
+    expect(screen.getByText(/Desactivadas/)).toBeTruthy();
+    expect(screen.queryByText(NOTICE)).toBeNull();
+  });
+
+  it('tells the user to go to Settings when pressing the button and the permission was blocked for good', async () => {
+    (ensureNotificationPermission as jest.Mock).mockResolvedValue('blocked');
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(screen.getByText(/Notificaciones:/));
+    });
+    expect(screen.getByText(NOTICE)).toBeTruthy();
+    expect(mockedProfileService.activateNotifications).not.toHaveBeenCalled();
+    expect(screen.getByText(/Desactivadas/)).toBeTruthy();
+    fireEvent.press(screen.getByText('Continuar'));
+    expect(screen.queryByText(NOTICE)).toBeNull();
   });
 });
