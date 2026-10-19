@@ -272,7 +272,7 @@ export default function CargarScreen() {
           </View>
         }
       />
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {direction === 'entrada' ? (
           <>
           <TouchableOpacity style={styles.scanBtn} onPress={() => setScanVisible(true)} testID="open-scan-modal">

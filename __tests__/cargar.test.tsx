@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import CargarScreen from '../app/(tabs)/cargar';
@@ -423,6 +423,13 @@ describe('CargarScreen - big Entrada/Salida buttons', () => {
     expect(StyleSheet.flatten(screen.getByText('Flujo de producto').props.style).flexShrink).toBe(0);
     expect(StyleSheet.flatten(screen.getByTestId('direction-row').props.style).marginRight).toBeGreaterThan(0);
     expect(StyleSheet.flatten(screen.getByTestId('direction-row').props.style).gap).toBe(12);
+  });
+});
+
+describe('CargarScreen - toque en sugerencias con el teclado abierto', () => {
+  it('deja que el primer toque llegue a las sugerencias sin cerrar el teclado (Android)', () => {
+    render(<CargarScreen />);
+    expect(screen.UNSAFE_getByType(ScrollView).props.keyboardShouldPersistTaps).toBe('handled');
   });
 });
 
