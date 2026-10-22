@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Modal, Platform, Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { Animated, Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleProp, StyleSheet, ViewStyle } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Props {
   visible: boolean;
@@ -20,7 +21,9 @@ const useNativeDriver = Platform.OS !== 'web';
 export default function BottomSheetModal({
   visible, onRequestClose, children, sheetStyle, overlayTestID, sheetTestID,
 }: Props) {
+  const insets = useSafeAreaInsets();
   const [mounted, setMounted] = useState(visible);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const fade = useRef(new Animated.Value(visible ? 1 : 0)).current;
   const slide = useRef(new Animated.Value(visible ? 1 : 0)).current;
 
@@ -41,20 +44,36 @@ export default function BottomSheetModal({
     }
   }, [visible, fade, slide]);
 
+  // Con el teclado abierto los botones del sistema quedan detrás de él: no hace falta dejarles lugar
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => setKeyboardOpen(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   const translateY = slide.interpolate({
     inputRange: [0, 1],
     outputRange: [Dimensions.get('window').height, 0],
   });
 
+  // La hoja llega hasta el borde inferior: se le suma el alto de los botones del sistema para que no tapen su contenido
+  const flatSheet = StyleSheet.flatten(sheetStyle) ?? {};
+  const basePaddingBottom = Number(flatSheet.paddingBottom ?? flatSheet.padding ?? 0);
+
   return (
-    <Modal visible={mounted} transparent animationType="none" onRequestClose={onRequestClose}>
-      <View style={styles.container}>
+    // El modal ocupa toda la pantalla (también bajo la barra de estado y los botones del sistema)
+    <Modal visible={mounted} transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={onRequestClose}>
+      {/* Con el teclado abierto la hoja sube y se achica para que sus campos queden a la vista */}
+      <KeyboardAvoidingView behavior="padding" style={styles.container}>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: fade }]} />
         <Pressable testID={overlayTestID} style={StyleSheet.absoluteFill} onPress={onRequestClose} />
-        <Animated.View testID={sheetTestID} style={[sheetStyle, { transform: [{ translateY }] }]}>
+        <Animated.View testID={sheetTestID} style={[sheetStyle, { paddingBottom: basePaddingBottom + (keyboardOpen ? 0 : insets.bottom), transform: [{ translateY }] }]}>
           {children}
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

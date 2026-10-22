@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Image, Alert, StyleSheet } from 'react-native';
 import ProductFormFields from '../src/components/ProductFormFields';
-import { pickFromCamera, pickFromGallery } from '@/services/imageService';
+import { FieldFocusContext } from '../src/components/KeyboardAwareScrollView';
+import { pickFromCamera, pickFromGallery, uploadImage } from '@/services/imageService';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
 
 jest.mock('@/services/imageService', () => ({
   pickFromGallery: jest.fn(),
   pickFromCamera: jest.fn(),
+  uploadImage: jest.fn(),
 }));
 
 function Wrapper({ form: initialForm, ...rest }: Partial<React.ComponentProps<typeof ProductFormFields>> = {}) {
@@ -220,24 +222,104 @@ describe('ProductFormFields - nombre suggestions', () => {
 });
 
 describe('ProductFormFields - image picker', () => {
-  it('uploads from the camera and sets imagen_url', async () => {
-    (pickFromCamera as jest.Mock).mockResolvedValue('https://cdn/a.jpg');
+  const PICKED = { uri: 'file://a.jpg', fileName: 'a.jpg', mimeType: 'image/jpeg' };
+
+  it('asks for confirmation after taking a photo, and uploads it only when confirmed', async () => {
+    (pickFromCamera as jest.Mock).mockResolvedValue(PICKED);
+    (uploadImage as jest.Mock).mockResolvedValue('https://cdn/a.jpg');
     render(<Wrapper />);
     fireEvent.press(screen.getByText('Seleccionar imagen'));
     await act(async () => {
       fireEvent.press(screen.getByText('Tomar foto'));
     });
+    expect(screen.getByText('¿Querés cargar esta imagen?')).toBeTruthy();
+    expect(screen.getByTestId('image-confirm-preview').props.source).toEqual({ uri: 'file://a.jpg' });
+    expect(uploadImage).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('image-confirm-accept'));
+    });
+    expect(uploadImage).toHaveBeenCalledWith(PICKED);
     expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/a.jpg' });
+    expect(screen.queryByText('¿Querés cargar esta imagen?')).toBeNull();
   });
 
-  it('uploads from the gallery and sets imagen_url', async () => {
-    (pickFromGallery as jest.Mock).mockResolvedValue('https://cdn/b.jpg');
+  it('asks for confirmation after choosing from the gallery, and uploads it only when confirmed', async () => {
+    (pickFromGallery as jest.Mock).mockResolvedValue(PICKED);
+    (uploadImage as jest.Mock).mockResolvedValue('https://cdn/b.jpg');
     render(<Wrapper />);
     fireEvent.press(screen.getByText('Seleccionar imagen'));
     await act(async () => {
       fireEvent.press(screen.getByText('Elegir de la galería'));
     });
+    expect(screen.getByText('¿Querés cargar esta imagen?')).toBeTruthy();
+    expect(uploadImage).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('image-confirm-accept'));
+    });
     expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/b.jpg' });
+  });
+
+  it('does not upload nor set the image when the user cancels the confirmation', async () => {
+    (pickFromGallery as jest.Mock).mockResolvedValue(PICKED);
+    render(<Wrapper />);
+    fireEvent.press(screen.getByText('Seleccionar imagen'));
+    await act(async () => {
+      fireEvent.press(screen.getByText('Elegir de la galería'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('image-confirm-cancel'));
+    });
+    expect(uploadImage).not.toHaveBeenCalled();
+    expect(screen.UNSAFE_queryAllByType(Image)).toHaveLength(0);
+    expect(screen.queryByText('¿Querés cargar esta imagen?')).toBeNull();
+  });
+
+  it('keeps the current image when the user cancels the confirmation of a new one', async () => {
+    (pickFromGallery as jest.Mock).mockResolvedValue(PICKED);
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    fireEvent.press(screen.getByText('Cambiar imagen'));
+    await act(async () => {
+      fireEvent.press(screen.getByText('Elegir de la galería'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('image-confirm-cancel'));
+    });
+    expect(uploadImage).not.toHaveBeenCalled();
+    expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/existing.jpg' });
+  });
+
+  it('shows an alert when the upload fails after confirming', async () => {
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    (pickFromCamera as jest.Mock).mockResolvedValue(PICKED);
+    (uploadImage as jest.Mock).mockRejectedValue(new Error('sin conexión'));
+    render(<Wrapper />);
+    fireEvent.press(screen.getByText('Seleccionar imagen'));
+    await act(async () => {
+      fireEvent.press(screen.getByText('Tomar foto'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('image-confirm-accept'));
+    });
+    expect(Alert.alert).toHaveBeenCalledWith('Error', 'sin conexión');
+    expect(screen.UNSAFE_queryAllByType(Image)).toHaveLength(0);
+    (Alert.alert as jest.Mock).mockRestore();
+  });
+
+  it('shows a generic alert message when the upload fails with something that is not an Error', async () => {
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    (pickFromCamera as jest.Mock).mockResolvedValue(PICKED);
+    (uploadImage as jest.Mock).mockRejectedValue('boom');
+    render(<Wrapper />);
+    fireEvent.press(screen.getByText('Seleccionar imagen'));
+    await act(async () => {
+      fireEvent.press(screen.getByText('Tomar foto'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('image-confirm-accept'));
+    });
+    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Error al subir la imagen.');
+    (Alert.alert as jest.Mock).mockRestore();
   });
 
   it('keeps no image when the user cancels the picker', async () => {
@@ -263,7 +345,7 @@ describe('ProductFormFields - image picker', () => {
     (Alert.alert as jest.Mock).mockRestore();
   });
 
-  it('shows a generic alert message for a non-Error rejection', async () => {
+  it('shows a generic alert message when picking fails with something that is not an Error', async () => {
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     (pickFromCamera as jest.Mock).mockRejectedValue('boom');
     render(<Wrapper />);
@@ -271,7 +353,7 @@ describe('ProductFormFields - image picker', () => {
     await act(async () => {
       fireEvent.press(screen.getByText('Tomar foto'));
     });
-    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Error al subir la imagen.');
+    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Error al elegir la imagen.');
     (Alert.alert as jest.Mock).mockRestore();
   });
 
@@ -457,6 +539,84 @@ describe('ProductFormFields - labels and placeholders', () => {
     expect(screen.queryByText(/DD\/MM\/AAAA/)).toBeNull();
     expect(screen.getByTestId('input-vencimiento').props.placeholder).toBe('DD/MM/AAAA');
     expect(screen.getByTestId('input-descripcion').props.placeholder).toBe('Opcional');
+  });
+
+  it('starts the Categoría, Marca and Ubicación placeholders with a capital letter', () => {
+    render(<Wrapper />);
+    fireEvent.press(screen.getByTestId('add-categoria'));
+    expect(screen.getByTestId('input-categoria').props.placeholder).toBe('Ej. Lácteos');
+    fireEvent.press(screen.getByTestId('confirm-categoria'));
+    fireEvent.press(screen.getByTestId('add-marca'));
+    expect(screen.getByTestId('input-marca').props.placeholder).toBe('Opcional');
+    fireEvent.press(screen.getByTestId('confirm-marca'));
+    fireEvent.press(screen.getByTestId('add-ubicacion'));
+    expect(screen.getByTestId('input-ubicacion').props.placeholder).toBe('Ej. Heladera, Alacena A, Freezer');
+  });
+
+  it('reserves the same label height in both alert rule fields so the inputs line up, with the title against its input', () => {
+    render(<Wrapper />);
+    const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
+    expect(flat('alert-label-box-stock-minimo').minHeight).toBe(32);
+    expect(flat('alert-label-box-dias').minHeight).toBe(flat('alert-label-box-stock-minimo').minHeight);
+    expect(flat('alert-label-box-stock-minimo').justifyContent).toBe('flex-end');
+    expect(flat('alert-label-box-dias').justifyContent).toBe('flex-end');
+  });
+
+  it('puts the selected option first and sends it back to its place when deselected', () => {
+    render(<Wrapper categoriaOptions={['Lácteos', 'Limpieza', 'Bebidas']} />);
+    const order = () => {
+      const tree = JSON.stringify(screen.toJSON());
+      return ['Lácteos', 'Limpieza', 'Bebidas'].sort((a, b) => tree.indexOf(a) - tree.indexOf(b));
+    };
+    expect(order()).toEqual(['Lácteos', 'Limpieza', 'Bebidas']);
+    fireEvent.press(screen.getByText('Bebidas'));
+    expect(order()).toEqual(['Bebidas', 'Lácteos', 'Limpieza']);
+    fireEvent.press(screen.getByText('Bebidas'));
+    expect(order()).toEqual(['Lácteos', 'Limpieza', 'Bebidas']);
+  });
+
+  it('tells the screen when any text field is focused', () => {
+    const onFieldFocus = jest.fn();
+    render(
+      <FieldFocusContext.Provider value={onFieldFocus}>
+        <Wrapper />
+      </FieldFocusContext.Provider>,
+    );
+    const ids = ['input-vencimiento', 'input-codigo-barras', 'input-descripcion'];
+    ids.forEach(id => fireEvent(screen.getByTestId(id), 'focus'));
+    fireEvent(screen.getByPlaceholderText('ej. Leche entera 1L'), 'focus');
+    fireEvent(screen.getByPlaceholderText('0'), 'focus');
+    screen.getAllByPlaceholderText('Default').forEach(input => fireEvent(input, 'focus'));
+    fireEvent.press(screen.getByTestId('add-categoria'));
+    fireEvent(screen.getByTestId('input-categoria'), 'focus');
+    expect(onFieldFocus).toHaveBeenCalledTimes(ids.length + 2 + 2 + 1);
+  });
+
+  it('does not show the camera buttons unless the screen can scan', () => {
+    render(<Wrapper />);
+    expect(screen.queryByTestId('scan-expiry')).toBeNull();
+    expect(screen.queryByTestId('scan-barcode')).toBeNull();
+  });
+
+  it('shows a camera button to the right of the calendar and one to the right of the barcode, in the same format', () => {
+    render(<Wrapper onScanField={jest.fn()} />);
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('open-calendar')).toBeLessThan(tree.indexOf('scan-expiry'));
+    expect(tree.indexOf('input-codigo-barras')).toBeLessThan(tree.indexOf('scan-barcode'));
+    const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
+    expect(flat('scan-expiry')).toMatchObject({ width: 40, height: 40, borderRadius: 8, backgroundColor: '#fff' });
+    expect(flat('scan-barcode')).toMatchObject(flat('open-calendar'));
+    expect(flat('scan-expiry')).toMatchObject(flat('open-calendar'));
+    expect(flat('input-codigo-barras').flex).toBe(1);
+  });
+
+  it('asks to scan the expiry date or the barcode when its camera button is pressed', () => {
+    const onScanField = jest.fn();
+    render(<Wrapper onScanField={onScanField} />);
+    fireEvent.press(screen.getByTestId('scan-expiry'));
+    expect(onScanField).toHaveBeenLastCalledWith('expiry_date');
+    fireEvent.press(screen.getByTestId('scan-barcode'));
+    expect(onScanField).toHaveBeenLastCalledWith('barcode');
   });
 
   it('shows "Default" in the alert rule fields', () => {

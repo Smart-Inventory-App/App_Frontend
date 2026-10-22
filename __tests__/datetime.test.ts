@@ -1,4 +1,4 @@
-import { formatArgentinaDateTime, humanizeEventNote } from '../src/utils/datetime';
+import { formatArgentinaDateTime, formatArgentinaShort, humanizeEventNote } from '../src/utils/datetime';
 
 describe('formatArgentinaDateTime', () => {
   it('shows the time first and then the date, in 24-hour Argentine time', () => {
@@ -49,5 +49,24 @@ describe('humanizeEventNote', () => {
   it('leaves the text alone when the record is unknown or there is no reference', () => {
     expect(humanizeEventNote('Deshecho: revierte el registro #99', events)).toBe('Deshecho: revierte el registro #99');
     expect(humanizeEventNote('compré de más', events)).toBe('compré de más');
+  });
+});
+
+describe('formatArgentinaShort', () => {
+  it('shows the date first and then the time, without seconds, in Argentine time', () => {
+    expect(formatArgentinaShort('2026-10-10T20:43:23Z')).toBe('10/10/2026 17:43');
+    expect(formatArgentinaShort('2026-10-10T20:43:23.962872+00:00')).toBe('10/10/2026 17:43');
+  });
+
+  it('moves to the previous day when the Argentine time is before midnight UTC', () => {
+    expect(formatArgentinaShort('2026-10-11T01:30:00Z')).toBe('10/10/2026 22:30');
+  });
+
+  it('uses 24 hours and understands a timestamp without a zone as UTC', () => {
+    expect(formatArgentinaShort('2026-10-10 23:59:00')).toBe('10/10/2026 20:59');
+  });
+
+  it('returns the text as it came when it is not a date', () => {
+    expect(formatArgentinaShort('not a date')).toBe('not a date');
   });
 });

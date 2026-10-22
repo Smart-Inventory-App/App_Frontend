@@ -1,5 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Modal, StyleSheet } from 'react-native';
+import { Colors } from '../src/constants/colors';
 import ConfirmModal from '../src/components/ConfirmModal';
 
 const baseProps = {
@@ -43,5 +45,32 @@ describe('ConfirmModal', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
     UNSAFE_getAllByType(Modal)[0].props.onRequestClose();
     expect(onCancel).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('ConfirmModal - pantalla completa', () => {
+  it('covers the status bar and the system buttons too', () => {
+    const { UNSAFE_getByType } = render(<ConfirmModal {...baseProps} visible onConfirm={jest.fn()} onCancel={jest.fn()} />);
+    expect(UNSAFE_getByType(Modal).props.statusBarTranslucent).toBe(true);
+    expect(UNSAFE_getByType(Modal).props.navigationBarTranslucent).toBe(true);
+  });
+});
+
+describe('ConfirmModal - color of the confirm button', () => {
+  const background = () => StyleSheet.flatten(screen.getByTestId('confirm-accept').props.style).backgroundColor;
+
+  it('is red by default, for what deletes or closes something', () => {
+    render(<ConfirmModal {...baseProps} visible onConfirm={jest.fn()} onCancel={jest.fn()} />);
+    expect(background()).toBe(Colors.error);
+  });
+
+  it('is the teal of the app when asked to', () => {
+    render(<ConfirmModal {...baseProps} visible confirmTone="primary" onConfirm={jest.fn()} onCancel={jest.fn()} />);
+    expect(background()).toBe(Colors.primary);
+  });
+
+  it('keeps the cancel button white in both cases', () => {
+    render(<ConfirmModal {...baseProps} visible confirmTone="primary" onConfirm={jest.fn()} onCancel={jest.fn()} />);
+    expect(StyleSheet.flatten(screen.getByTestId('confirm-cancel').props.style).backgroundColor).toBe(Colors.white);
   });
 });

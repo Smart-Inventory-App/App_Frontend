@@ -1,84 +1,113 @@
-import { View, Text, StyleSheet } from 'react-native';
-import {useFonts, Figtree_400Regular} from '@expo-google-fonts/figtree'
-import {RobotoFlex_400Regular} from '@expo-google-fonts/roboto-flex'
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useFonts, Figtree_400Regular } from '@expo-google-fonts/figtree';
+import { RobotoFlex_400Regular } from '@expo-google-fonts/roboto-flex';
+import { Colors } from '@/constants/colors';
 
 type Props = {
   title: string;
   value: string;
   label: string;
   labelColor: 'green' | 'yellow' | 'red';
+  /** Ícono de la tarjeta, dentro de un círculo del color de acento. */
+  icon?: keyof typeof Ionicons.glyphMap;
+  /** Color de acento del ícono y del número (por defecto, el del texto de abajo). */
+  accent?: string;
+  /** Si se indica, la tarjeta se puede tocar. */
+  onPress?: () => void;
+  testID?: string;
 };
 
-export default function StatCard({ title, value, label, labelColor }: Props) {
-  useFonts({Figtree_400Regular, RobotoFlex_400Regular });
-  const getLabelStyle = () => {
-    switch(labelColor) {
-      case 'green':
-        return styles.labelGreen
-      case 'yellow':
-        return styles.labelYellow
-      case 'red':
-        return styles.labelRed
-      default:
-        return styles.labelGreen
-    }
-  }
+const LABEL_ACCENT = { green: '#2db7a3', yellow: '#f59e0b', red: '#e5484d' } as const;
 
-  return (
-    <View style={styles.card}>
-      <Text style={styles.value}>{value}</Text>
+// Cuantos más caracteres tiene el número (con sus puntos), más chico se escribe para que entre en la tarjeta
+export function valueFontSize(value: string): number {
+  if (value.length <= 5) return 34;
+  if (value.length <= 7) return 28;
+  if (value.length <= 9) return 23;
+  return 19;
+}
+
+export default function StatCard({ title, value, label, labelColor, icon, accent, onPress, testID }: Props) {
+  useFonts({ Figtree_400Regular, RobotoFlex_400Regular });
+  const getLabelStyle = () => {
+    switch (labelColor) {
+      case 'green':
+        return styles.labelGreen;
+      case 'yellow':
+        return styles.labelYellow;
+      case 'red':
+        return styles.labelRed;
+      default:
+        return styles.labelGreen;
+    }
+  };
+  const color = accent ?? LABEL_ACCENT[labelColor] ?? LABEL_ACCENT.green;
+
+  const content = (
+    <>
+      <View style={styles.top}>
+        {icon ? (
+          <View testID={testID ? `${testID}-icon` : undefined} style={[styles.iconCircle, { backgroundColor: `${color}22` }]}>
+            <Ionicons name={icon} size={20} color={color} />
+          </View>
+        ) : <View />}
+        {onPress ? <Ionicons name="chevron-forward" size={18} color={Colors.placeholder} /> : null}
+      </View>
+      <Text
+        testID={testID ? `${testID}-value` : undefined}
+        style={[styles.value, { color, fontSize: valueFontSize(value) }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.6}
+      >
+        {value}
+      </Text>
       <Text style={styles.title}>{title}</Text>
-      <Text style={getLabelStyle()}>{label}</Text>
-    </View>
+      <Text style={[styles.label, getLabelStyle()]}>{label}</Text>
+    </>
+  );
+
+  if (!onPress) {
+    return <View testID={testID} style={styles.card}>{content}</View>;
+  }
+  return (
+    <TouchableOpacity testID={testID} style={styles.card} activeOpacity={0.8} onPress={onPress}>
+      {content}
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    marginHorizontal: 4,
-    marginVertical: 8,
-    padding: 12,
-    borderRadius: 10,
+    marginHorizontal: 6,
+    marginVertical: 6,
+    padding: 14,
+    borderRadius: 18,
     backgroundColor: '#fff',
-    elevation: 2,
-    height: 131,
-    // justifyContent: 'space-between'
+    elevation: 3,
+    shadowColor: '#1B3A8F',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
   },
-  value: { fontSize: 36, fontFamily: 'RobotoFlex_400Regular', marginBottom: 15 },
-  title: { fontSize: 14, fontFamily: 'Figtree_400Regular', marginBottom: 15 },
-  labelGreen: {
+  top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 38 },
+  iconCircle: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  value: { fontFamily: 'RobotoFlex_400Regular', fontWeight: '700', marginTop: 8 },
+  title: { fontSize: 14, fontFamily: 'Figtree_400Regular', fontWeight: '600', color: Colors.textPrimary, marginTop: 2, marginBottom: 8 },
+  label: {
     fontFamily: 'Figtree_400Regular',
     fontSize: 10,
-    color: '#14554b',
     borderRadius: 10,
-    backgroundColor: '#2db7a352',
-    width: 101,
-    height: 17,
-    lineHeight: 17,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    height: 18,
+    lineHeight: 18,
+    overflow: 'hidden',
     textAlign: 'center',
   },
-  labelYellow: {
-    fontFamily: 'Figtree_400Regular',
-    fontSize: 10,
-    color: '#564209',
-    borderRadius: 10,
-    backgroundColor: '#fbbc059d',
-    width: 101,
-    height: 17,
-    lineHeight: 17,
-    textAlign: 'center',
-  },
-  labelRed: {
-    fontFamily: 'Figtree_400Regular',
-    fontSize: 10,
-    color: '#671a1c',
-    borderRadius: 10,
-    backgroundColor: '#e5484d8f',
-    width: 101,
-    height: 17,
-    lineHeight: 17,
-    textAlign: 'center',
-  }
-
+  labelGreen: { color: '#14554b', backgroundColor: '#2db7a352' },
+  labelYellow: { color: '#564209', backgroundColor: '#fbbc059d' },
+  labelRed: { color: '#671a1c', backgroundColor: '#e5484d8f' },
 });

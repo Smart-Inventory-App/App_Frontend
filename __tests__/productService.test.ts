@@ -25,6 +25,12 @@ describe('productService', () => {
     expect(mockedApi.get).toHaveBeenCalledWith('/products/', { params: { search: 'leche' } });
   });
 
+  it('getProducts forwards the page (limit and offset) to the API', async () => {
+    mockedApi.get.mockResolvedValue({ data: [] });
+    await productService.getProducts({ sort_by: 'nombre', limit: 10, offset: 20 });
+    expect(mockedApi.get).toHaveBeenCalledWith('/products/', { params: { sort_by: 'nombre', limit: 10, offset: 20 } });
+  });
+
   it('getProducts works without filters', async () => {
     mockedApi.get.mockResolvedValue({ data: [] });
     await productService.getProducts();
@@ -87,6 +93,41 @@ describe('productService', () => {
       quantity: 1,
       event_type: 'consumed',
       note: undefined,
+    });
+  });
+
+  it('restockProduct posts the quantity to add to an existing product', async () => {
+    mockedApi.post.mockResolvedValue({ data: { id: 3, stock: 9, merged: true } });
+    await expect(productService.restockProduct(3, 5)).resolves.toEqual({ id: 3, stock: 9, merged: true });
+    expect(mockedApi.post).toHaveBeenCalledWith('/products/3/restock', { quantity: 5 });
+  });
+
+  it('getRecentChanges asks for the latest stock changes, five by default', async () => {
+    mockedApi.get.mockResolvedValue({ data: [{ id: 'event-1' }] });
+    await expect(productService.getRecentChanges()).resolves.toEqual([{ id: 'event-1' }]);
+    expect(mockedApi.get).toHaveBeenCalledWith('/products/changes', { params: { limit: 5, offset: 0 } });
+    await productService.getRecentChanges(2);
+    expect(mockedApi.get).toHaveBeenLastCalledWith('/products/changes', { params: { limit: 2, offset: 0 } });
+  });
+
+  it('getRecentChanges can skip the changes already seen to ask for the next page', async () => {
+    mockedApi.get.mockResolvedValue({ data: [] });
+    await productService.getRecentChanges(10, 20);
+    expect(mockedApi.get).toHaveBeenCalledWith('/products/changes', { params: { limit: 10, offset: 20 } });
+  });
+
+  it('suggestGroups searches the products grouped by name and category', async () => {
+    mockedApi.get.mockResolvedValue({ data: [{ nombre: 'Leche', stock_total: 12 }] });
+    await expect(productService.suggestGroups('lec')).resolves.toEqual([{ nombre: 'Leche', stock_total: 12 }]);
+    expect(mockedApi.get).toHaveBeenCalledWith('/products/groups', { params: { q: 'lec' } });
+  });
+
+  it('getProductGroup asks for every product with that name and category, whatever its brand', async () => {
+    mockedApi.get.mockResolvedValue({ data: { stock_total: 12, productos: [] } });
+    await expect(productService.getProductGroup({ nombre: 'Leche', categoria: 'Lacteos' }))
+      .resolves.toEqual({ stock_total: 12, productos: [] });
+    expect(mockedApi.get).toHaveBeenCalledWith('/products/group', {
+      params: { nombre: 'Leche', categoria: 'Lacteos' },
     });
   });
 

@@ -4,13 +4,14 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AppTextInput from '@/components/AppTextInput';
+import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { authService } from '../../src/services/authService';
@@ -33,6 +34,7 @@ function RuleRow({ state, label }: { state: RuleState; label: string }) {
 }
 
 export default function ChangePasswordScreen() {
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { reset_token } = useLocalSearchParams<{ reset_token: string }>();
   const [password, setPassword] = useState('');
@@ -96,16 +98,16 @@ export default function ChangePasswordScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.flex}
+      style={[styles.flex, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={styles.container}>
         <Image source={require('../../assets/icon.png')} style={styles.logo} />
         <Text style={styles.titleSmart}>Smart</Text>
         <Text style={styles.titleInventory}>Inventory</Text>
 
         <Text style={styles.label}>{t('changePassword.newPassword')}</Text>
-        <TextInput
+        <AppTextInput
           style={styles.input}
           placeholder="••••••••"
           placeholderTextColor={Colors.placeholder}
@@ -115,7 +117,7 @@ export default function ChangePasswordScreen() {
         />
 
         <Text style={styles.label}>{t('changePassword.repeatPassword')}</Text>
-        <TextInput
+        <AppTextInput
           style={styles.input}
           placeholder="••••••••"
           placeholderTextColor={Colors.placeholder}
@@ -145,7 +147,7 @@ export default function ChangePasswordScreen() {
         >
           <Text style={styles.buttonText}>{loading ? t('changePassword.changing') : t('changePassword.changePassword')}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </KeyboardAvoidingView>
   );
 }

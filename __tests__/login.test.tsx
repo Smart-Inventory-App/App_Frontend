@@ -65,6 +65,11 @@ describe('LoginScreen', () => {
     jest.useRealTimers();
   });
 
+  it('hides the Google sign-in button by default', () => {
+    render(<LoginScreen />);
+    expect(screen.queryByText('Continuar con Google')).toBeNull();
+  });
+
   it('does not show the banner when there is no pending message', () => {
     render(<LoginScreen />);
     expect(screen.queryByText('La cuenta ha sido creada exitosamente')).toBeNull();
@@ -146,6 +151,6 @@ describe('LoginScreen', () => {
     fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b.com');
     fireEvent.press(screen.getByText('Continuar'));
     fireEvent.press(screen.getByText('Olvidé mi contraseña'));
-    expect(mockPush).toHaveBeenCalledWith('/(auth)/forgot-password');
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/(auth)/forgot-password', params: { email: 'a@b.com' } });
   });
 });

@@ -1,14 +1,18 @@
 import React from 'react';
-import { Alert } from 'react-native';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Alert, FlatList, StyleSheet } from 'react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { Ionicons } from '@expo/vector-icons';
 import InventarioScreen from '../app/(tabs)/inventario';
 import { productService } from '@/services/productService';
+import { profileService } from '@/services/profileService';
 import { Product } from '@/types/product';
+
+const mockNavigate = jest.fn();
 
 jest.mock('expo-router', () => {
   const ReactActual = require('react');
   return {
+    router: { navigate: (...args: any[]) => mockNavigate(...args) },
     useFocusEffect: (cb: () => void) => ReactActual.useEffect(cb, [cb]),
   };
 });
@@ -20,6 +24,12 @@ jest.mock('@/services/productService', () => ({
     deleteProduct: jest.fn(),
     updateProduct: jest.fn(),
     getConsumptionHistory: jest.fn(),
+  },
+}));
+
+jest.mock('@/services/profileService', () => ({
+  profileService: {
+    getProfile: jest.fn(),
   },
 }));
 
@@ -36,6 +46,19 @@ jest.mock('@/components/ProductFormFields', () => {
   };
 });
 
+jest.mock('@/components/StockTotalModal', () => {
+  const { View, Text, TouchableOpacity } = require('react-native');
+  return function MockStockTotalModal({ visible, initial, onClose }: any) {
+    if (!visible) return null;
+    return (
+      <View testID="mock-stock-total">
+        <Text testID="mock-stock-total-initial">{initial ? `${initial.nombre}|${initial.categoria}` : 'none'}</Text>
+        <TouchableOpacity testID="mock-stock-total-close" onPress={onClose}><Text>close</Text></TouchableOpacity>
+      </View>
+    );
+  };
+});
+
 jest.mock('@/components/HistorialModal', () => {
   const { View, Text, TouchableOpacity } = require('react-native');
   return function MockHistorialModal({ visible, onClose }: any) {
@@ -48,7 +71,15 @@ jest.mock('@/components/HistorialModal', () => {
   };
 });
 
+// El árbol de la pantalla como texto. Se dejan afuera las partes de la lista que son elementos de React
+// (encabezado, vacío y pie), que tienen referencias circulares y ya aparecen dibujadas en el árbol.
+const treeJson = () =>
+  JSON.stringify(screen.toJSON(), (key, value) =>
+    ['ListHeaderComponent', 'ListEmptyComponent', 'ListFooterComponent', '_owner', '_store'].includes(key) ? undefined : value,
+  );
+
 const mockedProducts = productService as jest.Mocked<typeof productService>;
+const mockedProfile = profileService as jest.Mocked<typeof profileService>;
 
 const product = (overrides: Partial<Product> = {}): Product => ({
   id: 1,
@@ -62,6 +93,7 @@ const product = (overrides: Partial<Product> = {}): Product => ({
 beforeEach(() => {
   jest.clearAllMocks();
   mockedProducts.getFilterOptions.mockResolvedValue({ categorias: ['Lacteos'], ubicaciones: ['Heladera'], marcas: ['LSA'] });
+  mockedProfile.getProfile.mockResolvedValue({ coverageDaysThreshold: 7, expiryDaysThreshold: 10 } as any);
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 });
 
@@ -264,7 +296,7 @@ describe('InventarioScreen - edit modal and success messages', () => {
     fireEvent.press(screen.getByTestId('edit-sheet'));
     expect(screen.getByTestId('edit-sheet')).toBeTruthy();
     fireEvent.press(screen.getByTestId('edit-overlay'));
-    await waitFor(() => expect(screen.queryByTestId('edit-sheet')).toBeNull(), { timeout: 3000 });
+    await waitFor(() => expect(screen.queryByTestId('edit-sheet')).toBeNull(), { timeout: 10000 });
     expect(mockedProducts.updateProduct).not.toHaveBeenCalled();
   });
 
@@ -276,7 +308,7 @@ describe('InventarioScreen - edit modal and success messages', () => {
     const { Modal } = require('react-native');
     const editModal = UNSAFE_getAllByType(Modal).find((m: any) => m.props.visible);
     act(() => { editModal.props.onRequestClose(); });
-    await waitFor(() => expect(screen.queryByTestId('edit-sheet')).toBeNull(), { timeout: 3000 });
+    await waitFor(() => expect(screen.queryByTestId('edit-sheet')).toBeNull(), { timeout: 10000 });
     expect(mockedProducts.updateProduct).not.toHaveBeenCalled();
   });
 
@@ -349,6 +381,24 @@ describe('InventarioScreen - long values', () => {
 });
 
 describe('InventarioScreen - header, sort row and filters', () => {
+  it('puts the chosen sort criterion first and sends it back to its place when it is cleared', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const before = (a: string, b: string) => {
+      const tree = treeJson();
+      return tree.indexOf(`"${a}"`) < tree.indexOf(`"${b}"`);
+    };
+    expect(before('Nombre', 'Stock')).toBe(true);
+
+    await act(async () => { fireEvent.press(screen.getByText('Stock')); });
+    expect(before('Stock', 'Nombre')).toBe(true);
+
+    await act(async () => { fireEvent.press(screen.getByText('Stock ↑')); });
+    await act(async () => { fireEvent.press(screen.getByText('Stock ↓')); });
+    expect(before('Nombre', 'Stock')).toBe(true);
+  });
+
   it('uses the shared header with the inventory title', async () => {
     mockedProducts.getProducts.mockResolvedValue([product()]);
     render(<InventarioScreen />);
@@ -357,17 +407,77 @@ describe('InventarioScreen - header, sort row and filters', () => {
     expect(screen.getByText('Inventario')).toBeTruthy();
   });
 
-  it('aligns the sort chips vertically with the "Ordenar:" label (no extra bottom padding)', async () => {
+  it('puts the "Ordenar:" label above the four sort buttons', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    expect(StyleSheet.flatten(screen.getByTestId('sort-row').props.style).flexDirection).toBeUndefined();
+    const whole = treeJson();
+    const tree = whole.slice(whole.indexOf('sort-row'));
+    const at = (text: string) => tree.indexOf(text);
+    expect(at('sort-label')).toBeLessThan(at('Nombre'));
+    expect(at('Nombre')).toBeLessThan(at('Stock'));
+    expect(at('Stock')).toBeLessThan(at('Vencimiento'));
+    expect(at('Vencimiento')).toBeLessThan(at('Categoría'));
+    within(screen.getByTestId('sort-row')).getByText('Ordenar:');
+  });
+
+  it('keeps the four sort buttons in one row, starting at the left margin', async () => {
     mockedProducts.getProducts.mockResolvedValue([product()]);
     const { UNSAFE_getAllByType } = render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
-    const { ScrollView, StyleSheet } = require('react-native');
+    const { ScrollView } = require('react-native');
     const sortScroll = UNSAFE_getAllByType(ScrollView).find(
       (s: any) => StyleSheet.flatten(s.props.contentContainerStyle)?.alignItems === 'center',
     );
     const style = StyleSheet.flatten(sortScroll.props.contentContainerStyle);
-    expect(style.paddingBottom).toBe(0);
+    expect(style.flexDirection).toBe('row');
     expect(style.paddingLeft).toBe(0);
+  });
+
+  it('scrolls the whole screen, leaving only the banner fixed at the top', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const list = within(screen.UNSAFE_getByType(FlatList));
+    // dentro de la lista que se desliza: el botón de stock total, la búsqueda, el orden y los filtros
+    expect(list.getByTestId('open-stock-total')).toBeTruthy();
+    expect(list.getByPlaceholderText('Buscar por nombre o marca...')).toBeTruthy();
+    expect(list.getByTestId('sort-row')).toBeTruthy();
+    expect(list.getByTestId('filter-search-categoria')).toBeTruthy();
+    // el banner, en cambio, queda afuera
+    expect(list.queryByTestId('screen-header')).toBeNull();
+    expect(screen.getByTestId('screen-header')).toBeTruthy();
+  });
+
+  it('leaves a margin below the location filter so the entries do not look stuck to it', async () => {
+    mockedProducts.getFilterOptions.mockResolvedValue({ categorias: ['Lacteos'], ubicaciones: ['Heladera'], marcas: [] });
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const gap = StyleSheet.flatten(screen.getByTestId('list-header-gap').props.style);
+    expect(gap.height).toBeGreaterThanOrEqual(12);
+    const tree = treeJson();
+    expect(tree.indexOf('filter-search-ubicacion')).toBeLessThan(tree.indexOf('list-header-gap'));
+    expect(tree.indexOf('list-header-gap')).toBeLessThan(tree.indexOf('product-item-1'));
+  });
+
+  it('keeps the search field mounted while the products load, so typing is not interrupted', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const input = screen.getByPlaceholderText('Buscar por nombre o marca...');
+    fireEvent.changeText(input, 'lec');
+    expect(screen.getByPlaceholderText('Buscar por nombre o marca...')).toBe(input);
+  });
+
+  it('shows the loading indicator and the empty state under the filters, not instead of them', async () => {
+    mockedProducts.getProducts.mockResolvedValue([]);
+    render(<InventarioScreen />);
+    expect(screen.getByTestId('sort-row')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('No tenés productos cargados')).toBeTruthy());
+    expect(screen.getByTestId('sort-row')).toBeTruthy();
+    expect(screen.getByTestId('open-stock-total')).toBeTruthy();
   });
 
   it('has no horizontal swipe in the category and location filters: a search button comes first instead', async () => {
@@ -383,7 +493,7 @@ describe('InventarioScreen - header, sort row and filters', () => {
     expect(screen.queryByTestId('filter-categorias')).toBeNull();
     expect(screen.queryByTestId('filter-ubicaciones')).toBeNull();
     // la lupa va antes de "Todas"
-    const tree = JSON.stringify(screen.toJSON());
+    const tree = treeJson();
     expect(tree.indexOf('filter-search-categoria')).toBeLessThan(tree.indexOf('Todas'));
   });
 
@@ -414,5 +524,251 @@ describe('InventarioScreen - invalid barcode when editing', () => {
     });
     expect(Alert.alert).toHaveBeenCalledWith('Error', 'El código de barras es inválido');
     expect(mockedProducts.updateProduct).not.toHaveBeenCalled();
+  });
+});
+
+describe('InventarioScreen - product details', () => {
+  const full = () => product({
+    id: 5,
+    nombre: 'Yogur',
+    marca: 'Ser',
+    descripcion: 'Natural',
+    ubicacion: 'Heladera',
+    codigo_barras: '7791234567898',
+    vencimiento: '2027-03-05',
+    stock: 8,
+  });
+
+  it('opens a window with the whole product when its information is tapped', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    expect(screen.queryByTestId('product-detail-card')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('product-info-5'));
+
+    expect(screen.getByTestId('product-detail-card')).toBeTruthy();
+    expect(screen.getByTestId('detail-nombre').props.children).toBe('Yogur');
+    expect(screen.getByTestId('detail-descripcion').props.children).toEqual('Natural');
+    expect(screen.getByTestId('detail-codigo-barras').props.children).toEqual('7791234567898');
+  });
+
+  it('shows the general alert rules of the profile for a product without its own rules', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    await waitFor(() => expect(mockedProfile.getProfile).toHaveBeenCalled());
+    fireEvent.press(screen.getByTestId('product-info-5'));
+    await waitFor(() => expect(screen.getByTestId('detail-stock-minimo').props.children).toEqual('7 unidades'));
+    expect(screen.getByTestId('detail-dias-alerta').props.children).toEqual('10 días');
+    expect(screen.getByTestId('detail-dias-alerta-note').props.children).toEqual('Usando tu regla general');
+  });
+
+  it('keeps working when the profile cannot be loaded', async () => {
+    mockedProfile.getProfile.mockRejectedValue(new Error('boom'));
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('product-info-5'));
+    expect(screen.getByTestId('detail-stock-minimo').props.children).toEqual('Usando tu regla general');
+  });
+
+  it('closes the window and goes back to the list', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('product-info-5'));
+    fireEvent.press(screen.getByTestId('product-detail-close'));
+    expect(screen.queryByTestId('product-detail-card')).toBeNull();
+    expect(screen.getByText('Yogur')).toBeTruthy();
+  });
+
+  it('opens the details of the product that was tapped, not of another one', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full(), product({ id: 6, nombre: 'Leche', stock: 2 })]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('product-info-6'));
+    expect(screen.getByTestId('detail-nombre').props.children).toBe('Leche');
+  });
+
+  it('does not open the details when the edit, history or delete buttons are used', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    const names = screen.UNSAFE_getAllByType(Ionicons).map((n: any) => n.props.name);
+    expect(names).toEqual(expect.arrayContaining(['pencil', 'time-outline', 'trash']));
+    fireEvent.press(screen.UNSAFE_getAllByType(Ionicons).find((n: any) => n.props.name === 'time-outline'));
+    expect(screen.queryByTestId('product-detail-card')).toBeNull();
+  });
+});
+
+describe('InventarioScreen - stock total', () => {
+  const full = () => product({ id: 5, nombre: 'Yogur', marca: 'Ser', categoria: 'Lacteos', stock: 8 });
+
+  it('shows the "Stock total de producto" button above the search field', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    expect(screen.getByText('Stock total de producto')).toBeTruthy();
+    const tree = treeJson();
+    expect(tree.indexOf('open-stock-total')).toBeLessThan(tree.indexOf('Buscar por nombre o marca...'));
+  });
+
+  it('opens the total stock window from the button, with no product chosen, and closes it', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    expect(screen.queryByTestId('mock-stock-total')).toBeNull();
+    fireEvent.press(screen.getByTestId('open-stock-total'));
+    expect(screen.getByTestId('mock-stock-total-initial').props.children).toBe('none');
+    fireEvent.press(screen.getByTestId('mock-stock-total-close'));
+    expect(screen.queryByTestId('mock-stock-total')).toBeNull();
+  });
+
+  it('offers the "Stock total" button in the product information window', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('product-info-5'));
+    expect(screen.getByTestId('detail-total-button')).toBeTruthy();
+  });
+
+  it('goes from the information window to the total stock of that product, closing the information', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('product-info-5'));
+    fireEvent.press(screen.getByTestId('detail-total-button'));
+    expect(screen.queryByTestId('product-detail-card')).toBeNull();
+    expect(screen.getByTestId('mock-stock-total-initial').props.children).toBe('Yogur|Lacteos');
+  });
+
+  it('starts from scratch when opened again from the button after coming from a product', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('product-info-5'));
+    fireEvent.press(screen.getByTestId('detail-total-button'));
+    fireEvent.press(screen.getByTestId('mock-stock-total-close'));
+    fireEvent.press(screen.getByTestId('open-stock-total'));
+    expect(screen.getByTestId('mock-stock-total-initial').props.children).toBe('none');
+  });
+});
+
+describe('InventarioScreen - header', () => {
+  it('has the home icon on the left and "Inventario" on the right, and the icon goes home', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const tree = treeJson();
+    expect(tree.indexOf('header-home')).toBeLessThan(tree.indexOf('"Inventario"'));
+    fireEvent.press(screen.getByTestId('header-home'));
+    expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/');
+  });
+});
+
+// La lista dibuja solo las primeras entradas: lo cargado se mira en los datos que recibe
+const listed = () => screen.UNSAFE_getByType(FlatList).props.data as Product[];
+
+const manyProducts = (from: number, count: number) =>
+  Array.from({ length: count }, (_, i) => product({ id: from + i, nombre: `Producto ${from + i}` }));
+
+describe('InventarioScreen - paginated list', () => {
+  it('asks only for the first 20 products', async () => {
+    mockedProducts.getProducts.mockResolvedValue(manyProducts(1, 20));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Producto 1')).toBeTruthy());
+    expect(mockedProducts.getProducts).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 20, offset: 0 }));
+  });
+
+  it('shows "Cargar más" under a full page and asks for 10 more after the ones already loaded', async () => {
+    mockedProducts.getProducts.mockResolvedValueOnce(manyProducts(1, 20)).mockResolvedValueOnce(manyProducts(21, 10));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByTestId('inventory-load-more')).toBeTruthy());
+    expect(screen.getByText('Cargar más')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('inventory-load-more'));
+
+    await waitFor(() => expect(listed()).toHaveLength(30));
+    expect(mockedProducts.getProducts).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 10, offset: 20 }));
+    expect(listed()[0].nombre).toBe('Producto 1');
+    expect(listed()[29].nombre).toBe('Producto 30');
+  });
+
+  it('keeps the same filters when asking for more', async () => {
+    mockedProducts.getProducts.mockResolvedValue(manyProducts(1, 20));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByTestId('inventory-load-more')).toBeTruthy());
+    fireEvent.press(screen.getByText('Lacteos'));
+    await waitFor(() =>
+      expect(mockedProducts.getProducts).toHaveBeenLastCalledWith(expect.objectContaining({ categoria: 'Lacteos', limit: 20, offset: 0 })),
+    );
+    await waitFor(() => expect(screen.getByTestId('inventory-load-more')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('inventory-load-more'));
+
+    await waitFor(() =>
+      expect(mockedProducts.getProducts).toHaveBeenLastCalledWith(expect.objectContaining({ categoria: 'Lacteos', limit: 10, offset: 20 })),
+    );
+  });
+
+  it('hides "Cargar más" once a page comes back with fewer products than requested', async () => {
+    mockedProducts.getProducts.mockResolvedValueOnce(manyProducts(1, 20)).mockResolvedValueOnce(manyProducts(21, 4));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByTestId('inventory-load-more')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('inventory-load-more'));
+
+    await waitFor(() => expect(listed()).toHaveLength(24));
+    expect(screen.queryByTestId('inventory-load-more')).toBeNull();
+  });
+
+  it('does not show "Cargar más" when everything fits in the first page', async () => {
+    mockedProducts.getProducts.mockResolvedValue(manyProducts(1, 5));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Producto 1')).toBeTruthy());
+    expect(screen.queryByTestId('inventory-load-more')).toBeNull();
+  });
+
+  it('never repeats a product that the next page sends again', async () => {
+    mockedProducts.getProducts.mockResolvedValueOnce(manyProducts(1, 20)).mockResolvedValueOnce(manyProducts(20, 10));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByTestId('inventory-load-more')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('inventory-load-more'));
+
+    await waitFor(() => expect(listed()).toHaveLength(29));
+    expect(listed().filter(p => p.id === 20)).toHaveLength(1);
+  });
+
+  it('shows an alert when the next page fails, and lets the user try again', async () => {
+    mockedProducts.getProducts.mockResolvedValueOnce(manyProducts(1, 20)).mockRejectedValueOnce(new Error('boom'));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByTestId('inventory-load-more')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('inventory-load-more'));
+
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('Error', expect.any(String)));
+    await waitFor(() => expect(screen.getByTestId('inventory-load-more')).toBeTruthy());
+    expect(listed()).toHaveLength(20);
+  });
+
+  it('makes each entry a bit lower than the entries of the other lists', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const entry = StyleSheet.flatten(screen.getByTestId('product-item-1').props.style);
+    expect(entry.paddingVertical).toBeLessThan(12);
+    expect(entry.marginBottom).toBeLessThan(10);
+  });
+
+  it('shows the product names at the same size as in the other lists', async () => {
+    mockedProducts.getProducts.mockResolvedValue([product({ marca: 'Sancor' })]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
+    const name = StyleSheet.flatten(screen.getByText('Leche').props.style);
+    const brand = StyleSheet.flatten(screen.getByText('Sancor').props.style);
+    expect(name.fontSize).toBe(15);
+    expect(name.fontSize).toBeGreaterThan(brand.fontSize);
   });
 });

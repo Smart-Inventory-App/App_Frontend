@@ -1,11 +1,9 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -15,11 +13,20 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
-import { ProductCreate, ProductSuggestion } from '@/types/product';
+import { ExitReason, ProductCreate, ProductSuggestion } from '@/types/product';
+import { EXIT_REASONS, EXIT_REASON_LABEL_KEY } from '@/utils/exitReasons';
+import { selectedFirst } from '@/utils/selectedFirst';
+import { skipNextTabAnimation } from '@/utils/tabTransition';
+import SuccessCheck from '@/components/SuccessCheck';
+import ProductInfoCard from '@/components/ProductInfoCard';
+import AppTextInput from '@/components/AppTextInput';
+import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import ProductFormFields from '@/components/ProductFormFields';
 import ScreenHeader from '@/components/ScreenHeader';
 import { isValidBarcode } from '@/utils/barcode';
+import ExistingProductModal from '@/components/ExistingProductModal';
 import ScanModal, { ScanSuccessKind } from '@/components/ScanModal';
+import { FixedScanDocType } from '@/types/ocr';
 
 const SALIDA_NOTA_MAX = 50;
 
@@ -39,26 +46,20 @@ export default function CargarScreen() {
   const [marcaOptions, setMarcaOptions] = useState<string[]>([]);
   const [merged, setMerged] = useState(false);
   const [scanVisible, setScanVisible] = useState(false);
+  const [existingVisible, setExistingVisible] = useState(false);
+  // null: escaneo general (etiqueta o remito); si no, el campo que se escanea (fecha de vencimiento o código de barras)
+  const [scanField, setScanField] = useState<FixedScanDocType | null>(null);
+  const [exitScanVisible, setExitScanVisible] = useState(false);
   const [scanSuccessKind, setScanSuccessKind] = useState<ScanSuccessKind | null>(null);
 
   const [salidaQuery, setSalidaQuery] = useState('');
   const [salidaSuggestions, setSalidaSuggestions] = useState<ProductSuggestion[]>([]);
   const [salidaSelected, setSalidaSelected] = useState<ProductSuggestion | null>(null);
   const [salidaCantidad, setSalidaCantidad] = useState('');
-  const [salidaMotivo, setSalidaMotivo] = useState<'consumed' | 'expired'>('consumed');
+  // Sin motivo elegido al principio: hay que elegir uno (tocar el elegido lo deselecciona)
+  const [salidaMotivo, setSalidaMotivo] = useState<ExitReason | null>(null);
+  const motivoChipsRef = useRef<ScrollView>(null);
   const [salidaNota, setSalidaNota] = useState('');
-
-  const applyDefaults = useCallback(() => {
-    productService.getDefaults()
-      .then(({ last_categoria, last_ubicacion }) => {
-        setForm(prev => ({
-          ...prev,
-          categoria: prev.categoria ?? last_categoria ?? undefined,
-          ubicacion: prev.ubicacion ?? last_ubicacion ?? undefined,
-        }));
-      })
-      .catch(() => {});
-  }, []);
 
   useFocusEffect(useCallback(() => {
     productService.getFilterOptions()
@@ -68,8 +69,8 @@ export default function CargarScreen() {
         setMarcaOptions(marcas);
       })
       .catch(() => {});
-    applyDefaults();
-  }, [applyDefaults]));
+    // Los campos no se completan con lo elegido en la acción anterior: empiezan siempre vacíos
+  }, []));
 
   useEffect(() => {
     if (salidaSelected) return;
@@ -101,6 +102,10 @@ export default function CargarScreen() {
   const handleSubmit = async () => {
     const validationError = validate();
     if (validationError) {
+      // Con una fecha de vencimiento mal cargada se borra solo ese campo para que el usuario la escriba de nuevo
+      if (validationError === t('product.validationVencimiento')) {
+        setForm(prev => ({ ...prev, vencimiento: undefined }));
+      }
       setError(validationError);
       return;
     }
@@ -129,6 +134,7 @@ export default function CargarScreen() {
     if (!salidaSelected) return t('product.validationSalidaProducto');
     const n = Number(salidaCantidad);
     if (!salidaCantidad || isNaN(n) || n <= 0) return t('product.validationSalidaCantidad');
+    if (!salidaMotivo) return t('product.validationSalidaMotivo');
     return null;
   };
 
@@ -141,7 +147,7 @@ export default function CargarScreen() {
     setError(null);
     setSaving(true);
     try {
-      await productService.registerEvent(salidaSelected!.id, Number(salidaCantidad), salidaMotivo, salidaNota);
+      await productService.registerEvent(salidaSelected!.id, Number(salidaCantidad), salidaMotivo!, salidaNota);
       setMerged(false);
       setSuccess(true);
     } catch (err: unknown) {
@@ -164,7 +170,7 @@ export default function CargarScreen() {
     setSalidaQuery('');
     setSalidaSelected(null);
     setSalidaCantidad('');
-    setSalidaMotivo('consumed');
+    setSalidaMotivo(null);
     setSalidaNota('');
     setSuccess(false);
     setMerged(false);
@@ -172,9 +178,26 @@ export default function CargarScreen() {
     setError(null);
   };
 
+  // La ventana de "se registró correctamente" no tiene que seguir apareciendo la próxima vez que el usuario vuelva a
+  // Cargar: al irse a otra pantalla (inicio, inventario, alertas o perfil) se limpia, si estaba mostrándose.
+  const successRef = useRef(false);
+  successRef.current = success;
+  const resetAfterSuccessRef = useRef(handleLoadAnother);
+  resetAfterSuccessRef.current = handleLoadAnother;
+  useFocusEffect(useCallback(() => () => {
+    if (successRef.current) resetAfterSuccessRef.current();
+  }, []));
+
   const handleScanSuccess = (kind: ScanSuccessKind) => {
     setScanSuccessKind(kind);
     setMerged(kind === 'merged');
+    setSuccess(true);
+  };
+
+  // Se sumó stock a un producto que ya estaba cargado
+  const handleExistingSuccess = () => {
+    setScanSuccessKind(null);
+    setMerged(true);
     setSuccess(true);
   };
 
@@ -183,6 +206,7 @@ export default function CargarScreen() {
       case 'merged': return t('product.successMsgMerged');
       case 'updated': return t('scan.successUpdated');
       case 'salida': return t('product.successMsgSalida');
+      case 'restocked': return t('scan.successRestocked');
       default: return t('scan.successCreated');
     }
   };
@@ -206,7 +230,8 @@ export default function CargarScreen() {
 
   const pickSalidaSuggestion = (s: ProductSuggestion) => {
     setSalidaSelected(s);
-    setSalidaQuery(s.nombre + (s.marca ? ` · ${s.marca}` : ''));
+    // En el campo va solo el nombre: la marca y el stock se muestran debajo, como datos informativos
+    setSalidaQuery(s.nombre);
     setSalidaSuggestions([]);
   };
 
@@ -218,7 +243,7 @@ export default function CargarScreen() {
   if (success) {
     return (
       <View style={styles.successContainer}>
-        <Ionicons name="checkmark-circle" size={72} color={Colors.primary} />
+        <SuccessCheck />
         <Text style={styles.successTitle}>{t('product.successTitle')}</Text>
         <Text style={styles.successMsg}>
           {scanSuccessKind
@@ -229,7 +254,12 @@ export default function CargarScreen() {
         </Text>
         <TouchableOpacity
           style={styles.submitBtn}
-          onPress={() => router.replace('/(tabs)/inventario')}
+          onPress={() => {
+            handleLoadAnother();
+            // Se pasa a Inventario de golpe, sin deslizar la pantalla
+            skipNextTabAnimation();
+            router.replace('/(tabs)/inventario');
+          }}
         >
           <Text style={styles.submitBtnText}>{t('product.goToInventory')}</Text>
         </TouchableOpacity>
@@ -245,37 +275,38 @@ export default function CargarScreen() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior="padding"
     >
-      <ScreenHeader
-        title={t('product.loadTitle')}
-        keepTitleWhole
-        right={
-          <View testID="direction-row" style={styles.directionRow}>
-            <TouchableOpacity
-              testID="direction-entrada"
-            style={[styles.directionBtn, direction === 'entrada' && styles.directionBtnActive]}
-              onPress={() => handleSelectDirection('entrada')}
-            >
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.directionBtnText, direction === 'entrada' && styles.directionBtnTextActive]}>
-                {t('product.entrada')}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.directionBtn, direction === 'salida' && styles.directionBtnActiveSalida]}
-              onPress={() => handleSelectDirection('salida')}
-            >
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.directionBtnText, direction === 'salida' && styles.directionBtnTextActive]}>
-                {t('product.salida')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        }
-      />
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScreenHeader title={t('product.loadTitle')} onHomePress={() => router.navigate('/(tabs)/')} />
+      {/* Entrada / Salida: debajo del banner y encima de todo lo demás, como dos botones del mismo ancho */}
+      <View testID="direction-row" style={styles.directionRow}>
+        <TouchableOpacity
+          testID="direction-entrada"
+          style={[styles.directionBtn, direction === 'entrada' && styles.directionBtnActive]}
+          onPress={() => handleSelectDirection('entrada')}
+        >
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.directionBtnText, direction === 'entrada' && styles.directionBtnTextActive]}>
+            {t('product.entrada')}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          testID="direction-salida"
+          style={[styles.directionBtn, direction === 'salida' && styles.directionBtnActiveSalida]}
+          onPress={() => handleSelectDirection('salida')}
+        >
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.directionBtnText, direction === 'salida' && styles.directionBtnTextActive]}>
+            {t('product.salida')}
+          </Text>
+        </TouchableOpacity>
+      </View>
+      <KeyboardAwareScrollView style={styles.container} contentContainerStyle={styles.content}>
         {direction === 'entrada' ? (
           <>
-          <TouchableOpacity style={styles.scanBtn} onPress={() => setScanVisible(true)} testID="open-scan-modal">
+          <TouchableOpacity style={styles.scanBtn} onPress={() => setExistingVisible(true)} testID="open-existing-modal">
+            <Ionicons name="cube-outline" size={18} color={Colors.primary} />
+            <Text style={styles.scanBtnText}>{t('existing.openButton')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.scanBtn} onPress={() => { setScanField(null); setScanVisible(true); }} testID="open-scan-modal">
             <Ionicons name="camera-outline" size={18} color={Colors.primary} />
             <Text style={styles.scanBtnText}>{t('scan.openButton')}</Text>
           </TouchableOpacity>
@@ -289,18 +320,24 @@ export default function CargarScreen() {
             marcaOptions={marcaOptions}
             onAddMarca={handleAddMarca}
             suggestNombre={productService.suggestProducts}
+            onScanField={field => { setScanField(field); setScanVisible(true); }}
           />
           </>
         ) : (
           <View style={styles.container}>
+            <TouchableOpacity style={styles.scanBtn} onPress={() => setExitScanVisible(true)} testID="open-exit-scan-modal">
+              <Ionicons name="camera-outline" size={18} color={Colors.primary} />
+              <Text style={styles.scanBtnText}>{t('scan.openButton')}</Text>
+            </TouchableOpacity>
             <Text style={styles.label}>{t('product.salidaProducto')} *</Text>
-            <TextInput
+            <AppTextInput
               style={styles.input}
               placeholder={t('product.salidaProductoPlaceholder')}
               placeholderTextColor={Colors.placeholder}
               value={salidaQuery}
               onChangeText={onSalidaQueryChange}
             />
+            {salidaSelected && <ProductInfoCard product={salidaSelected} testIDPrefix="salida-selected" />}
             {!salidaSelected && salidaSuggestions.length > 0 && (
               <View style={styles.suggestionsBox}>
                 {salidaSuggestions.map(s => (
@@ -324,7 +361,7 @@ export default function CargarScreen() {
             )}
 
             <Text style={styles.label}>{t('product.salidaCantidad')} *</Text>
-            <TextInput
+            <AppTextInput
               style={styles.input}
               placeholder="0"
               placeholderTextColor={Colors.placeholder}
@@ -335,30 +372,38 @@ export default function CargarScreen() {
             />
 
             <Text style={styles.label}>{t('product.salidaMotivo')} *</Text>
-            <View style={styles.chipsContent}>
-              <TouchableOpacity
-                style={[styles.chip, salidaMotivo === 'consumed' && styles.chipActive]}
-                onPress={() => setSalidaMotivo('consumed')}
-              >
-                <Text style={[styles.chipText, salidaMotivo === 'consumed' && styles.chipTextActive]}>
-                  {t('product.salidaMotivoConsumido')}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.chip, salidaMotivo === 'expired' && styles.chipActive]}
-                onPress={() => setSalidaMotivo('expired')}
-              >
-                <Text style={[styles.chipText, salidaMotivo === 'expired' && styles.chipTextActive]}>
-                  {t('product.salidaMotivoVencido')}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            {/* Se desliza hacia los costados si los botones no entran; el elegido pasa al principio */}
+            <ScrollView
+              ref={motivoChipsRef}
+              testID="salida-motivo-scroll"
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              style={styles.motivoScroll}
+              contentContainerStyle={styles.motivoChips}
+            >
+              {selectedFirst(EXIT_REASONS, reason => reason === salidaMotivo).map(reason => (
+                <TouchableOpacity
+                  key={reason}
+                  testID={`salida-motivo-${reason}`}
+                  style={[styles.chip, styles.motivoChip, salidaMotivo === reason && styles.chipActive]}
+                  onPress={() => {
+                    setSalidaMotivo(salidaMotivo === reason ? null : reason);
+                    motivoChipsRef.current?.scrollTo?.({ x: 0, animated: true });
+                  }}
+                >
+                  <Text style={[styles.chipText, salidaMotivo === reason && styles.chipTextActive]}>
+                    {t(EXIT_REASON_LABEL_KEY[reason])}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
             <View style={styles.labelRow}>
-              <Text style={styles.labelInRow}>{t('product.historialNotaPlaceholder')}</Text>
+              <Text style={styles.labelInRow}>{t('product.salidaNotaLabel')}</Text>
               <Text testID="salida-nota-counter" style={styles.counter}>{salidaNota.length}/{SALIDA_NOTA_MAX}</Text>
             </View>
-            <TextInput
+            <AppTextInput
               testID="input-salida-nota"
               style={[styles.input, styles.multiline]}
               placeholder={t('product.salidaNotaPlaceholder')}
@@ -385,7 +430,19 @@ export default function CargarScreen() {
               : direction === 'entrada' ? t('product.saveProduct') : t('product.salidaSubmit')}
           </Text>
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAwareScrollView>
+      <ExistingProductModal
+        visible={existingVisible}
+        onClose={() => setExistingVisible(false)}
+        onSuccess={handleExistingSuccess}
+      />
+      <ExistingProductModal
+        mode="exit"
+        visible={exitScanVisible}
+        onClose={() => setExitScanVisible(false)}
+        onSelectProduct={pickSalidaSuggestion}
+        onPickReceipt={() => { setScanField('receipt'); setScanVisible(true); }}
+      />
       <ScanModal
         visible={scanVisible}
         onClose={() => setScanVisible(false)}
@@ -397,6 +454,8 @@ export default function CargarScreen() {
         marcaOptions={marcaOptions}
         onAddMarca={handleAddMarca}
         onApplyToForm={updater => setForm(updater)}
+        fixedDocType={scanField}
+        receiptDirection={scanField === 'receipt' ? 'salida' : 'entrada'}
       />
     </KeyboardAvoidingView>
   );
@@ -404,19 +463,27 @@ export default function CargarScreen() {
 
 const styles = StyleSheet.create({
   // Un poco corridos hacia la izquierda; si no entran, los textos se achican antes que el título
-  directionRow: { flexShrink: 1, flexDirection: 'row', gap: 12, marginRight: 10 },
-  // Texto un poco más chico que el título (22) y botón que no supera el renglón del banner (28 px)
-  directionBtn: {
-    flexShrink: 1,
-    height: 28,
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-    borderRadius: 14,
+  directionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 14,
     backgroundColor: '#f2f3f6',
   },
-  directionBtnActive: { backgroundColor: Colors.primary },
-  directionBtnActiveSalida: { backgroundColor: Colors.error },
-  directionBtnText: { fontSize: 18, lineHeight: 24, fontWeight: '600', color: Colors.textSecondary },
+  directionBtn: {
+    flex: 1,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRadius: 22,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+  },
+  directionBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  directionBtnActiveSalida: { backgroundColor: Colors.error, borderColor: Colors.error },
+  directionBtnText: { fontSize: 17, lineHeight: 24, fontWeight: '600', color: Colors.textSecondary },
   directionBtnTextActive: { color: '#fff' },
   container: { flex: 1, backgroundColor: '#f2f3f6' },
   scanBtn: {
@@ -467,7 +534,11 @@ const styles = StyleSheet.create({
   },
   suggestionText: { fontSize: 14, color: Colors.textPrimary },
   suggestionSubtext: { fontSize: 11, color: Colors.textSecondary, marginTop: 1 },
-  chipsContent: { flexDirection: 'row', gap: 8, marginTop: 6 },
+  chipsContent: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
+  // Motivos de salida en una sola fila que se desliza hacia los costados
+  motivoScroll: { flexGrow: 0, marginTop: 6 },
+  motivoChips: { flexDirection: 'row', gap: 8, paddingRight: 4 },
+  motivoChip: { flexShrink: 0 },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 6,

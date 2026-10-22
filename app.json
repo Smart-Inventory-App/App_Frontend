@@ -7,7 +7,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -24,7 +23,6 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.smartinventory.app",
       "permissions": [
-        "android.permission.RECORD_AUDIO",
         "android.permission.POST_NOTIFICATIONS"
       ]
     },
@@ -51,6 +49,7 @@
         {
           "icon": "./assets/notification-icon.png",
           "color": "#00B5A5",
+          "defaultChannel": "default",
           "sounds": [],
           "mode": "production"
         }

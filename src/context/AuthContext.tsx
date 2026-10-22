@@ -11,6 +11,7 @@ import {
   subscribeToTokenRefresh,
 } from '../services/notificationService';
 import { setFlashMessage } from '../utils/flashMessage';
+import { resetWelcome } from '../utils/welcomeState';
 
 const TOKEN_KEY = 'auth_access_token';
 
@@ -64,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const _afterLogin = async (accessToken: string) => {
+    resetWelcome();
     await storage.set(TOKEN_KEY, accessToken);
     setAuthToken(accessToken);
     setToken(accessToken);
@@ -80,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const endSession = async (flashKey: string) => {
     setFlashMessage(flashKey);
+    resetWelcome();
     unsubscribeTokenRefresh.current?.();
     unsubscribeTokenRefresh.current = null;
     await storage.delete(TOKEN_KEY);
