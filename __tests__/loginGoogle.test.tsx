@@ -47,8 +47,7 @@ beforeEach(() => {
   (GoogleSignin.hasPlayServices as jest.Mock).mockResolvedValue(true);
 });
 
-// Skipped while the Google button is hidden in login.tsx; switch back to `describe` when it returns.
-describe.skip('LoginScreen - Google sign-in (enabled)', () => {
+describe('LoginScreen - Google sign-in (enabled)', () => {
   it('configures GoogleSignin at module load', () => {
     expect(configureCallAtLoad).toEqual([{ webClientId: 'web-client-id' }]);
   });

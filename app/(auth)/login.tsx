@@ -136,7 +136,6 @@ export default function LoginScreen() {
               <Text style={styles.buttonText}>{t('common.continue')}</Text>
             </TouchableOpacity>
 
-            {/* Google sign-in temporarily hidden. To bring it back, uncomment this block.
             {GOOGLE_ENABLED && (
               <>
                 <View style={styles.dividerRow}>
@@ -147,7 +146,6 @@ export default function LoginScreen() {
                 <GoogleButton onError={setError} />
               </>
             )}
-            */}
 
             <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
               <Text style={styles.link}>{t('login.createAccount')}</Text>
