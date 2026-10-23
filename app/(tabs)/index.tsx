@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 import StatCard from '@/components/StatCard';
 import HomeHeader from '@/components/HomeHeader';
 import ChangesHistoryModal from '@/components/ChangesHistoryModal';
@@ -134,6 +134,21 @@ export default function HomeScreen() {
               />
             </View>
 
+            <View style={styles.actionsRow}>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/faltantes')}>
+                <Ionicons name="cart-outline" size={20} color={Colors.primary} />
+                <Text style={styles.actionText}>{t('home.actionFaltantes')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/reposicion')}>
+                <Ionicons name="trending-up-outline" size={20} color={Colors.primary} />
+                <Text style={styles.actionText}>{t('home.actionReposicion')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/tendencias')}>
+                <Ionicons name="stats-chart-outline" size={20} color={Colors.primary} />
+                <Text style={styles.actionText}>{t('home.actionTendencias')}</Text>
+              </TouchableOpacity>
+            </View>
+
             <View style={styles.sectionRow}>
               <Text testID="home-section-changes" style={styles.section}>{t('home.lastChanges')}</Text>
               <TouchableOpacity testID="home-changes-more" style={styles.more} onPress={() => setHistoryVisible(true)}>
@@ -176,6 +191,16 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f2f3f6' },
   content: { padding: 12, paddingTop: 16, paddingBottom: 32 },
   statsRow: { flexDirection: 'row' },
+  actionsRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  actionBtn: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  actionText: { fontSize: 11, color: Colors.textPrimary, fontFamily: 'Figtree_400Regular', textAlign: 'center' },
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
