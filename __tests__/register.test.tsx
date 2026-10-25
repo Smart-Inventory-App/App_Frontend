@@ -21,7 +21,7 @@ jest.mock('../src/context/AuthContext', () => ({
 }));
 
 jest.mock('../src/services/authService', () => ({
-  authService: { checkEmail: jest.fn() },
+  authService: { getEmailStatus: jest.fn() },
 }));
 
 const mockRegister = jest.fn();
@@ -31,7 +31,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   clearFlashMessage();
   (useAuth as jest.Mock).mockReturnValue({ register: mockRegister });
-  mockedAuthService.checkEmail.mockResolvedValue(false);
+  mockedAuthService.getEmailStatus.mockResolvedValue({ exists: false });
 });
 
 describe('RegisterScreen', () => {
@@ -55,7 +55,7 @@ describe('RegisterScreen', () => {
     fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b');
     expect(screen.getAllByText('○')).toHaveLength(6);
 
-    mockedAuthService.checkEmail.mockResolvedValue(false);
+    mockedAuthService.getEmailStatus.mockResolvedValue({ exists: false });
     fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b.com');
     expect(screen.getAllByText('○')).toHaveLength(6);
     await act(async () => { await jest.advanceTimersByTimeAsync(600); });
@@ -63,7 +63,7 @@ describe('RegisterScreen', () => {
     expect(screen.getAllByText('✓')).toHaveLength(1);
     expect(colorOf('Correo no registrado')).not.toBe('#FF3B30');
 
-    mockedAuthService.checkEmail.mockResolvedValue(true);
+    mockedAuthService.getEmailStatus.mockResolvedValue({ exists: true, password_set: true });
     fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'taken@b.com');
     expect(screen.getAllByText('○')).toHaveLength(6);
     await act(async () => { await jest.advanceTimersByTimeAsync(600); });
@@ -74,7 +74,7 @@ describe('RegisterScreen', () => {
 
   it('goes back to waiting when the email is edited into an incomplete one', async () => {
     jest.useFakeTimers();
-    mockedAuthService.checkEmail.mockResolvedValue(true);
+    mockedAuthService.getEmailStatus.mockResolvedValue({ exists: true, password_set: true });
     render(<RegisterScreen />);
     fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b.com');
     await act(async () => { await jest.advanceTimersByTimeAsync(600); });
@@ -177,7 +177,7 @@ describe('RegisterScreen', () => {
 
   it('debounces an email-availability check and flags it as taken', async () => {
     jest.useFakeTimers();
-    mockedAuthService.checkEmail.mockResolvedValue(true);
+    mockedAuthService.getEmailStatus.mockResolvedValue({ exists: true, password_set: true });
     render(<RegisterScreen />);
     fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b.com');
     await act(async () => {
@@ -190,12 +190,12 @@ describe('RegisterScreen', () => {
   it('does not check availability for an incomplete email', async () => {
     render(<RegisterScreen />);
     fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'incomplete');
-    expect(mockedAuthService.checkEmail).not.toHaveBeenCalled();
+    expect(mockedAuthService.getEmailStatus).not.toHaveBeenCalled();
   });
 
   it('silently ignores a failure checking email availability', async () => {
     jest.useFakeTimers();
-    mockedAuthService.checkEmail.mockRejectedValue(new Error('boom'));
+    mockedAuthService.getEmailStatus.mockRejectedValue(new Error('boom'));
     render(<RegisterScreen />);
     fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b.com');
     await act(async () => {
@@ -203,5 +203,51 @@ describe('RegisterScreen', () => {
     });
     jest.useRealTimers();
     expect(screen.queryByText('Mail en uso')).toBeNull();
+  });
+});
+
+describe('RegisterScreen - email of an account created with Google', () => {
+  const typeEmail = async () => {
+    jest.useFakeTimers();
+    render(<RegisterScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'g@b.com');
+    await act(async () => { await jest.advanceTimersByTimeAsync(600); });
+    jest.useRealTimers();
+  };
+
+  it('shows "Cuenta de Google" in place of "Correo no registrado", with what to do', async () => {
+    mockedAuthService.getEmailStatus.mockResolvedValue({ exists: true, password_set: false });
+    await typeEmail();
+    expect(screen.getByText('Cuenta de Google')).toBeTruthy();
+    expect(screen.queryByText('Correo no registrado')).toBeNull();
+    expect(screen.queryByText('Mail en uso')).toBeNull();
+    expect(screen.getByTestId('register-google-hint').props.children).toBe(
+      'Ese mail ya tiene una cuenta creada con Google. Ingresá con Google o creá una contraseña desde «Olvidé mi contraseña».',
+    );
+    expect(screen.getAllByText('✗')).toHaveLength(1);
+  });
+
+  it('keeps saying "Mail en uso" for a normal account, with no Google hint', async () => {
+    mockedAuthService.getEmailStatus.mockResolvedValue({ exists: true, password_set: true });
+    await typeEmail();
+    expect(screen.getByText('Mail en uso')).toBeTruthy();
+    expect(screen.queryByTestId('register-google-hint')).toBeNull();
+  });
+
+  it('does not let the user register with that email', async () => {
+    mockedAuthService.getEmailStatus.mockResolvedValue({ exists: true, password_set: false });
+    await typeEmail();
+    fireEvent.changeText(screen.getAllByPlaceholderText('••••••••')[0], 'Abcdef12');
+    fireEvent.changeText(screen.getAllByPlaceholderText('••••••••')[1], 'Abcdef12');
+    await act(async () => {
+      fireEvent.press(screen.getByText('Crear Cuenta'));
+    });
+    expect(mockRegister).not.toHaveBeenCalled();
+  });
+
+  it('shows no Google hint while the email is free', async () => {
+    mockedAuthService.getEmailStatus.mockResolvedValue({ exists: false });
+    await typeEmail();
+    expect(screen.queryByTestId('register-google-hint')).toBeNull();
   });
 });

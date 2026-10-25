@@ -20,7 +20,8 @@ import { getAuthError } from '../../src/utils/authError';
 import { setFlashMessage } from '../../src/utils/flashMessage';
 
 type RuleState = 'valid' | 'invalid' | 'pending';
-type EmailStatus = 'idle' | 'checking' | 'available' | 'taken';
+// «google»: el mail ya tiene una cuenta creada con Google, que todavía no definió una contraseña
+type EmailStatus = 'idle' | 'checking' | 'available' | 'taken' | 'google';
 
 const EMAIL_FORMAT = /^\S+@\S+\.\S+$/;
 
@@ -53,10 +54,11 @@ export default function RegisterScreen() {
     { key: 'lowercase', test: (pw: string) => /[a-z]/.test(pw) },
     { key: 'numberOrSpecial', test: (pw: string) => /[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pw) },
   ];
-  const emailTaken = emailStatus === 'taken';
+  const googleAccount = emailStatus === 'google';
+  const emailTaken = emailStatus === 'taken' || googleAccount;
   const passwordsMatch = password.length > 0 && password === repeat;
   const emailRuleState: RuleState =
-    emailStatus === 'available' ? 'valid' : emailStatus === 'taken' ? 'invalid' : 'pending';
+    emailStatus === 'available' ? 'valid' : emailTaken ? 'invalid' : 'pending';
   const passwordRuleState = (ok: boolean): RuleState =>
     password.length === 0 ? 'pending' : ok ? 'valid' : 'invalid';
   const matchRuleState: RuleState =
@@ -68,8 +70,10 @@ export default function RegisterScreen() {
     setEmailStatus('checking');
     const timer = setTimeout(async () => {
       try {
-        const exists = await authService.checkEmail(email.trim());
-        if (!cancelled) setEmailStatus(exists ? 'taken' : 'available');
+        const status = await authService.getEmailStatus(email.trim());
+        if (cancelled) return;
+        if (!status.exists) setEmailStatus('available');
+        else setEmailStatus(status.password_set === false ? 'google' : 'taken');
       } catch {
         if (!cancelled) setEmailStatus('idle');
       }
@@ -119,7 +123,9 @@ export default function RegisterScreen() {
 
         <View style={styles.fieldWrapper}>
           <Text style={styles.label}>{t('register.emailLabel')}</Text>
-          {emailTaken && <Text style={styles.takenBadge}>{t('register.emailTaken')}</Text>}
+          {emailStatus === 'taken' && (
+            <Text style={styles.takenBadge}>{t('register.emailTaken')}</Text>
+          )}
         </View>
         <AppTextInput
           style={[styles.input, emailTaken && styles.inputError]}
@@ -132,8 +138,14 @@ export default function RegisterScreen() {
           autoCorrect={false}
         />
         <View style={styles.emailRule}>
-          <RuleRow state={emailRuleState} label={t('register.rules.emailAvailable')} />
+          <RuleRow
+            state={emailRuleState}
+            label={googleAccount ? t('register.emailGoogle') : t('register.rules.emailAvailable')}
+          />
         </View>
+        {googleAccount && (
+          <Text testID="register-google-hint" style={styles.googleHint}>{t('register.googleAccountHint')}</Text>
+        )}
 
         <Text style={styles.label}>{t('register.passwordLabel')}</Text>
         <AppTextInput
@@ -192,6 +204,7 @@ const styles = StyleSheet.create({
   titleInventory: { fontSize: 32, fontWeight: '800', color: Colors.primaryDark, marginBottom: 28 },
   fieldWrapper: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 4 },
   label: { fontSize: 13, color: Colors.textPrimary, fontWeight: '500', marginBottom: 4, alignSelf: 'flex-start' },
+  googleHint: { width: '100%', fontSize: 12, color: Colors.textSecondary, lineHeight: 17, marginBottom: 12 },
   takenBadge: { fontSize: 12, color: Colors.error, fontWeight: '600' },
   input: {
     width: '100%',

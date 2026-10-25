@@ -68,9 +68,20 @@ describe('authService', () => {
     expect(mockPost).toHaveBeenCalledWith('/auth/check-new-password', { reset_token: 'rt', new_password: 'pw' });
   });
 
-  it('googleLogin exchanges the access token', async () => {
+  it('getEmailStatus says if the email has an account and if that account already has a password', async () => {
+    mockPost.mockResolvedValue({ data: { exists: true, password_set: false } });
+    await expect(authService.getEmailStatus('a@b.com')).resolves.toEqual({ exists: true, password_set: false });
+    expect(mockPost).toHaveBeenCalledWith('/auth/check-email', { email: 'a@b.com' });
+  });
+
+  it('getEmailStatus has no password data for an email without account', async () => {
+    mockPost.mockResolvedValue({ data: { exists: false } });
+    await expect(authService.getEmailStatus('a@b.com')).resolves.toEqual({ exists: false });
+  });
+
+  it('googleLogin exchanges the id token of Google', async () => {
     mockPost.mockResolvedValue({ data: { access_token: 'g', token_type: 'bearer' } });
     await expect(authService.googleLogin('g-token')).resolves.toEqual({ access_token: 'g', token_type: 'bearer' });
-    expect(mockPost).toHaveBeenCalledWith('/auth/google', { access_token: 'g-token' });
+    expect(mockPost).toHaveBeenCalledWith('/auth/google', { id_token: 'g-token' });
   });
 });
