@@ -1,5 +1,7 @@
 # App Frontend — Smart Inventory Platform
 
+<p align="center"><img src="assets/brand/logo_con_texto/logo_horizontal_color.png" alt="Smart Inventory" width="360"></p>
+
 [![codecov](https://codecov.io/gh/Smart-Inventory-App/App_Frontend/branch/main/graph/badge.svg?token=D7VKX0SD3X)](https://codecov.io/gh/Smart-Inventory-App/App_Frontend)
 
 React Native + Expo (web/iOS/Android) **Frontend** para la app de Smart Inventory Platform.

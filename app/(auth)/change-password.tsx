@@ -102,7 +102,7 @@ export default function ChangePasswordScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <KeyboardAwareScrollView contentContainerStyle={styles.container}>
-        <Image source={require('../../assets/icon.png')} style={styles.logo} />
+        <Image source={require('../../assets/logo.png')} style={styles.logo} />
         <Text style={styles.titleSmart}>Smart</Text>
         <Text style={styles.titleInventory}>Inventory</Text>
 
@@ -155,7 +155,7 @@ export default function ChangePasswordScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.background },
   container: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 32, paddingTop: 60, paddingBottom: 40 },
-  logo: { width: 100, height: 100, borderRadius: 20, marginBottom: 12 },
+  logo: { width: 100, height: 100, resizeMode: 'contain', marginBottom: 12 },
   titleSmart: { fontSize: 32, fontWeight: '800', color: Colors.primary, lineHeight: 36 },
   titleInventory: { fontSize: 32, fontWeight: '800', color: Colors.primaryDark, marginBottom: 28 },
   label: { fontSize: 13, color: Colors.textPrimary, fontWeight: '500', marginBottom: 4, alignSelf: 'flex-start' },
