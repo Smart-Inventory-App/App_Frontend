@@ -1,8 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -12,6 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppTextInput from '@/components/AppTextInput';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
+import KeyboardAvoidingView from '@/components/KeyboardAvoidingView';
 import AuthLogo from '../../src/components/AuthLogo';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
@@ -83,7 +82,6 @@ export default function VerifyCodeScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.flex, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <KeyboardAwareScrollView contentContainerStyle={styles.container}>
         <AuthLogo />

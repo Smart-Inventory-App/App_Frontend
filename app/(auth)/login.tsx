@@ -2,8 +2,6 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   Image,
-  KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -12,6 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppTextInput from '@/components/AppTextInput';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
+import KeyboardAvoidingView from '@/components/KeyboardAvoidingView';
 import ConfirmModal from '../../src/components/ConfirmModal';
 import { Ionicons } from '@expo/vector-icons';
 import { GoogleSignin, isErrorWithCode, statusCodes } from '@react-native-google-signin/google-signin';
@@ -127,7 +126,6 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.flex, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <KeyboardAwareScrollView contentContainerStyle={styles.container}>
         <Image source={require('../../assets/logo.png')} style={styles.logo} />

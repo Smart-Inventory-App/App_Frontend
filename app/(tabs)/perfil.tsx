@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -10,6 +9,7 @@ import {
 import AppTextInput from '@/components/AppTextInput';
 import NumberStepper from '@/components/NumberStepper';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
+import KeyboardAvoidingView from '@/components/KeyboardAvoidingView';
 import { router } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -227,7 +227,7 @@ export default function PerfilScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+    <KeyboardAvoidingView style={{ flex: 1 }}>
       <ScreenHeader title={t('tabs.profile')} onHomePress={() => router.navigate('/(tabs)/')} />
       <KeyboardAwareScrollView style={styles.container} contentContainerStyle={styles.content}>
         {/* Avatar */}

@@ -1,6 +1,5 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
-  KeyboardAvoidingView,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,6 +20,7 @@ import SuccessCheck from '@/components/SuccessCheck';
 import ProductInfoCard from '@/components/ProductInfoCard';
 import AppTextInput from '@/components/AppTextInput';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
+import KeyboardAvoidingView from '@/components/KeyboardAvoidingView';
 import ProductFormFields from '@/components/ProductFormFields';
 import ScreenHeader from '@/components/ScreenHeader';
 import { isValidBarcode } from '@/utils/barcode';
@@ -275,7 +275,6 @@ export default function CargarScreen() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior="padding"
     >
       <ScreenHeader title={t('product.loadTitle')} onHomePress={() => router.navigate('/(tabs)/')} />
       {/* Entrada / Salida: debajo del banner y encima de todo lo demás, como dos botones del mismo ancho */}
