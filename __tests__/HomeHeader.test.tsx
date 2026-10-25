@@ -58,9 +58,9 @@ describe('HomeHeader', () => {
     expect(StyleSheet.flatten(screen.getByTestId('home-name').props.style).color).toBe('#fff');
   });
 
-  it('shows a logo a bit bigger than before, and keeps the size of the words', () => {
+  it('shows the white logo at 80px, and keeps the size of the words', () => {
     render(<HomeHeader greeting="Bienvenido" name="ana" />);
-    expect(StyleSheet.flatten(screen.getByTestId('home-logo').props.style)).toMatchObject({ width: 84, height: 84 });
+    expect(StyleSheet.flatten(screen.getByTestId('home-logo').props.style)).toMatchObject({ width: 80, height: 80 });
     expect(StyleSheet.flatten(screen.getByTestId('home-greeting').props.style).fontSize).toBe(17);
     expect(StyleSheet.flatten(screen.getByTestId('home-name').props.style).fontSize).toBe(28);
   });

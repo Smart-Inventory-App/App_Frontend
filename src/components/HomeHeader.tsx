@@ -12,11 +12,11 @@ interface Props {
 
 const NAME_MAX = 20;
 
-const LOGO_SIZE = 84;
+const LOGO_SIZE = 80;
 // Logo de la app en blanco (símbolo sin fondo ni borde, recortado al borde del dibujo) sobre el banner de color.
-// Se corre a la izquierda; el margen derecho negativo deja el saludo 3 px a la derecha de donde estaba antes de agrandar el logo.
+// Se corre a la izquierda; el margen derecho compensa el tamaño del logo para que el saludo quede en su lugar (ahora 2 px más a la izquierda).
 const LOGO_SHIFT_LEFT = 8;
-const LOGO_RIGHT_MARGIN = -3;
+const LOGO_RIGHT_MARGIN = -1;
 
 // Banner del inicio: el logo de la app a la izquierda y el saludo en dos renglones (el nombre, debajo).
 export default function HomeHeader({ greeting, name }: Props) {
