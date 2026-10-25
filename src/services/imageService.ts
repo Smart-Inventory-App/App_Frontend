@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
-import axios from 'axios';
-import { getAuthToken } from './api';
+import axios, { AxiosError } from 'axios';
+import { getAuthToken, handleUnauthorized } from './api';
 import { appendImage } from '../utils/formData';
 
 const IMAGE_STORAGE_URL = process.env.EXPO_PUBLIC_IMAGE_STORAGE_URL;
@@ -20,17 +20,23 @@ export async function uploadImage(asset: PickedImage): Promise<string> {
   formData.append('folder', 'tpp/products');
 
   const token = getAuthToken();
-  const { data } = await axios.post<{ url: string }>(
-    `${IMAGE_STORAGE_URL}/storage/upload`,
-    formData,
-    {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  try {
+    const { data } = await axios.post<{ url: string }>(
+      `${IMAGE_STORAGE_URL}/storage/upload`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       },
-    },
-  );
-  return data.url;
+    );
+    return data.url;
+  } catch (error) {
+    // Esta subida no pasa por las instancias de axios de la app: si el token venció, también se cierra la sesión
+    handleUnauthorized(error as AxiosError);
+    throw error;
+  }
 }
 
 // Elegir no sube nada: la imagen se carga tal cual (sin recorte) y recién se sube cuando el usuario la confirma.

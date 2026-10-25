@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
-import { getAuthToken } from '../src/services/api';
+import { getAuthToken, handleUnauthorized } from '../src/services/api';
 import { pickFromCamera, pickFromGallery, uploadImage } from '../src/services/imageService';
 
 jest.mock('expo-image-picker', () => ({
@@ -19,6 +19,7 @@ jest.mock('axios', () => ({
 jest.mock('../src/services/api', () => ({
   __esModule: true,
   getAuthToken: jest.fn(),
+  handleUnauthorized: jest.fn(),
 }));
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -80,6 +81,15 @@ describe('imageService.pickFromCamera', () => {
 });
 
 describe('imageService.uploadImage', () => {
+  it('lets the session end when the image service rejects the token, and still fails the upload', async () => {
+    (getAuthToken as jest.Mock).mockReturnValue('tok123');
+    const error = { response: { status: 401 } };
+    mockedAxios.post.mockRejectedValue(error);
+
+    await expect(uploadImage({ uri: 'file://a.jpg', fileName: 'a.jpg', mimeType: 'image/jpeg' } as any)).rejects.toBe(error);
+    expect(handleUnauthorized).toHaveBeenCalledWith(error);
+  });
+
   it('uploads the image and returns its url, attaching the auth token', async () => {
     (getAuthToken as jest.Mock).mockReturnValue('tok123');
     mockedAxios.post.mockResolvedValue({ data: { url: 'https://cdn/a.jpg' } });

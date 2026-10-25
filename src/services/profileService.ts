@@ -1,6 +1,6 @@
 import api from './api';
 import authApi from './authApi';
-import { getFirebaseToken } from './firebaseService';
+import { getFirebaseToken } from './notificationService';
 
 export type UserType = 'individuo' | 'comercio';
 

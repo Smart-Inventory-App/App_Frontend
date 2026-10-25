@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getFirebaseToken } from './firebaseService';
+import { getFirebaseToken } from './notificationService';
 
 
 const AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL;
