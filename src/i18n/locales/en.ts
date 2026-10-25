@@ -220,8 +220,6 @@ export default {
     vencimientoPlaceholder: 'DD/MM/YYYY',
     descripcionPlaceholder: 'Optional',
     codigoBarras: 'Barcode',
-    codigoBarrasPlaceholder: 'Numeric code of {{lengths}} digits long',
-    codigoBarrasOr: 'or',
     defaultPlaceholder: 'Default',
     descripcion: 'Description',
     alertasTitle: 'Alerts for this product (optional)',

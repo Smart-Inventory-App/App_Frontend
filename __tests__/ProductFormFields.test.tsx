@@ -685,10 +685,10 @@ describe('ProductFormFields - stock limit', () => {
 describe('ProductFormFields - código de barras', () => {
   const input = () => screen.getByTestId('input-codigo-barras');
 
-  it('sits right below Vencimiento, titled "Código de barras", listing the accepted lengths inside', () => {
+  it('sits right below Vencimiento, titled "Código de barras", with "Opcional" inside', () => {
     render(<Wrapper />);
     expect(screen.getByText('Código de barras')).toBeTruthy();
-    expect(input().props.placeholder).toBe('Código numérico de 8, 12, 13 o 14 dígitos de largo');
+    expect(input().props.placeholder).toBe('Opcional');
     const tree = JSON.stringify(screen.toJSON());
     expect(tree.indexOf('Vencimiento')).toBeLessThan(tree.indexOf('Código de barras'));
     expect(tree.indexOf('Código de barras')).toBeLessThan(tree.indexOf('input-descripcion'));

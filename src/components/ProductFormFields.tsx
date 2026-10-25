@@ -15,7 +15,7 @@ import { useFieldFocus } from '@/components/KeyboardAwareScrollView';
 import DatePickerModal from '@/components/DatePickerModal';
 import ProductImage from '@/components/ProductImage';
 import { applySuggestionToForm } from '@/utils/ocrDraft';
-import { BARCODE_MAX_DIGITS, describeBarcodeLengths, onlyDigits } from '@/utils/barcode';
+import { BARCODE_MAX_DIGITS, onlyDigits } from '@/utils/barcode';
 import { displayToIso, formatDateDigits, isoToDisplay } from '@/utils/dateInput';
 import { findSimilarOptions } from '@/utils/optionSearch';
 import { selectedFirst } from '@/utils/selectedFirst';
@@ -272,7 +272,7 @@ export default function ProductFormFields({
     <TextInput
       testID="input-codigo-barras"
       style={onScanField ? [styles.input, styles.dateInput] : styles.input}
-      placeholder={t('product.codigoBarrasPlaceholder', { lengths: describeBarcodeLengths(t('product.codigoBarrasOr')) })}
+      placeholder={t('product.optional')}
       placeholderTextColor={Colors.placeholder}
       keyboardType="number-pad"
       maxLength={BARCODE_MAX_DIGITS}

@@ -224,8 +224,6 @@ export default {
     vencimientoPlaceholder: 'DD/MM/AAAA',
     descripcionPlaceholder: 'Opcional',
     codigoBarras: 'Código de barras',
-    codigoBarrasPlaceholder: 'Código numérico de {{lengths}} dígitos de largo',
-    codigoBarrasOr: 'o',
     defaultPlaceholder: 'Default',
     descripcion: 'Descripción',
     alertasTitle: 'Alertas para este producto (opcional)',
