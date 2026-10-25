@@ -1,4 +1,5 @@
 import React from 'react';
+import { Colors } from '../src/constants/colors';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import { GoogleSignin, isErrorWithCode } from '@react-native-google-signin/google-signin';
@@ -178,5 +179,18 @@ describe('LoginScreen - Google button, texts and accounts created with Google', 
     expect(screen.getByTestId('confirm-card')).toBeTruthy();
     expect(screen.getByText('Continuar con Google')).toBeTruthy();
     expect(screen.getByTestId('confirm-accept')).toBeTruthy();
+  });
+});
+
+describe('LoginScreen - Google button icon', () => {
+  it('paints the G with the main color of the app, not red, and grey while connecting', async () => {
+    render(<LoginScreen />);
+    expect(screen.UNSAFE_getByProps({ name: 'logo-google' }).props.color).toBe(Colors.primary);
+    let finish: (value: any) => void = () => {};
+    (GoogleSignin.signIn as jest.Mock).mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    fireEvent.press(screen.getByText('Continuar con Google'));
+    await act(async () => {});
+    expect(screen.UNSAFE_getByProps({ name: 'logo-google' }).props.color).toBe(Colors.textSecondary);
+    await act(async () => { finish({ type: 'cancelled', data: null }); });
   });
 });

@@ -62,7 +62,7 @@ function GoogleButton({ onError }: { onError: (msg: string) => void }) {
       onPress={handlePress}
       disabled={loading}
     >
-      <Ionicons name="logo-google" size={18} color={loading ? Colors.textSecondary : '#DB4437'} style={styles.googleIcon} />
+      <Ionicons name="logo-google" size={18} color={loading ? Colors.textSecondary : Colors.primary} style={styles.googleIcon} />
       <Text style={styles.googleButtonText}>
         {loading ? t('login.connecting') : t('login.continueWithGoogle')}
       </Text>
