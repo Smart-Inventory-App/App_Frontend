@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Ionicons } from '@expo/vector-icons';
 import LoginScreen from '../app/(auth)/login';
@@ -186,6 +187,8 @@ describe('LoginScreen - accounts created with Google', () => {
     expect(screen.getByTestId('confirm-card')).toBeTruthy();
     expect(screen.getByText('Crear contraseña')).toBeTruthy();
     expect(screen.getByText('Volver al login')).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId('confirm-accept').props.style).width).toBe('100%');
+    expect(StyleSheet.flatten(screen.getByTestId('confirm-cancel').props.style).width).toBe('100%');
     expect(screen.queryByPlaceholderText('Contraseña')).toBeNull();
   });
 

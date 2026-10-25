@@ -217,6 +217,7 @@ export default function LoginScreen() {
         confirmLabel={t('login.createPassword')}
         cancelLabel={t('login.backToLogin')}
         confirmTone="primary"
+        stacked
         onConfirm={() => {
           setGoogleOnly(false);
           router.push({ pathname: '/(auth)/forgot-password', params: { email: email.trim() } });

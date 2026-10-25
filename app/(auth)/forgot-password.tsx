@@ -1,7 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import {
-  Image,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppTextInput from '@/components/AppTextInput';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
+import AuthLogo from '../../src/components/AuthLogo';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { authService } from '../../src/services/authService';
@@ -42,9 +42,7 @@ export default function ForgotPasswordScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <KeyboardAwareScrollView contentContainerStyle={styles.container}>
-        <Image source={require('../../assets/logo.png')} style={styles.logo} />
-        <Text style={styles.titleSmart}>Smart</Text>
-        <Text style={styles.titleInventory}>Inventory</Text>
+        <AuthLogo />
 
         <Text style={styles.description}>{t('forgotPassword.description')}</Text>
 
@@ -77,10 +75,7 @@ export default function ForgotPasswordScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.background },
-  container: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 32, paddingTop: 80, paddingBottom: 40 },
-  logo: { width: 100, height: 100, resizeMode: 'contain', marginBottom: 12 },
-  titleSmart: { fontSize: 32, fontWeight: '800', color: Colors.primary, lineHeight: 36 },
-  titleInventory: { fontSize: 32, fontWeight: '800', color: Colors.primaryDark, marginBottom: 24 },
+  container: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 32, paddingTop: 0, paddingBottom: 24 },
   description: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
   input: {
     width: '100%',

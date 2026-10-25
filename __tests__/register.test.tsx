@@ -251,3 +251,32 @@ describe('RegisterScreen - email of an account created with Google', () => {
     expect(screen.queryByTestId('register-google-hint')).toBeNull();
   });
 });
+
+describe('RegisterScreen - password fields and logo', () => {
+  it('shows the horizontal logo of the app', () => {
+    render(<RegisterScreen />);
+    expect(screen.getByTestId('auth-logo')).toBeTruthy();
+    expect(screen.queryByText('Smart')).toBeNull();
+  });
+
+  it('hides both passwords by default and toggles each one with its eye button', () => {
+    render(<RegisterScreen />);
+    const fields = () => screen.getAllByPlaceholderText('••••••••');
+    expect(fields()[0].props.secureTextEntry).toBe(true);
+    expect(fields()[1].props.secureTextEntry).toBe(true);
+    const eyes = screen.getAllByTestId('toggle-password');
+    expect(eyes).toHaveLength(2);
+    fireEvent.press(eyes[0]);
+    expect(fields()[0].props.secureTextEntry).toBe(false);
+    expect(fields()[1].props.secureTextEntry).toBe(true);
+    fireEvent.press(screen.getAllByTestId('toggle-password')[0]);
+    expect(fields()[0].props.secureTextEntry).toBe(true);
+  });
+
+  it('keeps what was typed when the password is shown', () => {
+    render(<RegisterScreen />);
+    fireEvent.changeText(screen.getAllByPlaceholderText('••••••••')[1], 'Abcdef12');
+    fireEvent.press(screen.getAllByTestId('toggle-password')[1]);
+    expect(screen.getAllByPlaceholderText('••••••••')[1].props.value).toBe('Abcdef12');
+  });
+});
