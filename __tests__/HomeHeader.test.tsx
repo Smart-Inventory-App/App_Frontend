@@ -65,20 +65,17 @@ describe('HomeHeader', () => {
     expect(StyleSheet.flatten(screen.getByTestId('home-name').props.style).fontSize).toBe(28);
   });
 
-  it('shows just the logo: the white margin of the image is cropped out with the corners of the logo', () => {
+  it('shows just the logo: the icon fills the frame, which gives it rounded corners', () => {
     render(<HomeHeader greeting="Bienvenido" name="ana" />);
     const frame = StyleSheet.flatten(screen.getByTestId('home-logo-frame').props.style);
     expect(frame.overflow).toBe('hidden');
     expect(frame.borderRadius).toBeGreaterThan(0);
     expect(frame.backgroundColor).toBeUndefined();
     const image = StyleSheet.flatten(screen.getByTestId('home-logo').props.style);
-    expect(image.position).toBe('absolute');
-    expect(image.width).toBeGreaterThan(frame.width);
-    expect(image.height).toBeGreaterThan(frame.height);
-    expect(image.top).toBeLessThan(0);
-    expect(image.left).toBeLessThan(0);
-    // la imagen queda centrada dentro del marco
-    expect(image.width + 2 * image.left).toBe(frame.width);
+    // la imagen ocupa exactamente el marco (el ícono ya no trae margen blanco)
+    expect(image.width).toBe(frame.width);
+    expect(image.height).toBe(frame.height);
+    expect(image.position).toBeUndefined();
     const banner: any = screen.toJSON();
     expect(banner.children[0].props.testID).toBe('home-logo-frame');
   });

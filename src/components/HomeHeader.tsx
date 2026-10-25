@@ -13,10 +13,8 @@ interface Props {
 const NAME_MAX = 20;
 
 const LOGO_SIZE = 80;
-// El archivo del logo trae un margen blanco alrededor del cuadrado azul. Se agranda la imagen y se recorta con
-// las mismas esquinas redondeadas del logo, así queda solo el logo, sin recuadro blanco.
-const LOGO_IMAGE_SIZE = Math.round(LOGO_SIZE * 1.15);
-const LOGO_IMAGE_OFFSET = -Math.round((LOGO_IMAGE_SIZE - LOGO_SIZE) / 2);
+// El ícono de la app ya viene sin margen (cuadrado completo, fondo blanco): la imagen ocupa todo el marco y este
+// le pone las esquinas redondeadas.
 
 // Banner del inicio: el logo de la app a la izquierda y el saludo en dos renglones (el nombre, debajo).
 export default function HomeHeader({ greeting, name }: Props) {
@@ -54,13 +52,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   logoFrame: { width: LOGO_SIZE, height: LOGO_SIZE, borderRadius: 18, overflow: 'hidden' },
-  logo: {
-    position: 'absolute',
-    width: LOGO_IMAGE_SIZE,
-    height: LOGO_IMAGE_SIZE,
-    top: LOGO_IMAGE_OFFSET,
-    left: LOGO_IMAGE_OFFSET,
-  },
+  logo: { width: LOGO_SIZE, height: LOGO_SIZE },
   greetingBox: { flex: 1 },
   // Los dos renglones van pegados: sin espacio de más entre ellos
   greeting: { fontSize: 17, lineHeight: 20, color: '#fff', fontWeight: '600', includeFontPadding: false },
