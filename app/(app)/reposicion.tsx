@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import ProductImage from '@/components/ProductImage';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { ReposicionSuggestion } from '@/types/product';
@@ -45,10 +46,7 @@ export default function ReposicionScreen() {
           ) : (
             items.map((item) => (
               <View key={item.product_id} style={styles.card}>
-                <Image
-                  source={item.imagen_url ? { uri: item.imagen_url } : require('../../assets/icon.png')}
-                  style={styles.image}
-                />
+                <ProductImage uri={item.imagen_url} style={styles.image} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.name}>{item.nombre}</Text>
                   <Text style={styles.detail}>

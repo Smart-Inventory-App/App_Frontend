@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import { Animated, GestureResponderEvent, Modal, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Animated, GestureResponderEvent, Modal, Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,9 +21,15 @@ interface Props {
 
 // Un movimiento menor a esto cuenta como toque (no como arrastre)
 const TAP_SLOP = 8;
+// Lo que tarda la imagen en volver a su tamaño original al soltar los dedos
+const RESTORE_MS = 160;
+// Con el driver nativo la imagen se mueve y se escala en el hilo de la interfaz: cada cambio de zoom no pasa por el
+// renderizado de React, y el pellizco se ve fluido aunque el hilo de JavaScript esté ocupado.
+const nativeDriver = () => Platform.OS !== 'web';
 
 // Imagen a pantalla completa con zoom: se acerca y se aleja pellizcando con dos dedos (el zoom se hace desde donde
-// están los dedos) y, ya acercada, se arrastra con uno o con dos dedos para ver cada parte. No hay zoom con doble toque.
+// están los dedos, con la medida que quiera el usuario) y mientras haya dedos apoyados se arrastra con uno o con dos
+// para ver cada parte. Al soltar todos los dedos la imagen vuelve a su tamaño original. No hay zoom con doble toque.
 export default function ImageViewerModal({ visible, uri, onClose }: Props) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -57,6 +63,37 @@ export default function ImageViewerModal({ visible, uri, onClose }: Props) {
 
   const reset = useCallback(() => apply(1, 0, 0), [apply]);
 
+  // Pasa los tres valores al driver nativo apenas se crea el visor (una animación de duración cero). Desde ahí, cada
+  // `setValue` del pellizco se aplica directo en la interfaz, sin volver a renderizar la imagen.
+  useEffect(() => {
+    if (!nativeDriver()) return;
+    Animated.parallel([
+      Animated.timing(scale, { toValue: 1, duration: 0, useNativeDriver: true }),
+      Animated.timing(translateX, { toValue: 0, duration: 0, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 0, useNativeDriver: true }),
+    ]).start();
+  }, [scale, translateX, translateY]);
+
+  const restoring = useRef<Animated.CompositeAnimation | null>(null);
+
+  // Vuelve al tamaño original con una animación corta. Si se vuelve a tocar antes de terminar, arranca desde el original.
+  const restore = useCallback(() => {
+    current.current = { scale: 1, x: 0, y: 0 };
+    restoring.current = Animated.parallel([
+      Animated.timing(scale, { toValue: 1, duration: RESTORE_MS, useNativeDriver: nativeDriver() }),
+      Animated.timing(translateX, { toValue: 0, duration: RESTORE_MS, useNativeDriver: nativeDriver() }),
+      Animated.timing(translateY, { toValue: 0, duration: RESTORE_MS, useNativeDriver: nativeDriver() }),
+    ]);
+    restoring.current.start();
+  }, [scale, translateX, translateY]);
+
+  const stopRestoring = useCallback(() => {
+    if (!restoring.current) return;
+    restoring.current.stop();
+    restoring.current = null;
+    reset();
+  }, [reset]);
+
   // Cada vez que se abre arranca sin zoom
   useEffect(() => {
     if (visible) reset();
@@ -78,12 +115,24 @@ export default function ImageViewerModal({ visible, uri, onClose }: Props) {
     }
   };
 
-  const onGrant = (e: GestureResponderEvent) => {
-    gesture.current.moved = false;
+  // Se usan los eventos de toque directos y no el sistema de «responder» de React Native: en Android ese sistema
+  // soltaba el gesto apenas se apoyaba el segundo dedo y nunca llegaba a haber dos dedos en el pellizco.
+  const onTouchStart = (e: GestureResponderEvent) => {
+    if (gesture.current.touches === 0) {
+      stopRestoring();
+      gesture.current.moved = false;
+    }
     begin(e.nativeEvent.touches as unknown as TouchPoint[]);
   };
 
-  const onMove = (e: GestureResponderEvent) => {
+  const onTouchEnd = (e: GestureResponderEvent) => {
+    const touches = e.nativeEvent.touches as unknown as TouchPoint[];
+    // Si queda algún dedo apoyado se sigue desde donde está la imagen; al levantar el último, vuelve al tamaño original
+    if (touches.length > 0) begin(touches);
+    else onRelease();
+  };
+
+  const onTouchMove = (e: GestureResponderEvent) => {
     const touches = e.nativeEvent.touches as unknown as TouchPoint[];
     const g = gesture.current;
     if (touches.length !== g.touches) begin(touches);
@@ -108,10 +157,11 @@ export default function ImageViewerModal({ visible, uri, onClose }: Props) {
   };
 
   const onRelease = () => {
-    const g = gesture.current;
-    // Terminó un pellizco o un arrastre: si quedó casi sin zoom, vuelve al centro. Un toque suelto no hace nada.
-    if ((g.touches >= 2 || g.moved) && isResetScale(current.current.scale)) reset();
-    g.touches = 0;
+    gesture.current.touches = 0;
+    // Se soltaron los dedos: la imagen vuelve a su tamaño y lugar originales (un toque suelto no cambia nada)
+    const { scale: s, x, y } = current.current;
+    if (!isResetScale(s) || x !== 0 || y !== 0) restore();
+    else reset();
   };
 
   return (
@@ -128,12 +178,10 @@ export default function ImageViewerModal({ visible, uri, onClose }: Props) {
           testID="zoom-surface"
           style={styles.surface}
           onLayout={e => { size.current = { width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height }; }}
-          onStartShouldSetResponder={() => true}
-          onMoveShouldSetResponder={() => true}
-          onResponderGrant={onGrant}
-          onResponderMove={onMove}
-          onResponderRelease={onRelease}
-          onResponderTerminate={onRelease}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          onTouchCancel={onRelease}
         >
           <Animated.Image
             testID="zoom-image"

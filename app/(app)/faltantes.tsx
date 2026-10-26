@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import ProductImage from '@/components/ProductImage';
 import { Colors } from '@/constants/colors';
 import { Alert, alertService } from '@/services/alertService';
 
@@ -43,10 +44,7 @@ export default function FaltantesScreen() {
           ) : (
             items.map((item) => (
               <View key={item.id} style={styles.card}>
-                <Image
-                  source={item.image_url ? { uri: item.image_url } : require('../../assets/icon.png')}
-                  style={styles.image}
-                />
+                <ProductImage uri={item.image_url} style={styles.image} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.name}>{item.product_name}</Text>
                   <Text style={styles.detail}>
