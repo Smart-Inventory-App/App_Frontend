@@ -94,7 +94,7 @@ describe('LoginScreen', () => {
 
   it('advances to the password step once an email is entered', async () => {
     render(<LoginScreen />);
-    fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b.com');
+    fireEvent.changeText(screen.getByPlaceholderText('email@ejemplo.com'), 'a@b.com');
     await continueWithEmail();
     expect(screen.getByPlaceholderText('Contraseña')).toBeTruthy();
     expect(screen.getByText('a@b.com')).toBeTruthy();
@@ -102,15 +102,15 @@ describe('LoginScreen', () => {
 
   it('goes back to the email step, clearing password and error', async () => {
     render(<LoginScreen />);
-    fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b.com');
+    fireEvent.changeText(screen.getByPlaceholderText('email@ejemplo.com'), 'a@b.com');
     await continueWithEmail();
     fireEvent.press(screen.getByText('a@b.com'));
-    expect(screen.getByPlaceholderText('email@example.com')).toBeTruthy();
+    expect(screen.getByPlaceholderText('email@ejemplo.com')).toBeTruthy();
   });
 
   it('toggles password visibility', async () => {
     render(<LoginScreen />);
-    fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b.com');
+    fireEvent.changeText(screen.getByPlaceholderText('email@ejemplo.com'), 'a@b.com');
     await continueWithEmail();
     const eyeIcon = screen.UNSAFE_getAllByType(Ionicons).find((n: any) => n.props.name === 'eye');
     fireEvent.press(eyeIcon.parent);
@@ -119,7 +119,7 @@ describe('LoginScreen', () => {
   it('logs in successfully and navigates to the app', async () => {
     mockLogin.mockResolvedValue(undefined);
     render(<LoginScreen />);
-    fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b.com');
+    fireEvent.changeText(screen.getByPlaceholderText('email@ejemplo.com'), 'a@b.com');
     await continueWithEmail();
     fireEvent.changeText(screen.getByPlaceholderText('Contraseña'), 'pw123456');
     await act(async () => {
@@ -132,7 +132,7 @@ describe('LoginScreen', () => {
   it('shows a translated error when login fails', async () => {
     mockLogin.mockRejectedValue({ response: { data: { detail: 'auth.invalid_credentials' } } });
     render(<LoginScreen />);
-    fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b.com');
+    fireEvent.changeText(screen.getByPlaceholderText('email@ejemplo.com'), 'a@b.com');
     await continueWithEmail();
     fireEvent.changeText(screen.getByPlaceholderText('Contraseña'), 'pw123456');
     await act(async () => {
@@ -144,7 +144,7 @@ describe('LoginScreen', () => {
   it('clears the error as soon as the password changes again', async () => {
     mockLogin.mockRejectedValue({ response: { data: { detail: 'auth.invalid_credentials' } } });
     render(<LoginScreen />);
-    fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b.com');
+    fireEvent.changeText(screen.getByPlaceholderText('email@ejemplo.com'), 'a@b.com');
     await continueWithEmail();
     fireEvent.changeText(screen.getByPlaceholderText('Contraseña'), 'pw123456');
     await act(async () => {
@@ -159,7 +159,7 @@ describe('LoginScreen', () => {
     fireEvent.press(screen.getByText('Crear una cuenta'));
     expect(mockPush).toHaveBeenCalledWith('/(auth)/register');
 
-    fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b.com');
+    fireEvent.changeText(screen.getByPlaceholderText('email@ejemplo.com'), 'a@b.com');
     await continueWithEmail();
     fireEvent.press(screen.getByText('Olvidé mi contraseña'));
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/(auth)/forgot-password', params: { email: 'a@b.com' } });
@@ -167,7 +167,7 @@ describe('LoginScreen', () => {
 });
 
 describe('LoginScreen - accounts created with Google', () => {
-  const typeEmail = () => fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'a@b.com');
+  const typeEmail = () => fireEvent.changeText(screen.getByPlaceholderText('email@ejemplo.com'), 'a@b.com');
   const NOTICE = 'Esta cuenta se creó con Google y todavía no tiene contraseña. Ingresá con Google o creá una contraseña.';
 
   it('asks the server about the email before moving on', async () => {

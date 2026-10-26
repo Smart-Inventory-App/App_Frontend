@@ -174,7 +174,7 @@ describe('LoginScreen - Google button, texts and accounts created with Google', 
   it('keeps the Google button behind the pop up for an account created with Google', async () => {
     (authService.getEmailStatus as jest.Mock).mockResolvedValue({ exists: true, password_set: false });
     render(<LoginScreen />);
-    fireEvent.changeText(screen.getByPlaceholderText('email@example.com'), 'g@b.com');
+    fireEvent.changeText(screen.getByPlaceholderText('email@ejemplo.com'), 'g@b.com');
     await act(async () => { fireEvent.press(screen.getByText('Continuar')); });
     expect(screen.getByTestId('confirm-card')).toBeTruthy();
     expect(screen.getByText('Continuar con Google')).toBeTruthy();

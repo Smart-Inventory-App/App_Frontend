@@ -7,7 +7,7 @@ export default {
     goHome: 'Ir al inicio',
   },
   login: {
-    emailPlaceholder: 'email@example.com',
+    emailPlaceholder: 'email@ejemplo.com',
     createAccount: 'Crear una cuenta',
     or: 'o',
     continueWithGoogle: 'Continuar con Google',
