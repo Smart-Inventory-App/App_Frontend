@@ -1,4 +1,4 @@
-import { findSimilarOptions } from '../src/utils/optionSearch';
+import { findSimilarOptions, sortAlphabetically } from '../src/utils/optionSearch';
 
 describe('findSimilarOptions', () => {
   const options = ['Lácteos', 'Limpieza', 'Almacén', 'Bebidas', 'Lacteos light'];
@@ -27,5 +27,25 @@ describe('findSimilarOptions', () => {
 
   it('returns nothing when no option matches', () => {
     expect(findSimilarOptions('zzz', options)).toEqual([]);
+  });
+});
+
+describe('sortAlphabetically', () => {
+  it('orders the options alphabetically, ignoring case and accents', () => {
+    expect(sortAlphabetically(['limpieza', 'Lácteos', 'almacén', 'Bebidas', 'Álamo'])).toEqual(['Álamo', 'almacén', 'Bebidas', 'Lácteos', 'limpieza']);
+  });
+
+  it('does not change the original list', () => {
+    const original = ['b', 'a'];
+    sortAlphabetically(original);
+    expect(original).toEqual(['b', 'a']);
+  });
+
+  it('keeps a stable order for options that only differ in case or accents', () => {
+    expect(sortAlphabetically(['cafe', 'Café', 'CAFE'])).toEqual(sortAlphabetically(['CAFE', 'Café', 'cafe']));
+  });
+
+  it('handles an empty list', () => {
+    expect(sortAlphabetically([])).toEqual([]);
   });
 });

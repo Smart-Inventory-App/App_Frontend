@@ -325,24 +325,10 @@ describe('ProductDetailModal - details', () => {
   });
 });
 
-describe('ProductDetailModal - "Stock total" button', () => {
-  it('is not shown unless the screen can open the total stock', () => {
+describe('ProductDetailModal - without the "Stock total" button', () => {
+  it('has no "Stock total" button: the total stock is shown in the inventory', () => {
     render(<ProductDetailModal product={FULL} onClose={jest.fn()} />);
     expect(screen.queryByTestId('detail-total-button')).toBeNull();
-  });
-
-  it('is shown right below the product name when it can', () => {
-    render(<ProductDetailModal product={FULL} onClose={jest.fn()} onShowTotal={jest.fn()} />);
-    expect(screen.getByText('Stock total')).toBeTruthy();
-    const tree = JSON.stringify(screen.toJSON());
-    expect(tree.indexOf('detail-nombre')).toBeLessThan(tree.indexOf('detail-total-button'));
-    expect(tree.indexOf('detail-total-button')).toBeLessThan(tree.indexOf('"detail-categoria"'));
-  });
-
-  it('hands the product over when it is pressed', () => {
-    const onShowTotal = jest.fn();
-    render(<ProductDetailModal product={FULL} onClose={jest.fn()} onShowTotal={onShowTotal} />);
-    fireEvent.press(screen.getByTestId('detail-total-button'));
-    expect(onShowTotal).toHaveBeenCalledWith(FULL);
+    expect(screen.queryByText('Stock total')).toBeNull();
   });
 });

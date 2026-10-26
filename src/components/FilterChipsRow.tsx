@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../constants/colors';
-import { findSimilarOptions } from '../utils/optionSearch';
+import { findSimilarOptions, sortAlphabetically } from '../utils/optionSearch';
 import { selectedFirst } from '../utils/selectedFirst';
 import { truncateLabel } from '../utils/text';
 
@@ -30,8 +30,14 @@ export default function FilterChipsRow({
   const [query, setQuery] = useState('');
   const matches = useMemo(() => findSimilarOptions(query, options, MAX_SUGGESTIONS), [query, options]);
 
-  // La opción elegida va primero, así nunca queda escondida fuera del renglón.
-  const ordered = selectedFirst(options, o => o === selected);
+  // Las opciones van en orden alfabético y la elegida, primera (a la derecha de «Todas»): así siempre se ve
+  const ordered = useMemo(() => selectedFirst(sortAlphabetically(options), o => o === selected), [options, selected]);
+
+  // Al elegir una opción, la fila vuelve al principio para que se vea
+  const chipsRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    chipsRef.current?.scrollTo?.({ x: 0, animated: true });
+  }, [selected]);
 
   const closeSearch = () => {
     setSearching(false);
@@ -92,17 +98,27 @@ export default function FilterChipsRow({
           <TouchableOpacity testID={`filter-search-${testKey}`} style={styles.squareBtn} onPress={() => setSearching(true)}>
             <Ionicons name="search" size={18} color={Colors.primary} />
           </TouchableOpacity>
-          {/* Un solo renglón: lo que no entra queda oculto y se busca con la lupa */}
-          <View testID={`filter-chips-${testKey}`} style={styles.chipsLine}>
-            <TouchableOpacity
-              style={[styles.chip, !selected && styles.chipActive]}
-              onPress={() => onSelect(null)}
-            >
-              <Text style={[styles.chipText, !selected && styles.chipTextActive]}>{allLabel}</Text>
-            </TouchableOpacity>
+          {/* «Todas» queda fija; las opciones van en una sola fila que se desliza hacia los costados */}
+          <TouchableOpacity
+            testID={`filter-all-${testKey}`}
+            style={[styles.chip, !selected && styles.chipActive]}
+            onPress={() => onSelect(null)}
+          >
+            <Text style={[styles.chipText, !selected && styles.chipTextActive]}>{allLabel}</Text>
+          </TouchableOpacity>
+          <ScrollView
+            ref={chipsRef}
+            testID={`filter-chips-${testKey}`}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.chipsScroll}
+            contentContainerStyle={styles.chipsContent}
+            keyboardShouldPersistTaps="handled"
+          >
             {ordered.map(option => (
               <TouchableOpacity
                 key={option}
+                testID={`filter-chip-${testKey}-${option}`}
                 style={[styles.chip, selected === option && styles.chipActive]}
                 onPress={() => onSelect(selected === option ? null : option)}
               >
@@ -111,7 +127,7 @@ export default function FilterChipsRow({
                 </Text>
               </TouchableOpacity>
             ))}
-          </View>
+          </ScrollView>
         </View>
       )}
     </View>
@@ -143,14 +159,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#fff',
   },
-  chipsLine: {
-    flex: 1,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    height: CHIP_HEIGHT,
-    overflow: 'hidden',
-  },
+  chipsScroll: { flex: 1 },
+  chipsContent: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 4 },
   chip: {
     flexShrink: 0,
     height: CHIP_HEIGHT,

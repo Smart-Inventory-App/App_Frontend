@@ -5,10 +5,8 @@ import {
   Product,
   ProductCreate,
   ProductDefaults,
-  ProductGroupDetail,
-  ProductGroupKey,
-  ProductGroupSummary,
   ProductSuggestion,
+  StockTotal,
   ReposicionSuggestion,
   StockChange,
   TrendsResponse,
@@ -37,6 +35,12 @@ export const productService = {
     return data;
   },
 
+  /** La suma del stock y la cantidad de productos que cumplen los filtros del inventario (todos, no solo una página). */
+  async getStockTotal(params?: { search?: string; categoria?: string; ubicacion?: string }): Promise<StockTotal> {
+    const { data } = await api.get<StockTotal>('/products/stock-total', { params });
+    return data;
+  },
+
   async getFilterOptions(): Promise<ProductFilterOptions> {
     const { data } = await api.get<ProductFilterOptions>('/products/filters/options');
     return data;
@@ -44,20 +48,6 @@ export const productService = {
 
   async suggestProducts(q: string): Promise<ProductSuggestion[]> {
     const { data } = await api.get<ProductSuggestion[]>('/products/suggest', { params: { q } });
-    return data;
-  },
-
-  /** Productos agrupados por nombre y categoría cuyo nombre contiene `q`, con su stock total. */
-  async suggestGroups(q: string): Promise<ProductGroupSummary[]> {
-    const { data } = await api.get<ProductGroupSummary[]>('/products/groups', { params: { q } });
-    return data;
-  },
-
-  /** Todos los productos con ese nombre y categoría (de cualquier marca) y su stock total. */
-  async getProductGroup(key: ProductGroupKey): Promise<ProductGroupDetail> {
-    const { data } = await api.get<ProductGroupDetail>('/products/group', {
-      params: { nombre: key.nombre, categoria: key.categoria },
-    });
     return data;
   },
 
