@@ -9,8 +9,8 @@ import { Colors } from '@/constants/colors';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
 import { FieldScanDocType } from '@/types/ocr';
 import { pickFromGallery, pickFromCamera, uploadImage, PickedImage } from '@/services/imageService';
-import ImageConfirmModal from '@/components/ImageConfirmModal';
 import BottomSheetModal from '@/components/BottomSheetModal';
+import ConfirmModal from '@/components/ConfirmModal';
 import { useFieldFocus } from '@/components/KeyboardAwareScrollView';
 import DatePickerModal from '@/components/DatePickerModal';
 import ProductImage from '@/components/ProductImage';
@@ -193,8 +193,9 @@ export default function ProductFormFields({
   const [showCalendar, setShowCalendar] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   // Imagen elegida que espera la confirmación del usuario antes de subirse
-  const [pendingImage, setPendingImage] = useState<PickedImage | null>(null);
   const [showImagePicker, setShowImagePicker] = useState(false);
+  // Pregunta antes de quitar la imagen del producto a cargar
+  const [confirmRemoveImage, setConfirmRemoveImage] = useState(false);
   // «Alertas personalizadas»: cerradas al entrar. Los valores viven en `form`, así que cerrarlas no los pierde
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [nombreSuggestions, setNombreSuggestions] = useState<ProductSuggestion[]>([]);
@@ -222,27 +223,17 @@ export default function ProductFormFields({
     setNombreSuggestions([]);
   };
 
-  // Elegir la imagen (galería o cámara) no la sube: primero se pide la confirmación
+  // Elegir la imagen (galería o cámara) abre la pantalla del sistema para recortarla y confirmarla; con eso ya hecho, la
+  // imagen se sube y se carga en el formulario directamente, sin otra ventana de confirmación
   const doPick = async (picker: () => Promise<PickedImage | null>) => {
     setShowImagePicker(false);
     try {
       const asset = await picker();
-      if (asset) setPendingImage(asset);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al elegir la imagen.';
-      Alert.alert('Error', message);
-    }
-  };
-
-  const confirmImage = async () => {
-    const asset = pendingImage;
-    setPendingImage(null);
-    if (!asset) return;
-    try {
+      if (!asset) return;
       setUploadingImage(true);
       set('imagen_url', await uploadImage(asset));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al subir la imagen.';
+      const message = err instanceof Error ? err.message : 'Error al cargar la imagen.';
       Alert.alert('Error', message);
     } finally {
       setUploadingImage(false);
@@ -499,13 +490,16 @@ export default function ProductFormFields({
 
       <Text style={styles.label}>{t('product.imagen')}</Text>
       {form.imagen_url ? (
-        <View style={styles.imagePreviewContainer}>
+        <View testID="image-preview-container" style={styles.imagePreviewContainer}>
           <ProductImage uri={form.imagen_url} style={styles.imagePreview} resizeMode="cover" />
-          <TouchableOpacity style={styles.imageChangeBtn} onPress={() => setShowImagePicker(true)} disabled={uploadingImage}>
-            {uploadingImage
-              ? <ActivityIndicator size="small" color={Colors.primary} />
-              : <><Ionicons name="pencil-outline" size={16} color={Colors.primary} /><Text style={styles.imageChangeBtnText}>{t('product.imagenCambiar')}</Text></>
-            }
+          <TouchableOpacity
+            testID="remove-image-button"
+            accessibilityLabel={t('product.imagenEliminar')}
+            style={styles.imageRemoveBtn}
+            onPress={() => setConfirmRemoveImage(true)}
+          >
+            <Ionicons name="trash-outline" size={16} color={Colors.error} />
+            <Text style={styles.imageRemoveBtnText}>{t('product.imagenEliminar')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -552,12 +546,17 @@ export default function ProductFormFields({
         </TouchableOpacity>
       </BottomSheetModal>
 
-      {/* Antes de cargar la imagen se ve cómo quedó y se confirma; no hay recorte */}
-      <ImageConfirmModal
-        visible={pendingImage !== null}
-        uri={pendingImage?.uri ?? null}
-        onConfirm={confirmImage}
-        onCancel={() => setPendingImage(null)}
+
+      <ConfirmModal
+        visible={confirmRemoveImage}
+        message={t('product.imagenEliminarConfirm')}
+        confirmLabel={t('common.confirm')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={() => {
+          setConfirmRemoveImage(false);
+          set('imagen_url', undefined);
+        }}
+        onCancel={() => setConfirmRemoveImage(false)}
       />
     </View>
   );
@@ -674,9 +673,19 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   selectImageBtnText: { color: Colors.primary, fontWeight: '600', fontSize: 14 },
-  imagePreviewContainer: { marginTop: 4, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: Colors.inputBorder },
-  imagePreview: { width: '100%', height: 180 },
-  imageChangeBtn: {
+  // Vista previa cuadrada (1x1), centrada y con un tamaño máximo para que no ocupe toda la pantalla
+  imagePreviewContainer: {
+    marginTop: 4,
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 280,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+  },
+  imagePreview: { width: '100%', aspectRatio: 1 },
+  imageRemoveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -684,7 +693,7 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: '#fafafa',
   },
-  imageChangeBtnText: { fontSize: 13, color: Colors.primary },
+  imageRemoveBtnText: { fontSize: 13, color: Colors.error },
   modalSheet: {
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,

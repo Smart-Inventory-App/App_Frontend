@@ -224,7 +224,7 @@ describe('ProductFormFields - nombre suggestions', () => {
 describe('ProductFormFields - image picker', () => {
   const PICKED = { uri: 'file://a.jpg', fileName: 'a.jpg', mimeType: 'image/jpeg' };
 
-  it('asks for confirmation after taking a photo, and uploads it only when confirmed', async () => {
+  it('uploads the photo right after it is taken and cropped, with no other confirmation window', async () => {
     (pickFromCamera as jest.Mock).mockResolvedValue(PICKED);
     (uploadImage as jest.Mock).mockResolvedValue('https://cdn/a.jpg');
     render(<Wrapper />);
@@ -232,19 +232,13 @@ describe('ProductFormFields - image picker', () => {
     await act(async () => {
       fireEvent.press(screen.getByText('Tomar foto'));
     });
-    expect(screen.getByText('¿Querés cargar esta imagen?')).toBeTruthy();
-    expect(screen.getByTestId('image-confirm-preview').props.source).toEqual({ uri: 'file://a.jpg' });
-    expect(uploadImage).not.toHaveBeenCalled();
-
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('image-confirm-accept'));
-    });
     expect(uploadImage).toHaveBeenCalledWith(PICKED);
     expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/a.jpg' });
     expect(screen.queryByText('¿Querés cargar esta imagen?')).toBeNull();
+    expect(screen.queryByTestId('image-confirm-card')).toBeNull();
   });
 
-  it('asks for confirmation after choosing from the gallery, and uploads it only when confirmed', async () => {
+  it('uploads the image chosen from the gallery right away', async () => {
     (pickFromGallery as jest.Mock).mockResolvedValue(PICKED);
     (uploadImage as jest.Mock).mockResolvedValue('https://cdn/b.jpg');
     render(<Wrapper />);
@@ -252,44 +246,12 @@ describe('ProductFormFields - image picker', () => {
     await act(async () => {
       fireEvent.press(screen.getByText('Elegir de la galería'));
     });
-    expect(screen.getByText('¿Querés cargar esta imagen?')).toBeTruthy();
-    expect(uploadImage).not.toHaveBeenCalled();
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('image-confirm-accept'));
-    });
+    expect(uploadImage).toHaveBeenCalledWith(PICKED);
     expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/b.jpg' });
-  });
-
-  it('does not upload nor set the image when the user cancels the confirmation', async () => {
-    (pickFromGallery as jest.Mock).mockResolvedValue(PICKED);
-    render(<Wrapper />);
-    fireEvent.press(screen.getByText('Seleccionar imagen'));
-    await act(async () => {
-      fireEvent.press(screen.getByText('Elegir de la galería'));
-    });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('image-confirm-cancel'));
-    });
-    expect(uploadImage).not.toHaveBeenCalled();
-    expect(screen.UNSAFE_queryAllByType(Image)).toHaveLength(0);
     expect(screen.queryByText('¿Querés cargar esta imagen?')).toBeNull();
   });
 
-  it('keeps the current image when the user cancels the confirmation of a new one', async () => {
-    (pickFromGallery as jest.Mock).mockResolvedValue(PICKED);
-    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
-    fireEvent.press(screen.getByText('Cambiar imagen'));
-    await act(async () => {
-      fireEvent.press(screen.getByText('Elegir de la galería'));
-    });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('image-confirm-cancel'));
-    });
-    expect(uploadImage).not.toHaveBeenCalled();
-    expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/existing.jpg' });
-  });
-
-  it('shows an alert when the upload fails after confirming', async () => {
+  it('shows an alert when the upload fails', async () => {
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     (pickFromCamera as jest.Mock).mockResolvedValue(PICKED);
     (uploadImage as jest.Mock).mockRejectedValue(new Error('sin conexión'));
@@ -298,11 +260,10 @@ describe('ProductFormFields - image picker', () => {
     await act(async () => {
       fireEvent.press(screen.getByText('Tomar foto'));
     });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('image-confirm-accept'));
-    });
     expect(Alert.alert).toHaveBeenCalledWith('Error', 'sin conexión');
     expect(screen.UNSAFE_queryAllByType(Image)).toHaveLength(0);
+    // el botón de seleccionar vuelve a estar disponible
+    expect(screen.getByTestId('select-image-button')).toBeTruthy();
     (Alert.alert as jest.Mock).mockRestore();
   });
 
@@ -315,10 +276,7 @@ describe('ProductFormFields - image picker', () => {
     await act(async () => {
       fireEvent.press(screen.getByText('Tomar foto'));
     });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('image-confirm-accept'));
-    });
-    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Error al subir la imagen.');
+    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Error al cargar la imagen.');
     (Alert.alert as jest.Mock).mockRestore();
   });
 
@@ -353,21 +311,96 @@ describe('ProductFormFields - image picker', () => {
     await act(async () => {
       fireEvent.press(screen.getByText('Tomar foto'));
     });
-    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Error al elegir la imagen.');
+    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Error al cargar la imagen.');
     (Alert.alert as jest.Mock).mockRestore();
-  });
-
-  it('closes the picker sheet via cancel and can change an existing image', async () => {
-    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
-    expect(screen.getByText('Cambiar imagen')).toBeTruthy();
-    fireEvent.press(screen.getByText('Cambiar imagen'));
-    fireEvent.press(screen.getByText('Cancelar'));
   });
 
   it('closes the picker sheet by pressing the overlay', () => {
     render(<Wrapper />);
     fireEvent.press(screen.getByText('Seleccionar imagen'));
     // Overlay press dismisses the modal (top-level Pressable's onPress).
+  });
+});
+
+describe('ProductFormFields - remove the image and square preview', () => {
+  const TEXT = '¿Estás de acuerdo con eliminar la imagen del producto a cargar?';
+
+  it('has no "Cambiar imagen" button anymore: only "Eliminar imagen"', () => {
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    expect(screen.queryByText('Cambiar imagen')).toBeNull();
+    expect(screen.queryByTestId('change-image-button')).toBeNull();
+    expect(screen.getByTestId('remove-image-button')).toBeTruthy();
+    expect(screen.getByText('Eliminar imagen')).toBeTruthy();
+  });
+
+  it('asks for confirmation before removing the image, and does not remove it yet', () => {
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    expect(screen.queryByText(TEXT)).toBeNull();
+    fireEvent.press(screen.getByTestId('remove-image-button'));
+    expect(screen.getByText(TEXT)).toBeTruthy();
+    expect(screen.getByText('Confirmar')).toBeTruthy();
+    expect(screen.getByText('Cancelar')).toBeTruthy();
+    expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/existing.jpg' });
+  });
+
+  it('removes the image when confirmed: the preview disappears and the select button comes back', () => {
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    fireEvent.press(screen.getByTestId('remove-image-button'));
+    fireEvent.press(screen.getByTestId('confirm-accept'));
+    expect(screen.queryByText(TEXT)).toBeNull();
+    expect(screen.UNSAFE_queryAllByType(Image)).toHaveLength(0);
+    expect(screen.queryByTestId('image-preview-container')).toBeNull();
+    expect(screen.getByTestId('select-image-button')).toBeTruthy();
+  });
+
+  it('keeps the image when the user cancels', () => {
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    fireEvent.press(screen.getByTestId('remove-image-button'));
+    fireEvent.press(screen.getByTestId('confirm-cancel'));
+    expect(screen.queryByText(TEXT)).toBeNull();
+    expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/existing.jpg' });
+    expect(screen.getByTestId('remove-image-button')).toBeTruthy();
+  });
+
+  it('keeps the image when the question is dismissed by tapping outside of it', () => {
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    fireEvent.press(screen.getByTestId('remove-image-button'));
+    fireEvent.press(screen.getByTestId('confirm-backdrop'));
+    expect(screen.queryByText(TEXT)).toBeNull();
+    expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/existing.jpg' });
+  });
+
+  it('can load another image after removing one', async () => {
+    (pickFromGallery as jest.Mock).mockResolvedValue({ uri: 'file://c.jpg' });
+    (uploadImage as jest.Mock).mockResolvedValue('https://cdn/c.jpg');
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    fireEvent.press(screen.getByTestId('remove-image-button'));
+    fireEvent.press(screen.getByTestId('confirm-accept'));
+    fireEvent.press(screen.getByTestId('select-image-button'));
+    await act(async () => {
+      fireEvent.press(screen.getByText('Elegir de la galería'));
+    });
+    expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/c.jpg' });
+  });
+
+  it('has no remove button when there is no image', () => {
+    render(<Wrapper />);
+    expect(screen.queryByTestId('remove-image-button')).toBeNull();
+  });
+
+  it('shows the preview as a square (1x1)', () => {
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    const image = StyleSheet.flatten(screen.UNSAFE_getByType(Image).props.style);
+    expect(image.aspectRatio).toBe(1);
+    expect(image.height).toBeUndefined();
+    expect(image.width).toBe('100%');
+  });
+
+  it('keeps the square preview centered and not bigger than a reasonable size', () => {
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    const container = StyleSheet.flatten(screen.getByTestId('image-preview-container').props.style);
+    expect(container.alignSelf).toBe('center');
+    expect(container.maxWidth).toBe(280);
   });
 });
 

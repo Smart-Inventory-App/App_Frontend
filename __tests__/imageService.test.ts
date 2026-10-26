@@ -40,7 +40,7 @@ describe('imageService.pickFromGallery', () => {
     await expect(pickFromGallery()).resolves.toBeNull();
   });
 
-  it('returns the picked image without uploading it: it is uploaded after the user confirms', async () => {
+  it('returns the picked (and cropped) image without uploading it: the caller uploads it', async () => {
     (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
     const asset = { uri: 'file://a.jpg', fileName: 'a.jpg', mimeType: 'image/jpeg' };
     (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({ canceled: false, assets: [asset] });
@@ -49,11 +49,11 @@ describe('imageService.pickFromGallery', () => {
     expect(mockedAxios.post).not.toHaveBeenCalled();
   });
 
-  it('does not offer to crop the image', async () => {
+  it('opens the system screen that offers to crop the image and confirm it', async () => {
     (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
     (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({ canceled: true });
     await pickFromGallery();
-    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: false }));
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: true }));
   });
 });
 
@@ -69,14 +69,14 @@ describe('imageService.pickFromCamera', () => {
     await expect(pickFromCamera()).resolves.toBeNull();
   });
 
-  it('returns the captured photo without uploading it, and without offering to crop it', async () => {
+  it('returns the captured photo without uploading it, after offering to crop it', async () => {
     (ImagePicker.requestCameraPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
     const asset = { uri: 'file://b.jpg' };
     (ImagePicker.launchCameraAsync as jest.Mock).mockResolvedValue({ canceled: false, assets: [asset] });
 
     await expect(pickFromCamera()).resolves.toBe(asset);
     expect(mockedAxios.post).not.toHaveBeenCalled();
-    expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: false }));
+    expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: true }));
   });
 });
 
