@@ -98,7 +98,7 @@ export default {
     save: 'Guardar',
     saving: 'Guardando...',
     cancel: 'Cancelar',
-    saveSuccess: 'Perfil actualizado',
+    saveSuccess: 'Tu perfil se ha actualizado correctamente',
     saveError: 'No se pudo actualizar el perfil',
     argentinaTime: 'Hora de Argentina (UTC-3)',
     languageConfirm: 'Se va a cambiar el idioma a {{language}}.',

@@ -24,6 +24,7 @@ import { profileService, UserProfile, UserType } from '@/services/profileService
 import { ensureNotificationPermission, getNotificationPermission } from '@/services/notificationPermission';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { truncateLabel } from '@/utils/text';
+import TopBanner from '@/components/TopBanner';
 import {
   ALERT_DAYS_MAX,
   ALERT_DAYS_MIN,
@@ -59,6 +60,8 @@ export default function PerfilScreen() {
   // Aviso de que el permiso de notificaciones solo se da desde los Ajustes del teléfono
   const [settingsNoticeVisible, setSettingsNoticeVisible] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'error'; msg: string } | null>(null);
+  // Aviso verde arriba de la pantalla al guardar el perfil (el `id` hace que cada guardado muestre uno nuevo)
+  const [savedBanner, setSavedBanner] = useState<{ id: number; message: string } | null>(null);
 
   const [coverageDaysInput, setCoverageDaysInput] = useState('7');
   const [expiryDaysInput, setExpiryDaysInput] = useState('7');
@@ -138,7 +141,7 @@ export default function PerfilScreen() {
       );
       setProfile(updated);
       setEditing(false);
-      setFeedback({ type: 'ok', msg: t('profile.saveSuccess') });
+      setSavedBanner({ id: Date.now(), message: t('profile.saveSuccess') });
     } catch {
       setFeedback({ type: 'error', msg: t('profile.saveError') });
     } finally {
@@ -495,6 +498,14 @@ export default function PerfilScreen() {
           onCancel={() => setConfirmLogoutVisible(false)}
         />
           </KeyboardAwareScrollView>
+      {savedBanner && (
+        <TopBanner
+          key={savedBanner.id}
+          message={savedBanner.message}
+          autoDismissMs={4000}
+          onDismiss={() => setSavedBanner(null)}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }

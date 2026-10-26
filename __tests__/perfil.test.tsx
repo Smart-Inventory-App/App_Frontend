@@ -117,8 +117,36 @@ describe('PerfilScreen', () => {
     });
 
     expect(mockedProfileService.updateProfile).toHaveBeenCalledWith('Anita', 'Perez', 'ana', 7, 7, utcHourOf(5), 'individuo');
-    expect(screen.getByText('Perfil actualizado')).toBeTruthy();
+    // aviso arriba de la pantalla, no el texto chico dentro del formulario
+    expect(screen.getByTestId('top-banner')).toBeTruthy();
+    expect(screen.getByText('Tu perfil se ha actualizado correctamente')).toBeTruthy();
     expect(screen.queryByText('Guardar')).toBeNull();
+  });
+
+  it('hides the profile saved banner by itself after a few seconds', async () => {
+    jest.useFakeTimers();
+    render(<PerfilScreen />);
+    await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+    startEditing();
+    mockedProfileService.updateProfile.mockResolvedValue(baseProfile({ firstName: 'Anita' }));
+    await act(async () => {
+      fireEvent.press(screen.getByText('Guardar'));
+    });
+    expect(screen.getByTestId('top-banner')).toBeTruthy();
+    await act(async () => { await jest.advanceTimersByTimeAsync(5000); });
+    expect(screen.queryByTestId('top-banner')).toBeNull();
+    jest.useRealTimers();
+  });
+
+  it('does not show the saved banner when saving fails', async () => {
+    render(<PerfilScreen />);
+    await screen.findByText('Editar perfil');
+    startEditing();
+    mockedProfileService.updateProfile.mockRejectedValue(new Error('boom'));
+    await act(async () => {
+      fireEvent.press(screen.getByText('Guardar'));
+    });
+    expect(screen.queryByTestId('top-banner')).toBeNull();
   });
 
   it('shows an error message when saving the profile fails', async () => {

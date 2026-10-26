@@ -98,7 +98,7 @@ export default {
     save: 'Save',
     saving: 'Saving...',
     cancel: 'Cancel',
-    saveSuccess: 'Profile updated',
+    saveSuccess: 'Your profile has been updated successfully',
     saveError: 'Could not update profile',
     argentinaTime: 'Argentina time (UTC-3)',
     languageConfirm: 'The language will be changed to {{language}}.',
