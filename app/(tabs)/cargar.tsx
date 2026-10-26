@@ -466,7 +466,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 16,
+    // Los botones quedan fijos arriba al hacer scroll: el mismo margen abajo que arriba, del color del fondo, para que el
+    // contenido no se pegue a ellos
     paddingTop: 14,
+    paddingBottom: 14,
     backgroundColor: '#f2f3f6',
   },
   directionBtn: {

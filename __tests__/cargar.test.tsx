@@ -490,6 +490,16 @@ describe('CargarScreen - Entrada/Salida buttons', () => {
     expect(flat('direction-salida').flex).toBe(1);
   });
 
+  it('keep a margin below them, as big as the one above and of the color of the background, while the content scrolls under them', () => {
+    render(<CargarScreen />);
+    const row = StyleSheet.flatten(screen.getByTestId('direction-row').props.style);
+    expect(row.paddingTop).toBe(14);
+    expect(row.paddingBottom).toBe(row.paddingTop);
+    // el mismo color del fondo del contenido que pasa por debajo
+    const content = StyleSheet.flatten(screen.UNSAFE_getByType(ScrollView).props.style);
+    expect(row.backgroundColor).toBe(content.backgroundColor);
+  });
+
   it('are big enough to be pressed easily', () => {
     render(<CargarScreen />);
     const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
