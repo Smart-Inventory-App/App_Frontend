@@ -114,6 +114,42 @@ describe('ProductDetailModal', () => {
   });
 });
 
+describe('ProductDetailModal - Reglas de alerta', () => {
+  const flat = (id: string) => require('react-native').StyleSheet.flatten(screen.getByTestId(id).props.style);
+  const row = (id: string) => {
+    let node: any = screen.getByTestId(`${id}-label`).parent;
+    while (node && !(node.props?.style && require('react-native').StyleSheet.flatten(node.props.style)?.paddingVertical)) node = node.parent;
+    return require('react-native').StyleSheet.flatten(node.props.style);
+  };
+
+  it('has the section title written as "Reglas de alerta", not in capital letters', () => {
+    render(<ProductDetailModal product={FULL} onClose={jest.fn()} />);
+    expect(screen.getByText('Reglas de alerta')).toBeTruthy();
+    expect(screen.queryByText('REGLAS DE ALERTA')).toBeNull();
+    expect(flat('detail-stock-minimo').textTransform).toBeUndefined();
+    expect(require('react-native').StyleSheet.flatten(screen.getByText('Reglas de alerta').props.style).textTransform).toBeUndefined();
+  });
+
+  it('has no grey line under Stock mínimo: both rules read as a single section', () => {
+    render(<ProductDetailModal product={FULL} onClose={jest.fn()} />);
+    expect(row('detail-stock-minimo').borderBottomWidth).toBe(0);
+    // la fila de abajo sigue separada de lo que viene después
+    expect(row('detail-dias-alerta').borderBottomWidth).toBe(1);
+  });
+
+  it('keeps the two rules without a divider between them also when they use the general rule', () => {
+    render(<ProductDetailModal product={{ ...FULL, stock_minimo: undefined, dias_alerta_vencimiento: undefined }} generalRules={{ coverageDays: 7, expiryDays: 5 }} onClose={jest.fn()} />);
+    expect(row('detail-stock-minimo').borderBottomWidth).toBe(0);
+    expect(row('detail-dias-alerta').borderBottomWidth).toBe(1);
+  });
+
+  it('keeps the divider of the rows outside of the section', () => {
+    render(<ProductDetailModal product={FULL} onClose={jest.fn()} />);
+    expect(row('detail-categoria').borderBottomWidth).toBe(1);
+    expect(row('detail-stock').borderBottomWidth).toBe(1);
+  });
+});
+
 describe('ProductDetailModal - scroll', () => {
   const flat = (id: string) => require('react-native').StyleSheet.flatten(screen.getByTestId(id).props.style);
 

@@ -707,7 +707,7 @@ describe('ProductFormFields - alertas personalizadas', () => {
     const tree = JSON.stringify(screen.toJSON());
     const descripcion = tree.indexOf('input-descripcion');
     const ubicacion = tree.indexOf('Ubicación de guardado');
-    const alertas = tree.indexOf('Alertas personalizadas');
+    const alertas = tree.indexOf('Reglas de alerta de producto');
     const imagen = tree.indexOf('Imagen del producto');
     expect(descripcion).toBeGreaterThan(-1);
     expect(descripcion).toBeLessThan(ubicacion);
@@ -715,11 +715,11 @@ describe('ProductFormFields - alertas personalizadas', () => {
     expect(alertas).toBeLessThan(imagen);
   });
 
-  it('is called "Alertas personalizadas", written like that and not in capital letters', () => {
+  it('is called "Reglas de alerta de producto", written like that and not in capital letters', () => {
     render(<Wrapper />);
-    expect(screen.getByText('Alertas personalizadas')).toBeTruthy();
+    expect(screen.getByText('Reglas de alerta de producto')).toBeTruthy();
     expect(screen.queryByText(/Alertas para este producto/)).toBeNull();
-    expect(StyleSheet.flatten(screen.getByText('Alertas personalizadas').props.style).textTransform).toBeUndefined();
+    expect(StyleSheet.flatten(screen.getByText('Reglas de alerta de producto').props.style).textTransform).toBeUndefined();
   });
 
   it('starts closed: the two fields are not shown until it is opened', () => {
@@ -738,7 +738,7 @@ describe('ProductFormFields - alertas personalizadas', () => {
     expect(row.flexDirection).toBe('row');
     expect(row.justifyContent).toBe('space-between');
     const tree = JSON.stringify(screen.toJSON());
-    expect(tree.indexOf('Alertas personalizadas')).toBeLessThan(tree.indexOf('alerts-toggle'));
+    expect(tree.indexOf('Reglas de alerta de producto')).toBeLessThan(tree.indexOf('alerts-toggle'));
 
     fireEvent.press(screen.getByTestId('alerts-toggle'));
     expect(screen.getByTestId('alerts-section')).toBeTruthy();

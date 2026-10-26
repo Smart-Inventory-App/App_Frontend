@@ -35,12 +35,14 @@ interface RowProps {
   note?: string;
   /** Destaca el título y el valor con el color de la app. */
   highlight?: boolean;
+  /** Sin la línea gris de abajo: la fila forma una sola sección con la que sigue. */
+  noDivider?: boolean;
 }
 
-function Row({ testID, label, value, note, highlight }: RowProps) {
+function Row({ testID, label, value, note, highlight, noDivider }: RowProps) {
   const empty = value === undefined || value === null || value === '';
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, noDivider && styles.rowNoDivider]}>
       <Text testID={`${testID}-label`} style={[styles.rowLabel, highlight && styles.rowHighlight]}>{label}</Text>
       <Text testID={testID} style={[styles.rowValue, highlight && styles.rowHighlight, empty && styles.rowValueEmpty]}>
         {empty ? NO_VALUE : String(value)}
@@ -64,12 +66,13 @@ export default function ProductDetailModal({ product, onClose, generalRules, onS
     own: number | undefined,
     general: number | undefined,
     format: (n: number) => string,
+    noDivider = false,
   ) => {
-    if (own != null) return <Row testID={testID} label={label} value={format(own)} />;
+    if (own != null) return <Row testID={testID} label={label} value={format(own)} noDivider={noDivider} />;
     if (general != null) {
-      return <Row testID={testID} label={label} value={format(general)} note={t('product.usandoReglaGeneral')} />;
+      return <Row testID={testID} label={label} value={format(general)} note={t('product.usandoReglaGeneral')} noDivider={noDivider} />;
     }
-    return <Row testID={testID} label={label} value={t('product.usandoReglaGeneral')} />;
+    return <Row testID={testID} label={label} value={t('product.usandoReglaGeneral')} noDivider={noDivider} />;
   };
 
   // Alto máximo del cuerpo en números: con un máximo definido, el cuerpo se desplaza cuando la información no entra
@@ -133,7 +136,7 @@ export default function ProductDetailModal({ product, onClose, generalRules, onS
                 <Row testID="detail-codigo-barras" label={t('product.codigoBarras')} value={product.codigo_barras} />
 
                 <Text style={styles.sectionTitle}>{t('detail.alertsTitle')}</Text>
-                {ruleRow('detail-stock-minimo', t('product.stockMinimo'), product.stock_minimo, generalRules?.coverageDays, units)}
+                {ruleRow('detail-stock-minimo', t('product.stockMinimo'), product.stock_minimo, generalRules?.coverageDays, units, true)}
                 {ruleRow('detail-dias-alerta', t('product.diasAlertaVencimiento'), product.dias_alerta_vencimiento, generalRules?.expiryDays, days)}
 
                 {product.created_at ? (
@@ -188,11 +191,9 @@ const styles = StyleSheet.create({
   },
   totalBtnText: { color: Colors.primary, fontWeight: '600', fontSize: 14 },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
     marginTop: 16,
     marginBottom: 2,
   },
@@ -201,6 +202,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
+  rowNoDivider: { borderBottomWidth: 0 },
   rowLabel: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
   rowValue: { fontSize: 15, color: Colors.textPrimary, marginTop: 2 },
   rowValueEmpty: { color: Colors.placeholder },
