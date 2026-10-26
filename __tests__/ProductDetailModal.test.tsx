@@ -92,7 +92,7 @@ describe('ProductDetailModal', () => {
     expect(modal.props.transparent).toBe(true);
     expect(modal.props.statusBarTranslucent).toBe(true);
     expect(modal.props.navigationBarTranslucent).toBe(true);
-    expect(StyleSheet.flatten(screen.getByTestId('product-detail-backdrop').props.style)).toMatchObject({
+    expect(StyleSheet.flatten(screen.getByTestId('product-detail-overlay').props.style)).toMatchObject({
       justifyContent: 'center',
       alignItems: 'center',
     });
@@ -111,6 +111,63 @@ describe('ProductDetailModal', () => {
     expect(onClose).toHaveBeenCalledTimes(2);
     UNSAFE_getByType(Modal).props.onRequestClose();
     expect(onClose).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('ProductDetailModal - scroll', () => {
+  const flat = (id: string) => require('react-native').StyleSheet.flatten(screen.getByTestId(id).props.style);
+
+  it('has a body with a maximum height in numbers, so it scrolls when the information does not fit', () => {
+    render(<ProductDetailModal product={FULL} onClose={jest.fn()} />);
+    const max = flat('product-detail-scroll').maxHeight;
+    expect(typeof max).toBe('number');
+    expect(max).toBeGreaterThan(0);
+    // no puede ser más alto que la propia ventana
+    const { Dimensions } = require('react-native');
+    expect(max).toBeLessThan(Dimensions.get('window').height * 0.85);
+  });
+
+  it('adapts the maximum height of the body to the screen', () => {
+    const { Dimensions } = require('react-native');
+    const spy = jest.spyOn(Dimensions, 'get').mockReturnValue({ width: 360, height: 640, scale: 2, fontScale: 1 });
+    render(<ProductDetailModal product={FULL} onClose={jest.fn()} />);
+    const small = flat('product-detail-scroll').maxHeight;
+    spy.mockReturnValue({ width: 360, height: 1000, scale: 2, fontScale: 1 });
+    render(<ProductDetailModal product={FULL} onClose={jest.fn()} />);
+    const tall = screen.getAllByTestId('product-detail-scroll').map((n: any) => require('react-native').StyleSheet.flatten(n.props.style).maxHeight);
+    expect(small).toBeLessThan(Math.max(...tall));
+    spy.mockRestore();
+  });
+
+  it('never gets smaller than a usable height, even on a very short screen', () => {
+    const { Dimensions } = require('react-native');
+    const spy = jest.spyOn(Dimensions, 'get').mockReturnValue({ width: 300, height: 100, scale: 2, fontScale: 1 });
+    render(<ProductDetailModal product={FULL} onClose={jest.fn()} />);
+    expect(flat('product-detail-scroll').maxHeight).toBe(120);
+    spy.mockRestore();
+  });
+
+  it('keeps every row of the information inside the scrollable body', () => {
+    render(<ProductDetailModal product={FULL} onClose={jest.fn()} />);
+    const scroll = screen.getByTestId('product-detail-scroll');
+    for (const id of ['detail-nombre', 'detail-categoria', 'detail-stock', 'detail-ubicacion', 'detail-vencimiento', 'detail-codigo-barras', 'detail-stock-minimo', 'detail-dias-alerta']) {
+      let node: any = screen.getByTestId(id);
+      let inside = false;
+      while (node) {
+        if (node === scroll || node.props?.testID === 'product-detail-scroll') { inside = true; break; }
+        node = node.parent;
+      }
+      expect(inside).toBe(true);
+    }
+  });
+
+  it('does not wrap the window in a button that could keep the scroll gestures: the backdrop is its sibling', () => {
+    render(<ProductDetailModal product={FULL} onClose={jest.fn()} />);
+    let node: any = screen.getByTestId('product-detail-card');
+    while (node) {
+      expect(node.props?.testID).not.toBe('product-detail-backdrop');
+      node = node.parent;
+    }
   });
 });
 

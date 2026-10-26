@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
@@ -23,6 +23,9 @@ interface Props {
 }
 
 const NO_VALUE = '—';
+// La ventana ocupa hasta el 85 % del alto de la pantalla; al cuerpo se le descuenta lo que ocupan el título y los márgenes
+const CARD_MAX_HEIGHT_RATIO = 0.85;
+const CARD_CHROME_HEIGHT = 90;
 
 interface RowProps {
   testID: string;
@@ -69,6 +72,11 @@ export default function ProductDetailModal({ product, onClose, generalRules, onS
     return <Row testID={testID} label={label} value={t('product.usandoReglaGeneral')} />;
   };
 
+  // Alto máximo del cuerpo en números: con un máximo definido, el cuerpo se desplaza cuando la información no entra
+  // (confiar en que se achique solo dentro de una ventana con alto máximo no alcanzaba en Android)
+  const { height: windowHeight } = useWindowDimensions();
+  const bodyMaxHeight = Math.max(120, Math.round(windowHeight * CARD_MAX_HEIGHT_RATIO) - CARD_CHROME_HEIGHT);
+
   return (
     <Modal
       visible={!!product}
@@ -78,9 +86,11 @@ export default function ProductDetailModal({ product, onClose, generalRules, onS
       navigationBarTranslucent
       onRequestClose={onClose}
     >
-      <Pressable testID="product-detail-backdrop" style={styles.overlay} onPress={onClose}>
-        {/* Pressable interno: tocar la tarjeta no debe cerrar la ventana */}
-        <Pressable testID="product-detail-card" style={styles.card} onPress={() => {}}>
+      <View testID="product-detail-overlay" style={styles.overlay}>
+        {/* El fondo es un hermano de la ventana (no su padre): tocar la ventana no lo toca y los gestos de desplazar no
+            pasan por un botón que se quede con ellos */}
+        <Pressable testID="product-detail-backdrop" style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View testID="product-detail-card" style={styles.card}>
           {product && (
             <>
               <View style={styles.header}>
@@ -89,7 +99,14 @@ export default function ProductDetailModal({ product, onClose, generalRules, onS
                   <Ionicons name="close" size={24} color={Colors.textPrimary} />
                 </TouchableOpacity>
               </View>
-              <ScrollView testID="product-detail-scroll" contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                testID="product-detail-scroll"
+                style={{ maxHeight: bodyMaxHeight }}
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled
+                bounces
+              >
                 <View style={styles.imageBox}>
                   <ProductImage uri={product.imagen_url} style={styles.image} resizeMode="cover" />
                 </View>
@@ -125,8 +142,8 @@ export default function ProductDetailModal({ product, onClose, generalRules, onS
               </ScrollView>
             </>
           )}
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
