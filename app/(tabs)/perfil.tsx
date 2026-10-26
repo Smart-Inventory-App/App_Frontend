@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -39,6 +39,8 @@ import {
 } from '@/utils/profileLimits';
 
 // La hora del chequeo diario se muestra y se elige en hora de Argentina (UTC-3); el servidor la guarda en UTC
+// Cuánto se espera después de la última tecla para preguntar si el nombre de usuario está libre
+const USERNAME_CHECK_DELAY_MS = 500;
 const ARGENTINA_UTC_OFFSET_HOURS = 3;
 const utcToLocal = (utcHour: number) => (utcHour - ARGENTINA_UTC_OFFSET_HOURS + 24) % 24;
 const localToUtc = (localHour: number) => (localHour + ARGENTINA_UTC_OFFSET_HOURS + 24) % 24;
@@ -61,6 +63,8 @@ export default function PerfilScreen() {
   const [settingsNoticeVisible, setSettingsNoticeVisible] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'error'; msg: string } | null>(null);
   // Aviso verde arriba de la pantalla al guardar el perfil (el `id` hace que cada guardado muestre uno nuevo)
+  // Otra cuenta ya tiene el nombre de usuario que se está escribiendo
+  const [usernameTaken, setUsernameTaken] = useState(false);
   const [savedBanner, setSavedBanner] = useState<{ id: number; message: string } | null>(null);
 
   const [coverageDaysInput, setCoverageDaysInput] = useState('7');
@@ -118,9 +122,27 @@ export default function PerfilScreen() {
     setFeedback(null);
   };
 
+  // Mientras se edita, consulta si el nombre de usuario ya lo tiene otra cuenta (un instante después de dejar de escribir)
+  useEffect(() => {
+    const value = username.trim();
+    if (!editing) {
+      setUsernameTaken(false);
+      return;
+    }
+    if (!value || value.toLowerCase() === (profile?.username ?? '').trim().toLowerCase()) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      profileService.isUsernameAvailable(value)
+        .then((available) => { if (!cancelled) setUsernameTaken(!available); })
+        .catch(() => { /* sin conexión: el servidor lo vuelve a verificar al guardar */ });
+    }, USERNAME_CHECK_DELAY_MS);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [editing, username, profile?.username]);
+
   // Guarda de una vez los datos personales, el tipo de cuenta y la configuración de alertas
   const handleSave = async () => {
     setFeedback(null);
+    if (usernameTaken) return;
     const coverageDays = inRange(parseWholeNumber(coverageDaysInput), ALERT_DAYS_MIN, ALERT_DAYS_MAX);
     const expiryDays = inRange(parseWholeNumber(expiryDaysInput), ALERT_DAYS_MIN, ALERT_DAYS_MAX);
     const hour = inRange(parseWholeNumber(alertCheckHourInput), CHECK_HOUR_MIN, CHECK_HOUR_MAX);
@@ -142,8 +164,10 @@ export default function PerfilScreen() {
       setProfile(updated);
       setEditing(false);
       setSavedBanner({ id: Date.now(), message: t('profile.saveSuccess') });
-    } catch {
-      setFeedback({ type: 'error', msg: t('profile.saveError') });
+    } catch (error) {
+      // El servidor tiene la última palabra: si el nombre lo tomaron en el medio, se avisa debajo del campo
+      if ((error as { response?: { status?: number } })?.response?.status === 409) setUsernameTaken(true);
+      else setFeedback({ type: 'error', msg: t('profile.saveError') });
     } finally {
       setSaving(false);
     }
@@ -300,14 +324,15 @@ export default function PerfilScreen() {
             <>
               <AppTextInput
                 testID="username-input"
-                style={styles.input}
+                style={[styles.input, usernameTaken && styles.inputError]}
                 value={username}
-                onChangeText={setUsername}
+                onChangeText={(value) => { setUsername(value); setUsernameTaken(false); }}
                 maxLength={PROFILE_TEXT_MAX}
                 placeholder={t('profile.username')}
                 placeholderTextColor={Colors.placeholder}
                 autoCapitalize="none"
               />
+              {usernameTaken && <Text testID="username-taken" style={styles.fieldError}>{t('profile.usernameTaken')}</Text>}
               <Text testID="username-counter" style={styles.fieldCounter}>{username.length}/{PROFILE_TEXT_MAX}</Text>
             </>
           ) : (
@@ -627,6 +652,8 @@ const styles = StyleSheet.create({
   segmentHint: { fontSize: 12, color: Colors.placeholder, marginTop: 6 },
   settingInput: { width: 80, marginTop: 0 },
   // Contador de letras bajo el campo («18/20») y aclaración del rango de los campos numéricos
+  inputError: { borderColor: Colors.inputBorderError },
+  fieldError: { fontSize: 12, color: Colors.error, marginTop: 4 },
   fieldCounter: { alignSelf: 'flex-end', fontSize: 11, color: Colors.placeholder, marginTop: 2 },
   rangeHint: { fontSize: 11, color: Colors.textSecondary, marginTop: 4 },
   settingUnit: { fontSize: 13, color: Colors.textSecondary },

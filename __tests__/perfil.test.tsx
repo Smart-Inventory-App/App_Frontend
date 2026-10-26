@@ -43,6 +43,7 @@ jest.mock('@/services/profileService', () => ({
   profileService: {
     getProfile: jest.fn(),
     updateProfile: jest.fn(),
+    isUsernameAvailable: jest.fn(),
     activateNotifications: jest.fn(),
     deactivateNotifications: jest.fn(),
   },
@@ -78,6 +79,7 @@ beforeEach(async () => {
   mockFocusCallbacks.clear();
   await AsyncStorage.clear();
   mockedProfileService.getProfile.mockResolvedValue(baseProfile());
+  mockedProfileService.isUsernameAvailable.mockResolvedValue(true);
   // Por defecto el teléfono ya dio el permiso de notificaciones
   (getNotificationPermission as jest.Mock).mockResolvedValue({ granted: true, canAskAgain: true });
   (ensureNotificationPermission as jest.Mock).mockResolvedValue('granted');
@@ -770,5 +772,129 @@ describe('PerfilScreen - color of the confirm buttons', () => {
     await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
     fireEvent.press(screen.getByText('Cerrar sesión'));
     expect(background()).toBe(Colors.error);
+  });
+});
+
+describe('PerfilScreen - nombre de usuario ya tomado', () => {
+  const { Colors } = require('../src/constants/colors');
+  const TAKEN = 'El nombre de usuario ya ha sido seleccionado';
+
+  const openEditing = async () => {
+    jest.useFakeTimers();
+    render(<PerfilScreen />);
+    await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+    startEditing();
+  };
+  const typeUsername = async (value: string) => {
+    fireEvent.changeText(screen.getByTestId('username-input'), value);
+    await act(async () => { await jest.advanceTimersByTimeAsync(600); });
+  };
+  const save = async () => {
+    await act(async () => { fireEvent.press(screen.getByText('Guardar')); });
+  };
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('shows the red notice under the field when another account already has that username', async () => {
+    mockedProfileService.isUsernameAvailable.mockResolvedValue(false);
+    await openEditing();
+    await typeUsername('anag');
+    expect(mockedProfileService.isUsernameAvailable).toHaveBeenCalledWith('anag');
+    expect(screen.getByText(TAKEN)).toBeTruthy();
+    const style = StyleSheet.flatten(screen.getByTestId('username-taken').props.style);
+    expect(style.color).toBe(Colors.error);
+    expect(StyleSheet.flatten(screen.getByTestId('username-input').props.style).borderColor).toBe(Colors.inputBorderError);
+  });
+
+  it('shows nothing while the username is free', async () => {
+    await openEditing();
+    await typeUsername('libre');
+    expect(mockedProfileService.isUsernameAvailable).toHaveBeenCalledWith('libre');
+    expect(screen.queryByText(TAKEN)).toBeNull();
+  });
+
+  it('waits until the user stops typing before asking', async () => {
+    await openEditing();
+    fireEvent.changeText(screen.getByTestId('username-input'), 'a');
+    fireEvent.changeText(screen.getByTestId('username-input'), 'an');
+    fireEvent.changeText(screen.getByTestId('username-input'), 'ana2');
+    await act(async () => { await jest.advanceTimersByTimeAsync(600); });
+    expect(mockedProfileService.isUsernameAvailable).toHaveBeenCalledTimes(1);
+    expect(mockedProfileService.isUsernameAvailable).toHaveBeenCalledWith('ana2');
+  });
+
+  it('hides the notice as soon as the username is edited', async () => {
+    mockedProfileService.isUsernameAvailable.mockResolvedValue(false);
+    await openEditing();
+    await typeUsername('anag');
+    fireEvent.changeText(screen.getByTestId('username-input'), 'anag2');
+    expect(screen.queryByText(TAKEN)).toBeNull();
+  });
+
+  it('does not ask about the own username, nor about an empty one', async () => {
+    await openEditing();
+    await typeUsername('ANA');
+    await typeUsername('   ');
+    expect(mockedProfileService.isUsernameAvailable).not.toHaveBeenCalled();
+    expect(screen.queryByText(TAKEN)).toBeNull();
+  });
+
+  it('does not save while the username is taken', async () => {
+    mockedProfileService.isUsernameAvailable.mockResolvedValue(false);
+    await openEditing();
+    await typeUsername('anag');
+    await save();
+    expect(mockedProfileService.updateProfile).not.toHaveBeenCalled();
+    expect(screen.getByText(TAKEN)).toBeTruthy();
+    expect(screen.queryByTestId('top-banner')).toBeNull();
+  });
+
+  it('shows the notice, not a generic error, when the server rejects the username on saving', async () => {
+    await openEditing();
+    await typeUsername('anag');
+    mockedProfileService.updateProfile.mockRejectedValue({ response: { status: 409, data: { detail: 'profile.username_taken' } } });
+    await save();
+    expect(screen.getByText(TAKEN)).toBeTruthy();
+    expect(screen.queryByText('No se pudo actualizar el perfil')).toBeNull();
+    expect(screen.queryByTestId('top-banner')).toBeNull();
+  });
+
+  it('keeps showing the generic error for any other failure when saving', async () => {
+    await openEditing();
+    await typeUsername('anag');
+    mockedProfileService.updateProfile.mockRejectedValue({ response: { status: 500 } });
+    await save();
+    expect(screen.getByText('No se pudo actualizar el perfil')).toBeTruthy();
+    expect(screen.queryByText(TAKEN)).toBeNull();
+  });
+
+  it('lets the user save once they pick a free username', async () => {
+    mockedProfileService.isUsernameAvailable.mockResolvedValueOnce(false).mockResolvedValue(true);
+    await openEditing();
+    await typeUsername('anag');
+    expect(screen.getByText(TAKEN)).toBeTruthy();
+    await typeUsername('anag2');
+    mockedProfileService.updateProfile.mockResolvedValue(baseProfile({ username: 'anag2' }));
+    await save();
+    expect(mockedProfileService.updateProfile).toHaveBeenCalled();
+    expect(screen.queryByText(TAKEN)).toBeNull();
+  });
+
+  it('keeps going when the check can not be done (no connection): the server checks again on saving', async () => {
+    mockedProfileService.isUsernameAvailable.mockRejectedValue(new Error('sin red'));
+    await openEditing();
+    await typeUsername('anag');
+    expect(screen.queryByText(TAKEN)).toBeNull();
+  });
+
+  it('forgets the notice when the edition is cancelled', async () => {
+    mockedProfileService.isUsernameAvailable.mockResolvedValue(false);
+    await openEditing();
+    await typeUsername('anag');
+    fireEvent.press(screen.getByText('Cancelar'));
+    startEditing();
+    expect(screen.queryByText(TAKEN)).toBeNull();
   });
 });

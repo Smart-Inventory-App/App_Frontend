@@ -109,3 +109,16 @@ describe('profileService.deactivateNotifications', () => {
     await expect(profileService.deactivateNotifications()).rejects.toThrow('Failed to deactivate notifications');
   });
 });
+
+describe('profileService.isUsernameAvailable', () => {
+  it('asks the server if the username is free', async () => {
+    mockedApi.get.mockResolvedValue({ data: { available: false } });
+    await expect(profileService.isUsernameAvailable('anag')).resolves.toBe(false);
+    expect(mockedApi.get).toHaveBeenCalledWith('/profile/username-available', { params: { username: 'anag' } });
+  });
+
+  it('returns true when it is free', async () => {
+    mockedApi.get.mockResolvedValue({ data: { available: true } });
+    await expect(profileService.isUsernameAvailable('libre')).resolves.toBe(true);
+  });
+});

@@ -99,6 +99,7 @@ export default {
     saving: 'Guardando...',
     cancel: 'Cancelar',
     saveSuccess: 'Tu perfil se ha actualizado correctamente',
+    usernameTaken: 'El nombre de usuario ya ha sido seleccionado',
     saveError: 'No se pudo actualizar el perfil',
     argentinaTime: 'Hora de Argentina (UTC-3)',
     languageConfirm: 'Se va a cambiar el idioma a {{language}}.',
