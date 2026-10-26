@@ -673,6 +673,32 @@ describe('ProductFormFields - character limits and counters', () => {
   });
 });
 
+describe('ProductFormFields - alert rule limits', () => {
+  it('does not accept a stock mínimo of more than seven digits (9999999 at most)', () => {
+    render(<Wrapper />);
+    expect(screen.getByTestId('input-stock-minimo').props.maxLength).toBe(7);
+    fireEvent.changeText(screen.getByTestId('input-stock-minimo'), '9999999');
+    expect(screen.getByDisplayValue('9999999')).toBeTruthy();
+  });
+
+  it('does not accept días de anticipación of more than three digits (999 at most)', () => {
+    render(<Wrapper />);
+    expect(screen.getByTestId('input-dias-alerta').props.maxLength).toBe(3);
+    fireEvent.changeText(screen.getByTestId('input-dias-alerta'), '999');
+    expect(screen.getByDisplayValue('999')).toBeTruthy();
+  });
+
+  it('keeps working with the values below the limit and with the field empty', () => {
+    render(<Wrapper />);
+    fireEvent.changeText(screen.getByTestId('input-stock-minimo'), '25');
+    fireEvent.changeText(screen.getByTestId('input-dias-alerta'), '7');
+    expect(screen.getByDisplayValue('25')).toBeTruthy();
+    expect(screen.getByDisplayValue('7')).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId('input-stock-minimo'), '');
+    expect(screen.getByTestId('input-stock-minimo').props.value).toBe('');
+  });
+});
+
 describe('ProductFormFields - stock limit', () => {
   it('does not accept more than six digits (999999 at most)', () => {
     render(<Wrapper />);

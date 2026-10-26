@@ -25,6 +25,9 @@ const NOMBRE_MAX = 20;
 const OPTION_MAX = 20;
 const DESCRIPCION_MAX = 400;
 const STOCK_MAX_DIGITS = 6;
+// Reglas de alerta propias del producto: hasta 9999999 de stock mínimo y hasta 999 días de anticipación
+const STOCK_MINIMO_MAX_DIGITS = 7;
+const DIAS_ALERTA_MAX_DIGITS = 3;
 
 interface Props {
   form: Partial<ProductCreate>;
@@ -414,10 +417,12 @@ export default function ProductFormFields({
             <Text style={[styles.label, styles.alertLabel]}>{t('product.stockMinimo')}</Text>
           </View>
           <TextInput
+            testID="input-stock-minimo"
             style={styles.input}
             placeholder={t('product.defaultPlaceholder')}
             placeholderTextColor={Colors.placeholder}
             keyboardType="numeric"
+            maxLength={STOCK_MINIMO_MAX_DIGITS}
             onFocus={onFieldFocus}
             value={form.stock_minimo != null ? String(form.stock_minimo) : ''}
             onChangeText={(v) => {
@@ -434,10 +439,12 @@ export default function ProductFormFields({
             <Text style={[styles.label, styles.alertLabel]}>{t('product.diasAlertaVencimiento')}</Text>
           </View>
           <TextInput
+            testID="input-dias-alerta"
             style={styles.input}
             placeholder={t('product.defaultPlaceholder')}
             placeholderTextColor={Colors.placeholder}
             keyboardType="numeric"
+            maxLength={DIAS_ALERTA_MAX_DIGITS}
             onFocus={onFieldFocus}
             value={form.dias_alerta_vencimiento != null ? String(form.dias_alerta_vencimiento) : ''}
             onChangeText={(v) => {
