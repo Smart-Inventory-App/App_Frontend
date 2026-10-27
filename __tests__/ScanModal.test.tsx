@@ -11,6 +11,7 @@ jest.mock('@/services/productService', () => ({
     createProduct: jest.fn(),
     updateProduct: jest.fn(),
     suggestProducts: jest.fn(),
+    matchProducts: jest.fn(),
     getProductsByBarcode: jest.fn(),
   },
 }));
@@ -439,213 +440,507 @@ describe('ScanModal - label review (the fields that will fill the form)', () => 
   });
 });
 
-describe('ScanModal - receipt review flow', () => {
-  const receiptResult = () => baseResult({
-    doc_type: 'receipt',
-    draft: null,
-    comprobante: { comercio: 'Kiosco Don Juan', fecha_compra: '2026-01-01', total: 100 },
-    items: [
-      baseDraft({
-        nombre: 'Yogur',
-        stock: 2,
-        coincidencia_id: 5,
-        coincidencias: [{ id: 5, nombre: 'Yogur Ser', score: 0.9, por_codigo: false, stock: 1 }],
-      }),
-      baseDraft({ nombre: 'Fideos', stock: 1, coincidencias: [] }),
-    ],
+const receiptFor = (items: ProductDraft[], comprobante: ScanResult['comprobante'] = { comercio: 'Kiosco Don Juan', fecha_compra: '2026-01-01', total: 100 }) =>
+  baseResult({ doc_type: 'receipt', draft: null, comprobante, items });
+
+const YOGUR_MATCH = { id: 5, nombre: 'Yogur Ser', marca: 'Ser', categoria: 'Lacteos', score: 0.9, por_codigo: false, stock: 10, vencimiento: '2027-03-01' };
+const YOGUR_LIGHT = { id: 6, nombre: 'Yogur Descremado', categoria: 'Lacteos', score: 0.6, por_codigo: false, stock: 4 };
+
+const receiptItems = () => [
+  baseDraft({ nombre: 'Yogur', texto_leido: 'YOGUR SER X2', stock: 2, coincidencia_id: 5, coincidencias: [YOGUR_MATCH] }),
+  baseDraft({ nombre: 'Fideos', texto_leido: 'FIDEOS 500G', stock: 1, coincidencias: [] }),
+];
+
+const openReceipt = async (items: ProductDraft[] = receiptItems(), props: Partial<React.ComponentProps<typeof ScanModal>> = {}) => {
+  mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
+  mockedOcr.scan.mockResolvedValue({ status: 'done', doc_type: 'receipt', result: receiptFor(items) } as ScanState);
+  const handlers = setup(props);
+  if (!props.fixedDocType) fireEvent.press(screen.getByTestId('doc-type-receipt'));
+  await act(async () => {
+    fireEvent.press(screen.getByTestId('scan-source-camera'));
+  });
+  return handlers;
+};
+
+const confirmReceipt = async () => {
+  await act(async () => {
+    fireEvent.press(screen.getByTestId('confirm-receipt'));
+  });
+};
+
+const treeIndex = (id: string) => JSON.stringify(screen.toJSON()).indexOf(`"testID":"${id}"`);
+
+describe('ScanModal - receipt review flow (products read, entry)', () => {
+  const entry = { receiptDirection: 'entrada' } as const;
+
+  beforeEach(() => {
+    mockedProducts.matchProducts.mockResolvedValue([]);
+    mockedProducts.suggestProducts.mockResolvedValue([]);
   });
 
-  it('renders the receipt header and preselects the confident match', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    mockedOcr.scan.mockResolvedValue({ status: 'done', doc_type: 'receipt', result: receiptResult() } as ScanState);
-
-    setup();
-    fireEvent.press(screen.getByTestId('doc-type-receipt'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
-
+  it('is titled "Productos a ingresar" and shows every product read, with the receipt data', async () => {
+    await openReceipt(receiptItems(), entry);
+    expect(screen.getByTestId('receipt-items-title').props.children).toBe('Productos a ingresar');
+    expect(screen.queryByText('Productos leídos')).toBeNull();
     expect(screen.getByText('Comercio: Kiosco Don Juan')).toBeTruthy();
+    expect(screen.getByTestId('receipt-line-0')).toBeTruthy();
+    expect(screen.getByTestId('receipt-line-1')).toBeTruthy();
+  });
+
+  it('does not offer to include or exclude a product: all of them are loaded', async () => {
+    await openReceipt(receiptItems(), entry);
+    expect(screen.queryByText('No ingresar este renglón')).toBeNull();
+    expect(screen.queryByTestId('receipt-toggle-0')).toBeNull();
+  });
+
+  it('shows in each product, in this order: the text read, the name input and the stock input', async () => {
+    await openReceipt(receiptItems(), entry);
+    expect(screen.getByTestId('receipt-read-0').props.children).toBe('YOGUR SER X2');
+    expect(treeIndex('receipt-read-0')).toBeLessThan(treeIndex('receipt-name-0'));
+    expect(treeIndex('receipt-name-0')).toBeLessThan(treeIndex('receipt-quantity-0'));
+    expect(treeIndex('receipt-quantity-0')).toBeLessThan(treeIndex('receipt-read-1'));
+    expect(screen.getByTestId('receipt-name-1').props.value).toBe('Fideos');
     expect(screen.getByTestId('receipt-quantity-0').props.value).toBe('2');
-    expect(screen.getByText('Sin coincidencia en tu inventario')).toBeTruthy();
   });
 
-  it('requires at least one included line before submitting', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    const result = receiptResult();
-    result.items[0].coincidencia_id = undefined;
-    mockedOcr.scan.mockResolvedValue({ status: 'done', doc_type: 'receipt', result } as ScanState);
+  it('puts the "Texto leído" label above what was read, smaller than it', async () => {
+    const { StyleSheet } = require('react-native');
+    await openReceipt(receiptItems(), entry);
+    expect(screen.getByTestId('receipt-read-label-0').props.children).toBe('Texto leído');
+    expect(treeIndex('receipt-read-label-0')).toBeLessThan(treeIndex('receipt-read-0'));
+    const label = StyleSheet.flatten(screen.getByTestId('receipt-read-label-0').props.style);
+    const read = StyleSheet.flatten(screen.getByTestId('receipt-read-0').props.style);
+    expect(label.fontSize).toBeLessThan(read.fontSize);
+  });
 
-    setup();
-    fireEvent.press(screen.getByTestId('doc-type-receipt'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
+  it('centers the discard button with the text read and its label, or with the manual description', async () => {
+    const { StyleSheet } = require('react-native');
+    await openReceipt(receiptItems(), entry);
+    fireEvent.press(screen.getByTestId('receipt-add'));
+    const align = (id: number) => StyleSheet.flatten(screen.getByTestId(`receipt-header-${id}`).props.style).alignItems;
+    expect(align(0)).toBe('center');
+    expect(align(2)).toBe('center');
+    // el rótulo, lo leído y el botón están en esa misma fila
+    expect(treeIndex('receipt-header-0')).toBeLessThan(treeIndex('receipt-read-label-0'));
+    expect(treeIndex('receipt-read-0')).toBeLessThan(treeIndex('receipt-remove-0'));
+  });
 
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('confirm-receipt'));
-    });
-    expect(screen.getByText('Elegí al menos un renglón para descontar')).toBeTruthy();
+  it('has less space above "Comprobante" than the other section titles', async () => {
+    const { StyleSheet } = require('react-native');
+    await openReceipt(receiptItems(), entry);
+    expect(StyleSheet.flatten(screen.getByText('Comprobante').props.style).marginTop).toBeLessThan(12);
+  });
+
+  it('recommends, under the name, the most similar products with their info and percentage', async () => {
+    const items = [baseDraft({ nombre: 'Yogur', texto_leido: 'YOGUR', coincidencias: [YOGUR_LIGHT, YOGUR_MATCH] })];
+    await openReceipt(items, entry);
+    expect(treeIndex('receipt-option-0-5')).toBeLessThan(treeIndex('receipt-option-0-6'));
+    expect(treeIndex('receipt-name-0')).toBeLessThan(treeIndex('receipt-option-0-5'));
+    expect(treeIndex('receipt-option-0-6')).toBeLessThan(treeIndex('receipt-quantity-0'));
+    expect(screen.getByTestId('receipt-similarity-0-5').props.children).toBe('90% de similitud');
+    expect(screen.getByTestId('receipt-similarity-0-6').props.children).toBe('60% de similitud');
+    expect(within(screen.getByTestId('receipt-option-0-5')).getByText('Vence 01/03/2027 · Stock: 10')).toBeTruthy();
+    expect(screen.getByTestId('receipt-name-0').props.value).toBe('Yogur');
+  });
+
+  it('shows the info of the product under the name once it is chosen, and sends it', async () => {
+    mockedOcr.submitEntrada.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
+    const items = [baseDraft({ nombre: 'Yogur', texto_leido: 'YOGUR', stock: 3, coincidencias: [YOGUR_LIGHT, YOGUR_MATCH] })];
+    await openReceipt(items, entry);
+    expect(screen.queryByTestId('receipt-selected-0-info')).toBeNull();
+    fireEvent.press(screen.getByTestId('receipt-option-0-5'));
+    expect(screen.getByTestId('receipt-selected-0-info')).toBeTruthy();
+    expect(treeIndex('receipt-name-0')).toBeLessThan(treeIndex('receipt-selected-0-info'));
+    expect(screen.getByTestId('receipt-selected-0-stock').props.children).toBe('10');
+    expect(screen.getByTestId('receipt-name-0').props.value).toBe('Yogur Ser');
+    expect(screen.queryByTestId('receipt-options-0')).toBeNull();
+    await confirmReceipt();
+    expect(mockedOcr.submitEntrada).toHaveBeenCalledWith([{ product_id: 5, quantity: 3 }], 'Kiosco Don Juan');
+  });
+
+  it('preselects the product the scan is sure about, showing its info', async () => {
+    await openReceipt(receiptItems(), entry);
+    expect(screen.getByTestId('receipt-selected-0-info')).toBeTruthy();
+    expect(screen.getByTestId('receipt-name-0').props.value).toBe('Yogur Ser');
+  });
+
+  it('says so under the input when no product of the inventory matches', async () => {
+    await openReceipt(receiptItems(), entry);
+    expect(screen.getByTestId('receipt-no-match-1').props.children).toBe('No hay productos en tu inventario que coincidan con este nombre');
+    expect(screen.queryByTestId('receipt-no-match-0')).toBeNull();
+  });
+
+  it('when the name changes, recommends the existing products with a similar name, without repeating any', async () => {
+    mockedProducts.matchProducts.mockResolvedValue([{ id: 8, nombre: 'Fideos Secos', categoria: 'Almacen', stock: 3 } as any]);
+    mockedProducts.suggestProducts.mockResolvedValue([
+      { id: 8, nombre: 'Fideos Secos', categoria: 'Almacen', stock: 3 } as any,
+      { id: 9, nombre: 'Fideos Largos', categoria: 'Almacen', stock: 1 } as any,
+    ]);
+    await openReceipt(receiptItems(), entry);
+    fireEvent.changeText(screen.getByTestId('receipt-name-1'), 'Fideos');
+    expect(screen.queryByTestId('receipt-no-match-1')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('receipt-option-1-8')).toBeTruthy());
+    expect(mockedProducts.matchProducts).toHaveBeenCalledWith('Fideos');
+    expect(mockedProducts.suggestProducts).toHaveBeenCalledWith('Fideos');
+    expect(screen.getByTestId('receipt-option-1-9')).toBeTruthy();
+    expect(screen.getAllByTestId('receipt-option-1-8')).toHaveLength(1);
+  });
+
+  it('editing the name of a chosen product drops the choice and searches again; with nothing similar it says so', async () => {
+    await openReceipt(receiptItems(), entry);
+    fireEvent.changeText(screen.getByTestId('receipt-name-0'), 'Zzz raro');
+    expect(screen.queryByTestId('receipt-selected-0-info')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('receipt-no-match-0')).toBeTruthy());
+  });
+
+  it('does not search for less than two letters', async () => {
+    await openReceipt(receiptItems(), entry);
+    mockedProducts.matchProducts.mockClear();
+    fireEvent.changeText(screen.getByTestId('receipt-name-1'), 'F');
+    await act(async () => { await new Promise(r => setTimeout(r, 400)); });
+    expect(mockedProducts.matchProducts).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('receipt-no-match-1')).toBeNull();
+  });
+
+  it('keeps what one search found when the other fails, and shows nothing new when both fail', async () => {
+    mockedProducts.matchProducts.mockRejectedValue(new Error('boom'));
+    mockedProducts.suggestProducts.mockResolvedValue([{ id: 8, nombre: 'Fideos Secos', categoria: 'Almacen', stock: 3 } as any]);
+    await openReceipt(receiptItems(), entry);
+    fireEvent.changeText(screen.getByTestId('receipt-name-1'), 'Fideos');
+    await waitFor(() => expect(screen.getByTestId('receipt-option-1-8')).toBeTruthy());
+    mockedProducts.suggestProducts.mockRejectedValue(new Error('boom'));
+    fireEvent.changeText(screen.getByTestId('receipt-name-1'), 'Fideos Nuevos');
+    await act(async () => { await new Promise(r => setTimeout(r, 400)); });
+    expect(screen.queryByTestId('receipt-no-match-1')).toBeNull();
+  });
+
+  it('asks for confirmation before discarding a product, and keeps it if the user says no', async () => {
+    await openReceipt(receiptItems(), entry);
+    fireEvent.press(screen.getByTestId('receipt-remove-1'));
+    expect(screen.getByText('¿Seguro que querés descartar este producto?')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('confirm-cancel'));
+    expect(screen.getByTestId('receipt-line-1')).toBeTruthy();
+    expect(screen.queryByText('¿Seguro que querés descartar este producto?')).toBeNull();
+  });
+
+  it('discards the product when confirmed', async () => {
+    await openReceipt(receiptItems(), entry);
+    fireEvent.press(screen.getByTestId('receipt-remove-1'));
+    fireEvent.press(screen.getByTestId('confirm-accept'));
+    expect(screen.queryByTestId('receipt-line-1')).toBeNull();
+    expect(screen.getByTestId('receipt-line-0')).toBeTruthy();
+  });
+
+  it('with no products, says so and does not let the user register', async () => {
+    await openReceipt([], entry);
+    expect(screen.getByTestId('receipt-empty').props.children).toBe(
+      'No se han detectado productos. Ingresa uno manualmente o escanea otra imágen.',
+    );
+    const { StyleSheet } = require('react-native');
+    expect(StyleSheet.flatten(screen.getByTestId('receipt-empty').props.style).textAlign).toBe('center');
+    expect(screen.getByTestId('confirm-receipt').props.accessibilityState).toMatchObject({ disabled: true });
+    await confirmReceipt();
+    expect(mockedOcr.submitEntrada).not.toHaveBeenCalled();
+  });
+
+  it('shows that message again after discarding every product', async () => {
+    await openReceipt([receiptItems()[1]], entry);
+    fireEvent.press(screen.getByTestId('receipt-remove-0'));
+    fireEvent.press(screen.getByTestId('confirm-accept'));
+    expect(screen.getByTestId('receipt-empty')).toBeTruthy();
+  });
+
+  it('adds a product with the name and stock blank and no text read, to the right of the title', async () => {
+    await openReceipt([], entry);
+    expect(treeIndex('receipt-add')).toBeGreaterThan(JSON.stringify(screen.toJSON()).indexOf('Productos a ingresar'));
+    fireEvent.press(screen.getByTestId('receipt-add'));
+    expect(screen.queryByTestId('receipt-empty')).toBeNull();
+    expect(screen.getByTestId('receipt-name-0').props.value).toBe('');
+    expect(screen.getByTestId('receipt-quantity-0').props.value).toBe('');
+    expect(screen.queryByTestId('receipt-read-0')).toBeNull();
+    fireEvent.press(screen.getByTestId('receipt-add'));
+    expect(screen.getByTestId('receipt-line-1')).toBeTruthy();
+  });
+
+  it('puts the new product at the start of the list, titled "Entrada manual" in place of the text read', async () => {
+    await openReceipt(receiptItems(), entry);
+    fireEvent.press(screen.getByTestId('receipt-add'));
+    expect(treeIndex('receipt-line-2')).toBeLessThan(treeIndex('receipt-line-0'));
+    expect(screen.getByTestId('receipt-manual-2').props.children).toBe('Entrada manual');
+    expect(screen.queryByTestId('receipt-read-label-2')).toBeNull();
+    fireEvent.press(screen.getByTestId('receipt-add'));
+    expect(treeIndex('receipt-line-3')).toBeLessThan(treeIndex('receipt-line-2'));
+    expect(screen.queryByTestId('receipt-manual-0')).toBeNull();
+  });
+
+  it('draws the add and discard buttons with only the outline and the symbol in color, on a white background', async () => {
+    const { StyleSheet } = require('react-native');
+    await openReceipt(receiptItems(), entry);
+    const add = StyleSheet.flatten(screen.getByTestId('receipt-add').props.style);
+    const remove = StyleSheet.flatten(screen.getByTestId('receipt-remove-0').props.style);
+    expect(add).toMatchObject({ backgroundColor: '#fff', borderColor: '#2CC4B4' });
+    expect(remove).toMatchObject({ backgroundColor: '#fff', borderColor: '#FF3B30' });
+    expect(add.borderWidth).toBeGreaterThan(0);
+    expect(remove.borderWidth).toBeGreaterThan(0);
+  });
+
+  it('lets the user complete a product added by hand and register it', async () => {
+    mockedProducts.suggestProducts.mockResolvedValue([{ id: 8, nombre: 'Fideos Secos', categoria: 'Almacen', stock: 3 } as any]);
+    mockedOcr.submitEntrada.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
+    await openReceipt([], entry);
+    fireEvent.press(screen.getByTestId('receipt-add'));
+    fireEvent.changeText(screen.getByTestId('receipt-name-0'), 'Fide');
+    await waitFor(() => expect(screen.getByTestId('receipt-option-0-8')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('receipt-option-0-8'));
+    fireEvent.changeText(screen.getByTestId('receipt-quantity-0'), '6');
+    await confirmReceipt();
+    expect(mockedOcr.submitEntrada).toHaveBeenCalledWith([{ product_id: 8, quantity: 6 }], 'Kiosco Don Juan');
+  });
+
+  it('says what is missing under each input when registering a product without a name, a product or a stock', async () => {
+    await openReceipt([], entry);
+    fireEvent.press(screen.getByTestId('receipt-add'));
+    fireEvent.press(screen.getByTestId('receipt-add'));
+    fireEvent.changeText(screen.getByTestId('receipt-name-1'), 'Algo sin producto');
+    await confirmReceipt();
+    expect(screen.getByTestId('receipt-name-error-0').props.children).toBe('Escribí el nombre del producto');
+    expect(screen.getByTestId('receipt-name-error-1').props.children).toBe('Elegí un producto de tu inventario');
+    expect(screen.getByTestId('receipt-quantity-error-0').props.children).toBe('El stock debe ser mayor a 0');
+    expect(mockedOcr.submitEntrada).not.toHaveBeenCalled();
+  });
+
+  it('does not turn a blank stock into 0: it warns under the input as soon as it is left blank', async () => {
+    await openReceipt(receiptItems(), entry);
+    expect(screen.queryByTestId('receipt-quantity-error-0')).toBeNull();
+    fireEvent.changeText(screen.getByTestId('receipt-quantity-0'), '');
+    expect(screen.getByTestId('receipt-quantity-0').props.value).toBe('');
+    expect(screen.getByTestId('receipt-quantity-error-0').props.children).toBe('El stock debe ser mayor a 0');
+    fireEvent.changeText(screen.getByTestId('receipt-quantity-0'), '0');
+    expect(screen.getByTestId('receipt-quantity-error-0')).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId('receipt-quantity-0'), '4');
+    expect(screen.queryByTestId('receipt-quantity-error-0')).toBeNull();
+    fireEvent.changeText(screen.getByTestId('receipt-quantity-0'), 'a3b');
+    expect(screen.getByTestId('receipt-quantity-0').props.value).toBe('3');
+  });
+
+  it('registers all the products with their stock on an entry, and says how many were added', async () => {
+    mockedOcr.submitEntrada.mockResolvedValue({ procesados: 2, fallidos: 0, errores: [] });
+    mockedProducts.suggestProducts.mockResolvedValue([{ id: 8, nombre: 'Fideos Secos', categoria: 'Almacen', stock: 3 } as any]);
+    const { onSuccess, onClose } = await openReceipt(receiptItems(), entry);
+    fireEvent.changeText(screen.getByTestId('receipt-name-1'), 'Fideos');
+    await waitFor(() => expect(screen.getByTestId('receipt-option-1-8')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('receipt-option-1-8'));
+    fireEvent.changeText(screen.getByTestId('receipt-quantity-0'), '7');
+    await confirmReceipt();
+    expect(mockedOcr.submitEntrada).toHaveBeenCalledWith([{ product_id: 5, quantity: 7 }, { product_id: 8, quantity: 1 }], 'Kiosco Don Juan');
     expect(mockedOcr.submitSalida).not.toHaveBeenCalled();
-  });
-
-  it('lets the user exclude/include a line and change its quantity', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    mockedOcr.scan.mockResolvedValue({ status: 'done', doc_type: 'receipt', result: receiptResult() } as ScanState);
-    mockedOcr.submitSalida.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
-
-    setup();
-    fireEvent.press(screen.getByTestId('doc-type-receipt'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
-
-    fireEvent.press(screen.getByTestId('receipt-toggle-0'));
-    fireEvent.press(screen.getByTestId('receipt-toggle-0'));
-    fireEvent.changeText(screen.getByTestId('receipt-quantity-0'), '3');
-
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('confirm-receipt'));
-    });
-
-    expect(mockedOcr.submitSalida).toHaveBeenCalledWith([{ product_id: 5, quantity: 3 }], 'Kiosco Don Juan', 'consumed');
-  });
-
-  it('shows the chosen match first and sends it back to its place when the line is excluded', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    const result = receiptResult();
-    result.items[0].coincidencias.push({ id: 6, nombre: 'Yogur Descremado', score: 0.6, por_codigo: false, stock: 4 });
-    mockedOcr.scan.mockResolvedValue({ status: 'done', doc_type: 'receipt', result } as ScanState);
-
-    setup();
-    fireEvent.press(screen.getByTestId('doc-type-receipt'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
-
-    const firstIs = (a: string, b: string) => {
-      const tree = JSON.stringify(screen.toJSON());
-      return tree.indexOf(a) < tree.indexOf(b);
-    };
-    expect(firstIs('Yogur Ser', 'Yogur Descremado')).toBe(true);
-    fireEvent.press(screen.getByText('Yogur Descremado (60%)'));
-    expect(firstIs('Yogur Descremado', 'Yogur Ser')).toBe(true);
-    fireEvent.press(screen.getByTestId('receipt-toggle-0'));
-    expect(firstIs('Yogur Ser', 'Yogur Descremado')).toBe(true);
-  });
-
-  it('selects a match chip for a line with several candidates', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    const result = receiptResult();
-    result.items[0].coincidencias.push({ id: 6, nombre: 'Yogur Descremado', score: 0.6, por_codigo: false, stock: 4 });
-    mockedOcr.scan.mockResolvedValue({ status: 'done', doc_type: 'receipt', result } as ScanState);
-    mockedOcr.submitSalida.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
-
-    setup();
-    fireEvent.press(screen.getByTestId('doc-type-receipt'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
-
-    fireEvent.press(screen.getByText('Yogur Descremado (60%)'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('confirm-receipt'));
-    });
-
-    expect(mockedOcr.submitSalida).toHaveBeenCalledWith(
-      expect.arrayContaining([{ product_id: 6, quantity: 2 }]),
-      'Kiosco Don Juan',
-      'consumed',
-    );
-  });
-
-  it('lets the user search for a product on a line without a match', async () => {
-    jest.useFakeTimers();
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    mockedOcr.scan.mockResolvedValue({ status: 'done', doc_type: 'receipt', result: receiptResult() } as ScanState);
-    mockedProducts.suggestProducts.mockResolvedValue([{ id: 8, nombre: 'Fideos Secos', categoria: 'Almacen', stock: 1 } as any]);
-    mockedOcr.submitSalida.mockResolvedValue({ procesados: 2, fallidos: 0, errores: [] });
-
-    setup();
-    fireEvent.press(screen.getByTestId('doc-type-receipt'));
-    await act(async () => {
-      jest.useRealTimers();
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
-    jest.useFakeTimers();
-
-    fireEvent.press(screen.getByTestId('receipt-search-open-1'));
-    fireEvent.changeText(screen.getByTestId('receipt-search-input-1'), 'fide');
-    await act(async () => {
-      await jest.advanceTimersByTimeAsync(300);
-    });
-    jest.useRealTimers();
-
-    await waitFor(() => expect(screen.getByText('Fideos Secos')).toBeTruthy());
-    fireEvent.press(screen.getByText('Fideos Secos'));
-
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('confirm-receipt'));
-    });
-
-    expect(mockedOcr.submitSalida).toHaveBeenCalledWith(
-      expect.arrayContaining([{ product_id: 8, quantity: 1 }]),
-      'Kiosco Don Juan',
-      'consumed',
-    );
-  });
-
-  it('shows the result summary and closes when done is pressed', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    mockedOcr.scan.mockResolvedValue({ status: 'done', doc_type: 'receipt', result: receiptResult() } as ScanState);
-    mockedOcr.submitSalida.mockResolvedValue({ procesados: 1, fallidos: 1, errores: ['Producto #9: no encontrado'] });
-
-    const { onSuccess, onClose } = setup();
-    fireEvent.press(screen.getByTestId('doc-type-receipt'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('confirm-receipt'));
-    });
-
-    expect(screen.getByText('1 renglones procesados, 1 con error')).toBeTruthy();
-    expect(screen.getByText('Producto #9: no encontrado')).toBeTruthy();
-
+    expect(screen.getByText('Entrada registrada')).toBeTruthy();
+    expect(screen.getByTestId('receipt-result-summary').props.children).toBe('Se han ingresado 2 productos escaneados exitosamente');
+    const { StyleSheet } = require('react-native');
+    expect(StyleSheet.flatten(screen.getByTestId('receipt-result-summary').props.style).textAlign).toBe('center');
     fireEvent.press(screen.getByTestId('receipt-result-done'));
-    expect(onSuccess).toHaveBeenCalledWith('salida');
+    expect(onSuccess).toHaveBeenCalledWith('restocked');
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('shows a confirm error when submitSalida fails', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    mockedOcr.scan.mockResolvedValue({ status: 'done', doc_type: 'receipt', result: receiptResult() } as ScanState);
-    mockedOcr.submitSalida.mockRejectedValue({ response: { data: { detail: 'error de red' } } });
-
-    setup();
-    fireEvent.press(screen.getByTestId('doc-type-receipt'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('confirm-receipt'));
-    });
-
-    expect(screen.getByText('error de red')).toBeTruthy();
+  it('shows the registered result in a new window, without the scan title or the close button', async () => {
+    const { Modal } = require('react-native');
+    mockedOcr.submitEntrada.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
+    const { onClose, onSuccess } = await openReceipt([receiptItems()[0]], entry);
+    expect(within(screen.getByTestId('scan-sheet')).getByText('Ticket, remito o factura')).toBeTruthy();
+    expect(within(screen.getByTestId('scan-sheet')).getByTestId('scan-modal-close')).toBeTruthy();
+    await confirmReceipt();
+    const modals = screen.UNSAFE_getAllByType(Modal);
+    expect(modals[1].props.visible).toBe(false);
+    expect(modals[2].props.visible).toBe(true);
+    const result = within(screen.getByTestId('scan-result-sheet'));
+    expect(result.getByText('Entrada registrada')).toBeTruthy();
+    expect(result.queryByText('Ticket, remito o factura')).toBeNull();
+    expect(result.queryByTestId('scan-modal-close')).toBeNull();
+    // tocar afuera no la cierra; sí el botón atrás del sistema
+    fireEvent.press(screen.getByTestId('scan-result-overlay'));
+    expect(onClose).not.toHaveBeenCalled();
+    act(() => { modals[2].props.onRequestClose(); });
+    expect(onSuccess).toHaveBeenCalledWith('restocked');
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('renders a placeholder when a line has neither a name nor read text', async () => {
+  it('keeps the result in its window while it fades out after pressing "Listo"', async () => {
+    const { Modal } = require('react-native');
+    mockedOcr.submitEntrada.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
+    await openReceipt([receiptItems()[0]], entry);
+    await confirmReceipt();
+    fireEvent.press(screen.getByTestId('receipt-result-done'));
+    const ids = (node: any, found: string[] = []): string[] => {
+      if (!node || typeof node !== 'object') return found;
+      if (Array.isArray(node)) { node.forEach(n => ids(n, found)); return found; }
+      if (node.props?.testID) found.push(node.props.testID);
+      ids(node.props?.children, found);
+      return found;
+    };
+    const inResult = ids(screen.UNSAFE_getAllByType(Modal)[2].props.children);
+    expect(inResult).toContain('receipt-result-done');
+    expect(inResult).not.toContain('doc-type-product_label');
+  });
+
+  it('uses the singular when only one product was added', async () => {
+    mockedOcr.submitEntrada.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
+    await openReceipt([receiptItems()[0]], entry);
+    await confirmReceipt();
+    expect(screen.getByTestId('receipt-result-summary').props.children).toBe('Se ha ingresado 1 producto escaneado exitosamente');
+  });
+
+  it('also lists the failures of the registration', async () => {
+    mockedOcr.submitEntrada.mockResolvedValue({ procesados: 1, fallidos: 1, errores: ['Producto #9: no encontrado'] });
+    await openReceipt([receiptItems()[0]], entry);
+    await confirmReceipt();
+    expect(screen.getByText('1 con error')).toBeTruthy();
+    expect(screen.getByText('Producto #9: no encontrado')).toBeTruthy();
+  });
+
+  it('shows the error when registering fails', async () => {
+    mockedOcr.submitEntrada.mockRejectedValue({ response: { data: { detail: 'error de red' } } });
+    await openReceipt([receiptItems()[0]], entry);
+    await confirmReceipt();
+    expect(screen.getByText('error de red')).toBeTruthy();
+    expect(screen.getByTestId('confirm-receipt')).toBeTruthy();
+  });
+
+  it('leaves room below the "Leyendo la imagen..." text', async () => {
+    const { StyleSheet } = require('react-native');
+    let resolveScan: (value: ScanState) => void = () => {};
     mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    const result = baseResult({ doc_type: 'receipt', items: [] });
-    mockedOcr.scan.mockResolvedValue({ status: 'done', doc_type: 'receipt', result } as ScanState);
-
-    setup();
+    mockedOcr.scan.mockReturnValue(new Promise<ScanState>(resolve => { resolveScan = resolve; }));
+    setup({ receiptDirection: 'entrada' });
     fireEvent.press(screen.getByTestId('doc-type-receipt'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
+    await act(async () => { fireEvent.press(screen.getByTestId('scan-source-camera')); });
+    expect(StyleSheet.flatten(screen.getByText('Leyendo la imagen...').props.style).marginBottom).toBeGreaterThanOrEqual(16);
+    await act(async () => { resolveScan({ status: 'done', doc_type: 'receipt', result: receiptFor([]) } as ScanState); });
+  });
 
-    expect(screen.getByText('No se pudo leer ningún renglón de esta foto')).toBeTruthy();
+  it('offers to scan another image, going back to the start', async () => {
+    await openReceipt(receiptItems(), entry);
+    expect(screen.getByText('Escanear otra imagen')).toBeTruthy();
+    expect(screen.queryByText('Escanear otra')).toBeNull();
+    fireEvent.press(screen.getByTestId('receipt-scan-another'));
+    expect(screen.queryByTestId('receipt-line-0')).toBeNull();
+  });
+
+  it('keeps the confirm button in the color of the app on an entry', async () => {
+    await openReceipt(receiptItems(), entry);
+    const { StyleSheet } = require('react-native');
+    expect(StyleSheet.flatten(screen.getByTestId('confirm-receipt').props.style).backgroundColor).toBe('#2CC4B4');
+  });
+});
+
+describe('ScanModal - receipt review flow (products read, exit)', () => {
+  const exit = { fixedDocType: 'receipt', receiptDirection: 'salida' } as const;
+
+  beforeEach(() => {
+    mockedProducts.matchProducts.mockResolvedValue([]);
+    mockedProducts.suggestProducts.mockResolvedValue([]);
+  });
+
+  it('offers the reasons above the products, side by side in a horizontal scroll, starting with "Consumido"', async () => {
+    await openReceipt(receiptItems(), exit);
+    expect(screen.getByText('Motivo')).toBeTruthy();
+    ['consumed', 'expired', 'sold', 'rented'].forEach(r => expect(screen.getByTestId(`receipt-motivo-${r}`)).toBeTruthy());
+    expect(screen.getByTestId('receipt-motivos').props.horizontal).toBe(true);
+    expect(treeIndex('receipt-motivos')).toBeLessThan(JSON.stringify(screen.toJSON()).indexOf('Productos a salir'));
+    expect(screen.getByTestId('receipt-items-title').props.children).toBe('Productos a salir');
+    expect(treeIndex('receipt-motivo-consumed')).toBeLessThan(treeIndex('receipt-motivo-expired'));
+  });
+
+  it('moves the chosen reason to the start of the list, and puts it back in its place when it is deselected', async () => {
+    const order = () => ['consumed', 'expired', 'sold', 'rented'].sort((a, b) => treeIndex(`receipt-motivo-${a}`) - treeIndex(`receipt-motivo-${b}`));
+    await openReceipt(receiptItems(), exit);
+    expect(order()).toEqual(['consumed', 'sold', 'expired', 'rented']);
+    fireEvent.press(screen.getByTestId('receipt-motivo-expired'));
+    expect(order()).toEqual(['expired', 'sold', 'consumed', 'rented']);
+    fireEvent.press(screen.getByTestId('receipt-motivo-rented'));
+    expect(order()).toEqual(['rented', 'sold', 'consumed', 'expired']);
+    fireEvent.press(screen.getByTestId('receipt-motivo-rented'));
+    expect(order()).toEqual(['sold', 'consumed', 'expired', 'rented']);
+  });
+
+  it('sends no reason when it was deselected, so the backend uses its default', async () => {
+    mockedOcr.submitSalida.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
+    await openReceipt([receiptItems()[0]], exit);
+    fireEvent.press(screen.getByTestId('receipt-motivo-consumed'));
+    await confirmReceipt();
+    expect(mockedOcr.submitSalida).toHaveBeenCalledWith([{ product_id: 5, quantity: 2 }], 'Kiosco Don Juan', undefined);
+  });
+
+  it('titles a product added by hand "Salida manual" on an exit', async () => {
+    await openReceipt(receiptItems(), exit);
+    fireEvent.press(screen.getByTestId('receipt-add'));
+    expect(screen.getByTestId('receipt-manual-2').props.children).toBe('Salida manual');
+  });
+
+  it('sends the chosen reason', async () => {
+    mockedOcr.submitSalida.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
+    await openReceipt([receiptItems()[0]], exit);
+    fireEvent.press(screen.getByTestId('receipt-motivo-sold'));
+    await confirmReceipt();
+    expect(mockedOcr.submitSalida).toHaveBeenCalledWith([{ product_id: 5, quantity: 2 }], 'Kiosco Don Juan', 'sold');
+    expect(mockedOcr.submitEntrada).not.toHaveBeenCalled();
+  });
+
+  it('has the register button in red', async () => {
+    await openReceipt(receiptItems(), exit);
+    const { StyleSheet } = require('react-native');
+    expect(StyleSheet.flatten(screen.getByTestId('confirm-receipt').props.style).backgroundColor).toBe('#FF3B30');
+    expect(screen.getByText('Registrar salida')).toBeTruthy();
+  });
+
+  it('warns in red under the stock when it is more than the stock of the product, and does not register', async () => {
+    mockedOcr.submitSalida.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
+    await openReceipt([receiptItems()[0]], exit);
+    expect(screen.queryByTestId('receipt-quantity-error-0')).toBeNull();
+    fireEvent.changeText(screen.getByTestId('receipt-quantity-0'), '11');
+    expect(screen.getByTestId('receipt-quantity-error-0').props.children).toBe('El stock no puede superar el disponible (10)');
+    const { StyleSheet } = require('react-native');
+    expect(StyleSheet.flatten(screen.getByTestId('receipt-quantity-error-0').props.style).color).toBe('#FF3B30');
+    await confirmReceipt();
+    expect(mockedOcr.submitSalida).not.toHaveBeenCalled();
+    fireEvent.changeText(screen.getByTestId('receipt-quantity-0'), '10');
+    expect(screen.queryByTestId('receipt-quantity-error-0')).toBeNull();
+    await confirmReceipt();
+    expect(mockedOcr.submitSalida).toHaveBeenCalledWith([{ product_id: 5, quantity: 10 }], 'Kiosco Don Juan', 'consumed');
+  });
+
+  it('checks the stock again when another product is chosen', async () => {
+    const items = [baseDraft({ nombre: 'Yogur', texto_leido: 'YOGUR', stock: 6, coincidencias: [YOGUR_LIGHT, YOGUR_MATCH] })];
+    await openReceipt(items, exit);
+    fireEvent.press(screen.getByTestId('receipt-option-0-6'));
+    expect(screen.getByTestId('receipt-quantity-error-0').props.children).toBe('El stock no puede superar el disponible (4)');
+  });
+
+  it('does not allow the same product twice to take more than its stock together', async () => {
+    const items = [
+      baseDraft({ nombre: 'Yogur', texto_leido: 'A', stock: 6, coincidencia_id: 5, coincidencias: [YOGUR_MATCH] }),
+      baseDraft({ nombre: 'Yogur', texto_leido: 'B', stock: 6, coincidencia_id: 5, coincidencias: [YOGUR_MATCH] }),
+    ];
+    await openReceipt(items, exit);
+    expect(screen.queryByTestId('receipt-quantity-error-0')).toBeNull();
+    expect(screen.getByTestId('receipt-quantity-error-1')).toBeTruthy();
+  });
+
+  it('reports a success of kind "salida" and says how many products were registered', async () => {
+    mockedOcr.submitSalida.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
+    const { onSuccess } = await openReceipt([receiptItems()[0]], exit);
+    await confirmReceipt();
+    expect(screen.getByText('Salida registrada')).toBeTruthy();
+    expect(screen.getByTestId('receipt-result-summary').props.children).toBe('Se ha registrado la salida de 1 producto escaneado exitosamente');
+    fireEvent.press(screen.getByTestId('receipt-result-done'));
+    expect(onSuccess).toHaveBeenCalledWith('salida');
+  });
+
+  it('uses the plural for several products', async () => {
+    mockedOcr.submitSalida.mockResolvedValue({ procesados: 3, fallidos: 0, errores: [] });
+    await openReceipt([receiptItems()[0]], exit);
+    await confirmReceipt();
+    expect(screen.getByTestId('receipt-result-summary').props.children).toBe('Se ha registrado la salida de 3 productos escaneados exitosamente');
   });
 });
 
@@ -1063,35 +1358,6 @@ describe('ScanModal - scanning a single field (expiry date or barcode)', () => {
 });
 
 describe('ScanModal - receipts: exits and entries are separate', () => {
-  const receiptState = () => ({
-    status: 'done',
-    doc_type: 'receipt',
-    result: baseResult({
-      doc_type: 'receipt',
-      draft: null,
-      comprobante: { comercio: 'Kiosco Don Juan', fecha_compra: '2026-01-01', total: 100 },
-      items: [
-        baseDraft({
-          nombre: 'Yogur',
-          stock: 2,
-          coincidencia_id: 5,
-          coincidencias: [{ id: 5, nombre: 'Yogur Ser', score: 0.9, por_codigo: false, stock: 1 }],
-        }),
-      ],
-    }),
-  } as ScanState);
-
-  const scanReceipt = async (props: Partial<React.ComponentProps<typeof ScanModal>> = {}) => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    mockedOcr.scan.mockResolvedValue(receiptState());
-    const handlers = setup(props);
-    if (!props.fixedDocType) fireEvent.press(screen.getByTestId('doc-type-receipt'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
-    return handlers;
-  };
-
   it('opens a fixed receipt scan straight on the photo options, titled after the invoice or receipt', () => {
     setup({ fixedDocType: 'receipt' });
     expect(screen.getByText('Ticket, remito o factura')).toBeTruthy();
@@ -1099,66 +1365,15 @@ describe('ScanModal - receipts: exits and entries are separate', () => {
     expect(screen.queryByTestId('doc-type-receipt')).toBeNull();
   });
 
-  it('on an exit receipt, offers the exit reasons, starting with "Consumido", and sends the chosen one', async () => {
-    mockedOcr.submitSalida.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
-    await scanReceipt({ fixedDocType: 'receipt', receiptDirection: 'salida' });
-    expect(screen.getByText('Motivo')).toBeTruthy();
-    ['consumed', 'expired', 'sold', 'rented'].forEach(r => expect(screen.getByTestId(`receipt-motivo-${r}`)).toBeTruthy());
-    fireEvent.press(screen.getByTestId('receipt-motivo-sold'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('confirm-receipt'));
-    });
-    expect(mockedOcr.submitSalida).toHaveBeenCalledWith([{ product_id: 5, quantity: 2 }], 'Kiosco Don Juan', 'sold');
-    expect(mockedOcr.submitEntrada).not.toHaveBeenCalled();
-  });
-
-  it('on an entry receipt, only adds stock: no exit reasons, entry wording and the entry endpoint', async () => {
+  it('on an entry receipt, has no exit reasons and uses the entry endpoint and wording', async () => {
+    mockedProducts.matchProducts.mockResolvedValue([]);
     mockedOcr.submitEntrada.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
-    const { onSuccess, onClose } = await scanReceipt({ receiptDirection: 'entrada' });
+    await openReceipt([receiptItems()[0]], { receiptDirection: 'entrada' });
     expect(screen.queryByTestId('receipt-motivo-sold')).toBeNull();
-    expect(screen.getByText('No ingresar este renglón')).toBeTruthy();
+    expect(screen.queryByText('Motivo')).toBeNull();
     expect(screen.getByText('Registrar entrada')).toBeTruthy();
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('confirm-receipt'));
-    });
-    expect(mockedOcr.submitEntrada).toHaveBeenCalledWith([{ product_id: 5, quantity: 2 }], 'Kiosco Don Juan');
+    await confirmReceipt();
+    expect(mockedOcr.submitEntrada).toHaveBeenCalled();
     expect(mockedOcr.submitSalida).not.toHaveBeenCalled();
-    expect(screen.getByText('Entrada registrada')).toBeTruthy();
-    fireEvent.press(screen.getByTestId('receipt-result-done'));
-    expect(onSuccess).toHaveBeenCalledWith('restocked');
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it('on an entry receipt, asks to choose at least one line to add', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    const state = receiptState();
-    (state.result as any).items[0].coincidencia_id = undefined;
-    mockedOcr.scan.mockResolvedValue(state);
-    setup({ receiptDirection: 'entrada' });
-    fireEvent.press(screen.getByTestId('doc-type-receipt'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('confirm-receipt'));
-    });
-    expect(screen.getByText('Elegí al menos un renglón para ingresar')).toBeTruthy();
-    expect(mockedOcr.submitEntrada).not.toHaveBeenCalled();
-  });
-
-  it('on an entry receipt, toggles a line between "No ingresar" and "Ingresar"', async () => {
-    await scanReceipt({ receiptDirection: 'entrada' });
-    fireEvent.press(screen.getByTestId('receipt-toggle-0'));
-    expect(screen.getByText('Ingresar este renglón')).toBeTruthy();
-  });
-
-  it('on an exit receipt, reports a success of kind "salida"', async () => {
-    mockedOcr.submitSalida.mockResolvedValue({ procesados: 1, fallidos: 0, errores: [] });
-    const { onSuccess } = await scanReceipt({ fixedDocType: 'receipt', receiptDirection: 'salida' });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('confirm-receipt'));
-    });
-    fireEvent.press(screen.getByTestId('receipt-result-done'));
-    expect(onSuccess).toHaveBeenCalledWith('salida');
   });
 });

@@ -336,9 +336,9 @@ export default function CargarScreen() {
           </>
         ) : (
           <View style={styles.container}>
-            <TouchableOpacity style={styles.scanBtn} onPress={() => setExitScanVisible(true)} testID="open-exit-scan-modal">
-              <Ionicons name="camera-outline" size={18} color={Colors.primary} />
-              <Text style={styles.scanBtnText}>{t('scan.openButton')}</Text>
+            <TouchableOpacity style={[styles.scanBtn, styles.scanBtnExit]} onPress={() => setExitScanVisible(true)} testID="open-exit-scan-modal">
+              <Ionicons name="camera-outline" size={18} color={Colors.error} />
+              <Text style={[styles.scanBtnText, styles.scanBtnTextExit]}>{t('scan.openButton')}</Text>
             </TouchableOpacity>
             <Text style={styles.label}>{t('product.salidaProducto')} *</Text>
             <AppTextInput
@@ -535,6 +535,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   scanBtnText: { color: Colors.primary, fontWeight: '600', fontSize: 14 },
+  // En una salida, el botón de escanear va en rojo, como el resto de la salida
+  scanBtnExit: { borderColor: Colors.error },
+  scanBtnTextExit: { color: Colors.error },
   content: { padding: 16, paddingBottom: 40 },
   label: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginTop: 12 },
   labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 12 },

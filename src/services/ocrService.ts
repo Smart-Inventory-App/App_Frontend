@@ -39,24 +39,57 @@ async function pickImage(source: 'camera' | 'gallery', crop = true): Promise<Ima
   return result.assets[0];
 }
 
-async function scan(asset: ScanImageAsset, docType: ScanDocType): Promise<ScanState> {
-  const formData = new FormData();
-  await appendImage(formData, 'file', asset, 'scan.jpg');
-  formData.append('doc_type', docType);
+const defaultWait = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
-  const { data } = await api.post<ScanState>(SCAN_URL, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: UPLOAD_TIMEOUT_MS,
-  });
-  return data;
+// Cuánto se espera antes de volver a mandar la foto si el primer intento falló por algo pasajero
+const SCAN_RETRY_DELAY_MS = 1000;
+// Cuántas consultas seguidas del estado pueden fallar por algo pasajero antes de darse por vencido
+const MAX_TRANSIENT_POLL_FAILURES = 3;
+// La consulta del estado puede tardar más de lo normal mientras el servicio de OCR está ocupado (por ejemplo, la primera vez)
+const POLL_TIMEOUT_MS = 30000;
+
+/**
+ * Un fallo pasajero, que al reintentar suele resolverse: no hubo respuesta (se cortó la conexión o se agotó el tiempo)
+ * o el servicio estaba momentáneamente caído u ocupado (502, 503, 504). Un rechazo del backend (validación, sesión,
+ * límite de pedidos) no lo es: reintentar daría lo mismo.
+ */
+export function isTransientError(err: unknown): boolean {
+  const error = err as { response?: { status?: number }; code?: string; message?: string; isAxiosError?: boolean } | null;
+  if (!error) return false;
+  if (error.response) return [502, 503, 504].includes(error.response.status ?? 0);
+  return error.isAxiosError === true
+    || ['ECONNABORTED', 'ERR_NETWORK', 'ETIMEDOUT'].includes(error.code ?? '')
+    || error.message === 'Network Error';
+}
+
+async function scan(asset: ScanImageAsset, docType: ScanDocType): Promise<ScanState> {
+  const send = async () => {
+    const formData = new FormData();
+    await appendImage(formData, 'file', asset, 'scan.jpg');
+    formData.append('doc_type', docType);
+
+    const { data } = await api.post<ScanState>(SCAN_URL, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: UPLOAD_TIMEOUT_MS,
+    });
+    return data;
+  };
+
+  // La primera foto de una sesión solía fallar y la segunda funcionar: ante un fallo pasajero se reintenta una vez, sin
+  // que el usuario tenga que volver a elegir la foto
+  try {
+    return await send();
+  } catch (err) {
+    if (!isTransientError(err)) throw err;
+    await defaultWait(SCAN_RETRY_DELAY_MS);
+    return send();
+  }
 }
 
 async function getJob(jobId: string): Promise<ScanState> {
-  const { data } = await api.get<ScanState>(`${SCAN_URL}/${jobId}`);
+  const { data } = await api.get<ScanState>(`${SCAN_URL}/${jobId}`, { timeout: POLL_TIMEOUT_MS });
   return data;
 }
-
-const defaultWait = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 export interface PollOptions {
   intervalMs?: number;
@@ -82,12 +115,23 @@ async function pollJob(jobId: string, options: PollOptions = {}): Promise<ScanSt
   } = options;
 
   let attempts = 0;
+  let transientFailures = 0;
   while (attempts < maxAttempts) {
     if (shouldStop()) {
       throw new Error('cancelado');
     }
 
-    const state = await getJob(jobId);
+    let state: ScanState;
+    try {
+      state = await getJob(jobId);
+      transientFailures = 0;
+    } catch (err) {
+      // Una consulta que falla por algo pasajero no pierde el seguimiento: se vuelve a consultar
+      if (!isTransientError(err) || ++transientFailures > MAX_TRANSIENT_POLL_FAILURES) throw err;
+      attempts += 1;
+      await wait(intervalMs);
+      continue;
+    }
     onUpdate?.(state);
 
     if (state.status === 'done' || state.status === 'failed') {

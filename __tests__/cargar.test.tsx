@@ -882,6 +882,14 @@ describe('CargarScreen - salida: motivos y escaneo', () => {
     expect(StyleSheet.flatten(screen.getByTestId('open-exit-scan-modal').props.style).borderRadius).toBe(10);
   });
 
+  it('shows the scan button in red on an exit, and the one of an entry in the color of the app', () => {
+    goToSalida();
+    expect(StyleSheet.flatten(screen.getByTestId('open-exit-scan-modal').props.style).borderColor).toBe('#FF3B30');
+    expect(StyleSheet.flatten(screen.getByText('Escanear imágenes').props.style).color).toBe('#FF3B30');
+    fireEvent.press(screen.getByText('Entrada'));
+    expect(StyleSheet.flatten(screen.getByTestId('open-scan-modal').props.style).borderColor).toBe('#2CC4B4');
+  });
+
   it('opens the exit scan menu from the button, and not the entry one', () => {
     goToSalida();
     fireEvent.press(screen.getByTestId('open-exit-scan-modal'));

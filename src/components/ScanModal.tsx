@@ -16,23 +16,20 @@ import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { ocrService, getScanErrorMessage } from '@/services/ocrService';
 import { ExitReason, ProductCreate, ProductSuggestion } from '@/types/product';
-import { EXIT_REASONS, EXIT_REASON_LABEL_KEY } from '@/utils/exitReasons';
-import { FixedScanDocType, GENERAL_SCAN_DOC_TYPES, LabelScan, ProductDraft, ProductMatch, SalidaOCRResult, ScanDocType, ScanState } from '@/types/ocr';
+import { FixedScanDocType, GENERAL_SCAN_DOC_TYPES, LabelScan, ProductDraft, SalidaOCRItem, SalidaOCRResult, ScanDocType, ScanState } from '@/types/ocr';
 import {
   applySuggestionToForm,
-  buildSalidaItems,
   draftToLabelFields,
   EMPTY_LABEL_FIELDS,
   formatWaitSeconds,
-  initReceiptLines,
   LabelFields,
   labelFieldsToForm,
-  ReceiptLineState,
   validateLabelFields,
 } from '@/utils/ocrDraft';
 import BottomSheetModal from '@/components/BottomSheetModal';
 import CenteredModal from '@/components/CenteredModal';
 import ImageViewerModal from '@/components/ImageViewerModal';
+import ReceiptItemsReview from '@/components/ReceiptItemsReview';
 import { PickedImage, uploadImage } from '@/services/imageService';
 import { BARCODE_MAX_DIGITS, isValidBarcode, onlyDigits } from '@/utils/barcode';
 import { displayToIso, formatDateDigits, isoToDisplay } from '@/utils/dateInput';
@@ -144,12 +141,9 @@ export default function ScanModal({
   const [barcodeProducts, setBarcodeProducts] = useState<ProductSuggestion[]>([]);
   const [barcodeSelectedId, setBarcodeSelectedId] = useState<number | null>(null);
 
-  const [lines, setLines] = useState<ReceiptLineState[]>([]);
-  const [activeSearchIndex, setActiveSearchIndex] = useState<number | null>(null);
-  const [lineSearchQuery, setLineSearchQuery] = useState('');
-  const [lineSearchResults, setLineSearchResults] = useState<ProductSuggestion[]>([]);
   const [receiptResult, setReceiptResult] = useState<SalidaOCRResult | null>(null);
-  const [receiptMotivo, setReceiptMotivo] = useState<ExitReason>('consumed');
+  // Salida de un comprobante: el motivo elegido; sin ninguno, el backend usa el consumo
+  const [receiptMotivo, setReceiptMotivo] = useState<ExitReason | null>('consumed');
 
   // El título dice qué se está escaneando; mientras se elige el tipo, es el general
   const scanTitle = (() => {
@@ -165,6 +159,7 @@ export default function ScanModal({
   const cancelledRef = useRef(false);
   const sheetBody = useRef<React.ReactNode>(null);
   const windowBody = useRef<React.ReactNode>(null);
+  const resultBody = useRef<React.ReactNode>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -197,19 +192,6 @@ export default function ScanModal({
     return () => { cancelled = true; clearTimeout(handle); };
   }, [docType, step, barcodeValue]);
 
-  useEffect(() => {
-    if (activeSearchIndex === null) return;
-    const q = lineSearchQuery.trim();
-    if (q.length < 2) {
-      setLineSearchResults([]);
-      return;
-    }
-    const handle = setTimeout(() => {
-      productService.suggestProducts(q).then(setLineSearchResults).catch(() => setLineSearchResults([]));
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [lineSearchQuery, activeSearchIndex]);
-
   function resetAll() {
     setPhase(firstPhase);
     setStep(initialLabel ? 'review' : firstStep);
@@ -229,10 +211,6 @@ export default function ScanModal({
     setBarcodeValue('');
     setBarcodeProducts([]);
     setBarcodeSelectedId(null);
-    setLines([]);
-    setActiveSearchIndex(null);
-    setLineSearchQuery('');
-    setLineSearchResults([]);
     setReceiptResult(null);
     setReceiptMotivo('consumed');
   }
@@ -320,9 +298,7 @@ export default function ScanModal({
 
   const applyResult = (type: ScanDocType, result: NonNullable<ScanState['result']>, asset?: LabelScan['asset']) => {
     setScanResult(result);
-    if (type === 'receipt') {
-      setLines(initReceiptLines(result.items));
-    } else if (type === 'expiry_date') {
+    if (type === 'expiry_date') {
       const read = isoToDisplay(result.draft?.vencimiento ?? '');
       setExpiryRead(read);
       setExpiryText(read);
@@ -416,19 +392,14 @@ export default function ScanModal({
 
   const isEntrada = receiptDirection === 'entrada';
 
-  const handleConfirmReceipt = async () => {
-    const items = buildSalidaItems(lines);
-    if (items.length === 0) {
-      setConfirmError(t(isEntrada ? 'scan.receiptNoItemsSelectedEntrada' : 'scan.receiptNoItemsSelected'));
-      return;
-    }
+  const handleConfirmReceipt = async (items: SalidaOCRItem[]) => {
     setConfirmError(null);
     setConfirming(true);
     try {
       const comercio = scanResult?.comprobante?.comercio;
       const result = isEntrada
         ? await ocrService.submitEntrada(items, comercio)
-        : await ocrService.submitSalida(items, comercio, receiptMotivo);
+        : await ocrService.submitSalida(items, comercio, receiptMotivo ?? undefined);
       setReceiptResult(result);
       setStep('receipt-result');
     } catch (err: unknown) {
@@ -441,33 +412,6 @@ export default function ScanModal({
   const handleReceiptDone = () => {
     onSuccess(isEntrada ? 'restocked' : 'salida');
     handleClose();
-  };
-
-  const openLineSearch = (index: number) => {
-    setActiveSearchIndex(index);
-    setLineSearchQuery('');
-    setLineSearchResults([]);
-  };
-
-  const pickLineSuggestion = (s: ProductSuggestion) => {
-    if (activeSearchIndex === null) return;
-    setLines(prev => prev.map((line, i) => (i === activeSearchIndex ? { ...line, productId: s.id } : line)));
-    setActiveSearchIndex(null);
-    setLineSearchResults([]);
-  };
-
-  const updateLineQuantity = (index: number, value: string) => {
-    const digits = value.replace(/[^0-9]/g, '');
-    const quantity = digits === '' ? 0 : parseInt(digits, 10);
-    setLines(prev => prev.map((line, i) => (i === index ? { ...line, quantity } : line)));
-  };
-
-  const toggleLineIncluded = (index: number, match?: ProductMatch) => {
-    setLines(prev => prev.map((line, i) => {
-      if (i !== index) return line;
-      if (line.productId != null) return { ...line, productId: null };
-      return { ...line, productId: match?.id ?? line.draft.coincidencia_id ?? null };
-    }));
   };
 
   const renderDocTypeStep = () => (
@@ -670,110 +614,18 @@ export default function ScanModal({
 
   const renderReceiptReview = () => {
     if (!scanResult) return null;
-    const { comprobante } = scanResult;
     return (
-      <View>
-        {confirmError && <Text style={styles.errorBanner}>{confirmError}</Text>}
-        <Text style={styles.sectionTitle}>{t('scan.receiptHeaderTitle')}</Text>
-        {comprobante?.comercio ? <Text style={styles.hintText}>{t('scan.receiptComercio', { value: comprobante.comercio })}</Text> : null}
-        {comprobante?.fecha_compra ? <Text style={styles.hintText}>{t('scan.receiptFecha', { value: comprobante.fecha_compra })}</Text> : null}
-        {comprobante?.total != null ? <Text style={styles.hintText}>{t('scan.receiptTotal', { value: comprobante.total })}</Text> : null}
-
-        <Text style={styles.sectionTitle}>{t('scan.receiptItemsTitle')}</Text>
-        {lines.length === 0 && <Text style={styles.hintText}>{t('scan.receiptNoItems')}</Text>}
-        {lines.map((line, index) => (
-          <View key={index} style={styles.receiptLine} testID={`receipt-line-${index}`}>
-            <Text style={styles.receiptLineName}>{line.draft.nombre ?? line.draft.texto_leido}</Text>
-            {line.draft.coincidencias.length === 0 && line.productId == null && (
-              <Text style={styles.warningText}>{t('scan.receiptNoMatch')}</Text>
-            )}
-            <View style={styles.receiptLineRow}>
-              <AppTextInput
-                style={[styles.input, styles.receiptQuantityInput]}
-                keyboardType="numeric"
-                value={String(line.quantity)}
-                onChangeText={(v) => updateLineQuantity(index, v)}
-                testID={`receipt-quantity-${index}`}
-              />
-              <TouchableOpacity
-                style={styles.receiptToggle}
-                onPress={() => toggleLineIncluded(index, line.draft.coincidencias[0])}
-                testID={`receipt-toggle-${index}`}
-              >
-                <Text style={styles.receiptToggleText}>
-                  {line.productId != null
-                    ? t(isEntrada ? 'scan.receiptExcludeEntrada' : 'scan.receiptExclude')
-                    : t(isEntrada ? 'scan.receiptIncludeEntrada' : 'scan.receiptInclude')}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            {line.draft.coincidencias.length > 0 && (
-              <View style={styles.chipsContent}>
-                {selectedFirst(line.draft.coincidencias, m => m.id === line.productId).map(match => (
-                  <TouchableOpacity
-                    key={match.id}
-                    style={[styles.chip, line.productId === match.id && styles.chipActive]}
-                    onPress={() => setLines(prev => prev.map((l, i) => (i === index ? { ...l, productId: match.id } : l)))}
-                  >
-                    <Text style={[styles.chipText, line.productId === match.id && styles.chipTextActive]}>
-                      {match.nombre} ({Math.round(match.score * 100)}%)
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-            <TouchableOpacity onPress={() => openLineSearch(index)} testID={`receipt-search-open-${index}`}>
-              <Text style={styles.linkText}>{t('scan.receiptSearchProduct')}</Text>
-            </TouchableOpacity>
-            {activeSearchIndex === index && (
-              <View>
-                <AppTextInput
-                  style={styles.input}
-                  value={lineSearchQuery}
-                  onChangeText={setLineSearchQuery}
-                  placeholder={t('scan.receiptSearchProduct')}
-                  placeholderTextColor={Colors.placeholder}
-                  testID={`receipt-search-input-${index}`}
-                />
-                {lineSearchResults.length > 0 && (
-                  <View style={styles.suggestionsBox}>
-                    {lineSearchResults.map(s => (
-                      <TouchableOpacity key={s.id} style={styles.suggestionItem} onPress={() => pickLineSuggestion(s)}>
-                        <Text style={styles.suggestionText}>{s.nombre}{s.marca ? ` · ${s.marca}` : ''}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-            )}
-          </View>
-        ))}
-        {!isEntrada && (
-          <View>
-            <Text style={styles.sectionTitle}>{t('product.salidaMotivo')}</Text>
-            <View style={styles.chipsContent}>
-              {EXIT_REASONS.map(reason => (
-                <TouchableOpacity
-                  key={reason}
-                  testID={`receipt-motivo-${reason}`}
-                  style={[styles.chip, receiptMotivo === reason && styles.chipActive]}
-                  onPress={() => setReceiptMotivo(reason)}
-                >
-                  <Text style={[styles.chipText, receiptMotivo === reason && styles.chipTextActive]}>
-                    {t(EXIT_REASON_LABEL_KEY[reason])}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-        <TouchableOpacity style={styles.confirmButton} onPress={handleConfirmReceipt} disabled={confirming} testID="confirm-receipt">
-          <Text style={styles.confirmButtonText}>{confirming ? t('scan.confirming') : t(isEntrada ? 'scan.receiptSubmitEntrada' : 'scan.receiptSubmit')}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.backLink} onPress={resetAll}>
-          <Text style={styles.backLinkText}>{t('scan.scanAnother')}</Text>
-        </TouchableOpacity>
-      </View>
+      <ReceiptItemsReview
+        drafts={scanResult.items}
+        comprobante={scanResult.comprobante}
+        direction={receiptDirection}
+        motivo={receiptMotivo}
+        onMotivoChange={setReceiptMotivo}
+        confirming={confirming}
+        error={confirmError}
+        onConfirm={handleConfirmReceipt}
+        onScanAnother={resetAll}
+      />
     );
   };
 
@@ -785,19 +637,22 @@ export default function ScanModal({
   };
 
   const renderReceiptResult = () => (
-    <View style={styles.centered}>
+    <View style={styles.resultContent}>
       <Ionicons name="checkmark-circle" size={56} color={Colors.primary} />
-      <Text style={styles.sectionTitle}>{t(isEntrada ? 'scan.receiptResultTitleEntrada' : 'scan.receiptResultTitle')}</Text>
+      <Text style={[styles.sectionTitle, styles.resultText]}>{t(isEntrada ? 'scan.receiptResultTitleEntrada' : 'scan.receiptResultTitle')}</Text>
       {receiptResult && (
-        <Text style={styles.hintText}>
-          {t('scan.receiptResultSummary', { procesados: receiptResult.procesados, fallidos: receiptResult.fallidos })}
+        <Text testID="receipt-result-summary" style={[styles.hintText, styles.resultText]}>
+          {t(`scan.receiptResult${isEntrada ? 'Entrada' : 'Salida'}${receiptResult.procesados === 1 ? 'One' : 'Many'}`, { count: receiptResult.procesados })}
         </Text>
+      )}
+      {receiptResult && receiptResult.fallidos > 0 && (
+        <Text style={[styles.warningText, styles.resultText]}>{t('scan.receiptResultFailed', { count: receiptResult.fallidos })}</Text>
       )}
       {receiptResult && receiptResult.errores.length > 0 && (
         <View>
-          <Text style={styles.warningText}>{t('scan.receiptResultErrors')}</Text>
+          <Text style={[styles.warningText, styles.resultText]}>{t('scan.receiptResultErrors')}</Text>
           {receiptResult.errores.map((e, i) => (
-            <Text key={i} style={styles.warningText}>{e}</Text>
+            <Text key={i} style={[styles.warningText, styles.resultText]}>{e}</Text>
           ))}
         </View>
       )}
@@ -812,7 +667,6 @@ export default function ScanModal({
       case 'source': return renderSourceStep();
       case 'processing': return renderProcessingStep();
       case 'review': return renderReview();
-      case 'receipt-result': return renderReceiptResult();
       case 'doc-type':
       default:
         return renderDocTypeStep();
@@ -840,7 +694,12 @@ export default function ScanModal({
 
   // Lo mismo con la ventana central: al cerrarla (X, Cancelar, Atrás) los datos se reinician mientras ella todavía se
   // desvanece, y mostraría un instante la ventana inicial (que ahora es la hoja de abajo). Se queda con lo último que tenía.
-  if (visible && phase === 'window') {
+  // El resultado de un comprobante registrado es una ventana nueva, sin el título ni la X del escaneo
+  const showResult = step === 'receipt-result';
+  if (visible && phase === 'window' && showResult) {
+    resultBody.current = renderReceiptResult();
+  }
+  if (visible && phase === 'window' && !showResult) {
     windowBody.current = (
       <>
         {header}
@@ -865,12 +724,20 @@ export default function ScanModal({
       </BottomSheetModal>
       {/* El escaneo en sí, en el centro de la pantalla: solo se cierra con su botón de cerrar o con Cancelar, no al tocar afuera */}
       <CenteredModal
-        visible={visible && phase === 'window'}
+        visible={visible && phase === 'window' && !showResult}
         onRequestClose={handleClose}
         overlayTestID="scan-overlay"
         cardTestID="scan-sheet"
       >
         {windowBody.current}
+      </CenteredModal>
+      <CenteredModal
+        visible={visible && phase === 'window' && showResult}
+        onRequestClose={handleReceiptDone}
+        overlayTestID="scan-result-overlay"
+        cardTestID="scan-result-sheet"
+      >
+        {resultBody.current}
       </CenteredModal>
     </>
   );
@@ -923,7 +790,9 @@ const styles = StyleSheet.create({
   backLink: { alignItems: 'center', marginTop: 16 },
   backLinkText: { color: Colors.textSecondary, fontSize: 14, fontWeight: '600' },
   centered: { alignItems: 'center', justifyContent: 'center', marginTop: 40, gap: 8 },
-  processingText: { fontSize: 15, color: Colors.textPrimary, marginTop: 8 },
+  resultContent: { alignItems: 'center', justifyContent: 'center', padding: 24, gap: 8 },
+  resultText: { textAlign: 'center' },
+  processingText: { fontSize: 15, color: Colors.textPrimary, marginTop: 8, marginBottom: 20 },
   queueText: { fontSize: 13, color: Colors.textSecondary },
   errorBanner: { color: Colors.error, fontSize: 13, marginBottom: 8 },
   warningText: { color: Colors.error, fontSize: 12, marginTop: 4 },
@@ -985,35 +854,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fafafa',
     marginTop: 4,
   },
-  suggestionsBox: {
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: Colors.inputBorder ?? '#ddd',
-    borderRadius: 8,
-    backgroundColor: '#fff',
-    overflow: 'hidden',
-  },
-  suggestionItem: { paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  suggestionText: { fontSize: 14, color: Colors.textPrimary },
   confirmButton: { backgroundColor: Colors.primary, borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 20 },
   confirmButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  receiptLine: { borderWidth: 1, borderColor: Colors.inputBorder, borderRadius: 10, padding: 12, marginBottom: 12 },
-  receiptLineName: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
-  receiptLineRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
-  receiptQuantityInput: { flex: 1, marginTop: 0 },
-  receiptToggle: { paddingHorizontal: 10, paddingVertical: 8 },
-  receiptToggleText: { fontSize: 12, color: Colors.primary, fontWeight: '600' },
-  linkText: { fontSize: 12, color: Colors.primary, marginTop: 6, fontWeight: '600' },
-  chipsContent: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
-  chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 16,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: Colors.inputBorder ?? '#ddd',
-  },
-  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  chipText: { fontSize: 11, color: Colors.textSecondary },
-  chipTextActive: { color: '#fff', fontWeight: '600' },
 });

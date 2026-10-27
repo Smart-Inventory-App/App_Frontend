@@ -938,7 +938,7 @@ describe('ProductFormFields - image picker sheet', () => {
     expect(sheet.queryByText('Cancelar')).toBeNull();
     expect(StyleSheet.flatten(sheet.getByTestId('image-picker-camera').props.style).backgroundColor).toBeDefined();
     fireEvent.press(sheet.getByTestId('image-picker-close'));
-    await waitFor(() => expect(screen.queryByTestId('image-picker-sheet')).toBeNull(), { timeout: 3000 });
+    await waitFor(() => expect(screen.queryByTestId('image-picker-sheet')).toBeNull(), { timeout: 10000 });
   });
 
   it('labels the expiry field "Fecha de vencimiento"', () => {

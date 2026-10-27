@@ -1,9 +1,7 @@
 import {
   applyMatchToForm,
-  buildSalidaItems,
   draftToProductForm,
   formatWaitSeconds,
-  initReceiptLines,
   isLowConfidence,
   isValidIsoDate,
   validateProductForm,
@@ -165,38 +163,6 @@ describe('formatWaitSeconds', () => {
   it('formats a minute or more as rounded minutes', () => {
     expect(formatWaitSeconds(90)).toBe('2 min');
     expect(formatWaitSeconds(120)).toBe('2 min');
-  });
-});
-
-describe('initReceiptLines', () => {
-  it('preselects the confident match and defaults quantity to the read stock', () => {
-    const items = [baseDraft({ nombre: 'Yogur', stock: 3, coincidencia_id: 5 })];
-    expect(initReceiptLines(items)).toEqual([{ draft: items[0], productId: 5, quantity: 3 }]);
-  });
-
-  it('falls back to quantity 1 and no product when nothing matched', () => {
-    const items = [baseDraft({ nombre: 'Yogur', stock: null })];
-    expect(initReceiptLines(items)).toEqual([{ draft: items[0], productId: null, quantity: 1 }]);
-  });
-
-  it('does not use a non-positive stock as the quantity', () => {
-    const items = [baseDraft({ stock: 0 })];
-    expect(initReceiptLines(items)[0].quantity).toBe(1);
-  });
-});
-
-describe('buildSalidaItems', () => {
-  it('only includes lines with a selected product and a positive quantity', () => {
-    const lines = [
-      { draft: baseDraft(), productId: 1, quantity: 2 },
-      { draft: baseDraft(), productId: null, quantity: 1 },
-      { draft: baseDraft(), productId: 3, quantity: 0 },
-    ];
-    expect(buildSalidaItems(lines)).toEqual([{ product_id: 1, quantity: 2 }]);
-  });
-
-  it('returns an empty array when nothing qualifies', () => {
-    expect(buildSalidaItems([])).toEqual([]);
   });
 });
 

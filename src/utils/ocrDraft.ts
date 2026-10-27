@@ -80,26 +80,6 @@ export function isValidIsoDate(value: string): boolean {
   return !isNaN(d.getTime());
 }
 
-export interface ReceiptLineState {
-  draft: ProductDraft;
-  productId: number | null;
-  quantity: number;
-}
-
-export function initReceiptLines(items: ProductDraft[]): ReceiptLineState[] {
-  return items.map(draft => ({
-    draft,
-    productId: draft.coincidencia_id ?? null,
-    quantity: draft.stock && draft.stock > 0 ? draft.stock : 1,
-  }));
-}
-
-export function buildSalidaItems(lines: ReceiptLineState[]): { product_id: number; quantity: number }[] {
-  return lines
-    .filter(line => line.productId != null && line.quantity > 0)
-    .map(line => ({ product_id: line.productId as number, quantity: line.quantity }));
-}
-
 export type ProductFormError = 'nombre' | 'categoria' | 'stock' | 'vencimiento' | 'codigoBarras' | null;
 
 export function validateProductForm(form: Partial<ProductCreate>): ProductFormError {
