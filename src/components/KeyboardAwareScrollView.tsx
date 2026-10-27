@@ -16,7 +16,15 @@ export const useFieldFocus = () => useContext(FieldFocusContext);
  * - Tocar una sugerencia o un botón con el teclado abierto funciona al primer toque.
  * Quien lo use debe reservar el lugar del teclado con un KeyboardAvoidingView (padding).
  */
-export default function KeyboardAwareScrollView({ contentContainerStyle, children, onLayout, ...rest }: ScrollViewProps) {
+export default function KeyboardAwareScrollView({
+  contentContainerStyle, children, onLayout, reserveKeyboardSpace = true, ...rest
+}: ScrollViewProps & {
+  /**
+   * Agrega lugar al final mientras el teclado está abierto. Una ventana que se achica sola con el teclado (centrada, con
+   * contenido corto) lo desactiva: ese lugar la estiraría hasta ocupar toda la pantalla, dejando un vacío debajo de sus botones.
+   */
+  reserveKeyboardSpace?: boolean;
+}) {
   const scrollRef = useRef<ScrollView>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -79,7 +87,7 @@ export default function KeyboardAwareScrollView({ contentContainerStyle, childre
   // el teclado cubre y la pantalla no se achicó: ese espacio queda detrás del teclado y nunca se ve en blanco. Si la
   // pantalla ya se achicó sola (KeyboardAvoidingView), no se agrega nada y no se puede bajar a un vacío.
   const covered = keyboardOpen ? Math.max(0, closedViewportRef.current - viewportHeight) : 0;
-  const extraBottom = keyboardOpen ? Math.max(0, keyboardHeight - covered) : 0;
+  const extraBottom = keyboardOpen && reserveKeyboardSpace ? Math.max(0, keyboardHeight - covered) : 0;
   const givenStyle = StyleSheet.flatten(contentContainerStyle) ?? {};
   const givenBottom = Number(givenStyle.paddingBottom ?? givenStyle.padding ?? 0);
 

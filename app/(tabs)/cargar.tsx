@@ -66,10 +66,12 @@ export default function CargarScreen() {
   const motivoChipsRef = useRef<ScrollView>(null);
   const [salidaNota, setSalidaNota] = useState('');
 
-  // Al aparecer la pantalla de «¡Listo!» el teclado no tiene que quedar abierto
-  useEffect(() => {
-    if (success) Keyboard.dismiss();
-  }, [success]);
+  // Al aparecer la pantalla de «¡Listo!» el teclado no tiene que quedar abierto. Se cierra antes de mostrarla: en cuanto
+  // aparece, el campo que lo tenía abierto ya no existe y no habría a quién pedirle que lo cierre.
+  const showSuccess = () => {
+    Keyboard.dismiss();
+    setSuccess(true);
+  };
 
   useFocusEffect(useCallback(() => {
     productService.getFilterOptions()
@@ -124,7 +126,7 @@ export default function CargarScreen() {
     try {
       const created = await productService.createProduct(form as ProductCreate);
       setMerged(Boolean(created.merged));
-      setSuccess(true);
+      showSuccess();
     } catch (err: unknown) {
       const detail = (err as any)?.response?.data?.detail;
       if (typeof detail === 'string') {
@@ -159,7 +161,7 @@ export default function CargarScreen() {
     try {
       await productService.registerEvent(salidaSelected!.id, Number(salidaCantidad), salidaMotivo!, salidaNota);
       setMerged(false);
-      setSuccess(true);
+      showSuccess();
     } catch (err: unknown) {
       const detail = (err as any)?.response?.data?.detail;
       if (typeof detail === 'string') {
@@ -201,14 +203,14 @@ export default function CargarScreen() {
   const handleScanSuccess = (kind: ScanSuccessKind) => {
     setScanSuccessKind(kind);
     setMerged(kind === 'merged');
-    setSuccess(true);
+    showSuccess();
   };
 
   // Se sumó stock a un producto que ya estaba cargado
   const handleExistingSuccess = () => {
     setScanSuccessKind(null);
     setMerged(true);
-    setSuccess(true);
+    showSuccess();
   };
 
   const scanSuccessMessage = (): string => {

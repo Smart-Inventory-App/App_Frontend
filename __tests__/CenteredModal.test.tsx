@@ -1,6 +1,7 @@
 import React from 'react';
-import { KeyboardAvoidingView, Modal, StyleSheet, Text } from 'react-native';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Keyboard, KeyboardAvoidingView, Modal, StyleSheet, Text } from 'react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import CenteredModal from '../src/components/CenteredModal';
 
 const centered = (visible: boolean, onRequestClose = jest.fn()) => (
@@ -22,7 +23,7 @@ describe('CenteredModal', () => {
     const modal = screen.UNSAFE_getByType(Modal);
     expect(modal.props.transparent).toBe(true);
     expect(modal.props.animationType).toBe('fade');
-    expect(StyleSheet.flatten(screen.UNSAFE_getByType(KeyboardAvoidingView).props.style).justifyContent).toBe('center');
+    expect(StyleSheet.flatten(screen.getByTestId('centered-modal-inner').props.style).justifyContent).toBe('center');
     expect(StyleSheet.flatten(screen.getByTestId('card').props.style).borderRadius).toBe(20);
   });
 
@@ -45,5 +46,39 @@ describe('CenteredModal', () => {
     render(centered(true));
     expect(screen.UNSAFE_getByType(KeyboardAvoidingView).props.behavior).toBe('padding');
     expect(StyleSheet.flatten(screen.getByTestId('card').props.style).flexShrink).toBe(1);
+  });
+
+  describe('Android system buttons', () => {
+    const metrics = { frame: { x: 0, y: 0, width: 360, height: 800 }, insets: { top: 30, left: 0, right: 0, bottom: 48 } };
+    const withInsets = () => (
+      <SafeAreaProvider initialMetrics={metrics}>{centered(true)}</SafeAreaProvider>
+    );
+    // El margen va en un View aparte: KeyboardAvoidingView pisa el padding inferior de su propio estilo
+    const inner = () => StyleSheet.flatten(screen.getByTestId('centered-modal-inner').props.style);
+
+    afterEach(() => { jest.restoreAllMocks(); });
+
+    it('covers the whole screen and keeps the window clear of the status bar and the system buttons', () => {
+      render(withInsets());
+      const modal = screen.UNSAFE_getByType(Modal);
+      expect(modal.props.statusBarTranslucent).toBe(true);
+      expect(modal.props.navigationBarTranslucent).toBe(true);
+      expect(inner().paddingBottom).toBe(60);
+      expect(inner().paddingTop).toBe(42);
+      expect(StyleSheet.flatten(screen.UNSAFE_getByType(KeyboardAvoidingView).props.style).paddingBottom).toBeUndefined();
+    });
+
+    it('does not leave room for the system buttons while the keyboard covers them', () => {
+      const handlers: Record<string, () => void> = {};
+      jest.spyOn(Keyboard, 'addListener').mockImplementation(((event: string, cb: () => void) => {
+        handlers[event] = cb;
+        return { remove: jest.fn() };
+      }) as any);
+      render(withInsets());
+      act(() => { handlers.keyboardDidShow(); });
+      expect(inner().paddingBottom).toBe(24);
+      act(() => { handlers.keyboardDidHide(); });
+      expect(inner().paddingBottom).toBe(60);
+    });
   });
 });

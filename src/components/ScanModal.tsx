@@ -30,7 +30,9 @@ import {
   ReceiptLineState,
   validateLabelFields,
 } from '@/utils/ocrDraft';
+import BottomSheetModal from '@/components/BottomSheetModal';
 import CenteredModal from '@/components/CenteredModal';
+import ImageViewerModal from '@/components/ImageViewerModal';
 import { PickedImage, uploadImage } from '@/services/imageService';
 import { BARCODE_MAX_DIGITS, isValidBarcode, onlyDigits } from '@/utils/barcode';
 import { displayToIso, formatDateDigits, isoToDisplay } from '@/utils/dateInput';
@@ -42,12 +44,15 @@ const BARCODE_ROW_GAP = 8;
 const BARCODE_LIST_MAX_HEIGHT = 3.5 * (BARCODE_ROW_HEIGHT + BARCODE_ROW_GAP);
 
 type Step = 'doc-type' | 'source' | 'processing' | 'review' | 'receipt-result';
+// Las ventanas iniciales (elegir qué escanear, o cómo cargar la foto de un campo del formulario) suben desde abajo; al
+// elegir una opción se cierran y el resto del escaneo ocurre en una ventana en el centro. `hidden`: entre las dos, mientras
+// el usuario saca o elige la foto.
+type Phase = 'sheet' | 'window' | 'hidden';
 
 // Límites de los campos del formulario de producto
 const NOMBRE_MAX = 20;
 const OPTION_MAX = 20;
 const DESCRIPCION_MAX = 400;
-const STOCK_MAX_DIGITS = 6;
 
 export type ScanSuccessKind = 'created' | 'merged' | 'updated' | 'salida' | 'restocked';
 
@@ -111,6 +116,9 @@ export default function ScanModal({
   const { t } = useTranslation();
   // Primer paso del modal: elegir el tipo de documento, o directamente la foto si el tipo ya está definido
   const firstStep: Step = fixedDocType ? 'source' : 'doc-type';
+  // Un comprobante elegido en el menú de salida, o una etiqueta ya escaneada, empiezan directamente en la ventana central
+  const firstPhase: Phase = initialLabel || fixedDocType === 'receipt' ? 'window' : 'sheet';
+  const [phase, setPhase] = useState<Phase>(firstPhase);
   const [step, setStep] = useState<Step>(initialLabel ? 'review' : firstStep);
   const [docType, setDocType] = useState<ScanDocType | null>(initialLabel ? 'product_label' : fixedDocType);
   const [error, setError] = useState<string | null>(null);
@@ -122,6 +130,9 @@ export default function ScanModal({
   const [labelAsset, setLabelAsset] = useState<LabelScan['asset']>(null);
   const [labelFields, setLabelFields] = useState<LabelFields>({ ...EMPTY_LABEL_FIELDS });
   const [confirmError, setConfirmError] = useState<string | null>(null);
+  // El error del nombre va debajo de su campo
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [imageViewerOpen, setImageViewerOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
   // Fecha de vencimiento escaneada: lo que se leyó y lo que el usuario deja (DD/MM/AAAA)
@@ -152,6 +163,7 @@ export default function ScanModal({
   })();
 
   const cancelledRef = useRef(false);
+  const sheetBody = useRef<React.ReactNode>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -198,6 +210,7 @@ export default function ScanModal({
   }, [lineSearchQuery, activeSearchIndex]);
 
   function resetAll() {
+    setPhase(firstPhase);
     setStep(initialLabel ? 'review' : firstStep);
     setDocType(initialLabel ? 'product_label' : fixedDocType);
     setError(null);
@@ -207,6 +220,8 @@ export default function ScanModal({
     setLabelAsset(initialLabel?.asset ?? null);
     setLabelFields(draftToLabelFields(initialLabel?.draft));
     setConfirmError(null);
+    setNameError(null);
+    setImageViewerOpen(false);
     setConfirming(false);
     setExpiryRead('');
     setExpiryText('');
@@ -227,28 +242,44 @@ export default function ScanModal({
     onClose();
   };
 
+  // Vuelve a donde empezó el escaneo (la ventana inicial), por ejemplo después de un error
+  const returnToStart = () => {
+    setPhase(firstPhase);
+    setStep(firstStep);
+  };
+
   const handlePickDocType = (type: ScanDocType) => {
     setDocType(type);
     setError(null);
     setStep('source');
+    // La ventana de abajo se cierra y se abre la de este tipo de escaneo, en el centro
+    setPhase('window');
   };
 
   const handlePickSource = async (source: 'camera' | 'gallery') => {
     if (!docType) return;
     setError(null);
+    const fromSheet = phase === 'sheet';
+    // Desde la ventana de abajo, esta se cierra mientras el usuario saca o elige la foto
+    if (fromSheet) setPhase('hidden');
     try {
-      // La etiqueta se recorta siempre antes de procesarla (con la cámara o desde la galería)
-      const asset = await ocrService.pickImage(source, docType === 'product_label');
-      if (!asset) return;
+      // Todo se recorta antes de procesarlo, menos los comprobantes (con la cámara o desde la galería)
+      const asset = await ocrService.pickImage(source, docType !== 'receipt');
+      if (!asset) {
+        // Sin foto no hay nada que escanear: desde la ventana de abajo se vuelve al formulario
+        if (fromSheet) handleClose();
+        return;
+      }
       await runScan(docType, asset);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('scan.errorUpload');
       setError(message);
-      setStep(firstStep);
+      returnToStart();
     }
   };
 
   const runScan = async (type: ScanDocType, asset: { uri: string; fileName?: string | null; mimeType?: string | null }) => {
+    setPhase('window');
     setStep('processing');
     setQueueInfo({});
     let stage: 'upload' | 'poll' = 'upload';
@@ -269,7 +300,7 @@ export default function ScanModal({
 
       if (finalState.status === 'failed' || !finalState.result) {
         setError(t('scan.errorFailed', { reason: finalState.error ?? '' }));
-        setStep(firstStep);
+        returnToStart();
         return;
       }
 
@@ -282,7 +313,7 @@ export default function ScanModal({
           ? null
           : getScanErrorMessage(err, stage === 'upload' ? t('scan.errorUpload') : t('scan.errorPoll'));
       if (message) setError(message);
-      setStep(firstStep);
+      returnToStart();
     }
   };
 
@@ -307,16 +338,18 @@ export default function ScanModal({
   const setLabelField = (key: keyof LabelFields, value: string) => {
     setLabelFields(prev => ({ ...prev, [key]: value }));
     setConfirmError(null);
+    if (key === 'nombre') setNameError(null);
   };
 
   // Los datos validados por el usuario pasan al formulario de "Flujo de producto" y la foto escaneada, a ser la imagen
   // del producto; si se cancela, no se carga nada
   const handleConfirmLabel = async () => {
-    const errorCode = validateLabelFields(labelFields);
-    if (errorCode) {
-      setConfirmError(t(`product.validation${errorCode.charAt(0).toUpperCase()}${errorCode.slice(1)}`));
+    // Solo el nombre se edita (y es obligatorio): lo demás que se leyó pasa al formulario tal cual, si es válido
+    if (validateLabelFields(labelFields) === 'nombre') {
+      setNameError(t('product.validationNombre'));
       return;
     }
+    setNameError(null);
     setConfirmError(null);
     setConfirming(true);
     let imageUrl: string | undefined;
@@ -490,12 +523,13 @@ export default function ScanModal({
         <Text style={styles.label}>{label}{key === 'nombre' ? ' *' : ''}</Text>
         <AppTextInput
           testID={`label-field-${key}`}
-          style={styles.input}
+          style={[styles.input, key === 'nombre' && nameError ? styles.inputError : null]}
           value={labelFields[key]}
           onChangeText={v => setLabelField(key, v)}
           placeholderTextColor={Colors.placeholder}
           {...extra}
         />
+        {key === 'nombre' && nameError ? <Text testID="label-error" style={styles.fieldError}>{nameError}</Text> : null}
         {!recognized && !labelFields[key] ? (
           <Text testID={`label-field-${key}-missing`} style={styles.missingHint}>{t('scan.labelNotRecognized')}</Text>
         ) : null}
@@ -505,9 +539,14 @@ export default function ScanModal({
 
   const renderLabelReview = () => (
     <View>
-      {confirmError && <Text testID="label-error" style={styles.errorBanner}>{confirmError}</Text>}
       <Text style={styles.sectionTitle}>{t('scan.labelReviewTitle')}</Text>
-      {labelAsset ? <Image testID="label-image" source={{ uri: labelAsset.uri }} style={styles.labelImage} resizeMode="cover" /> : null}
+      {labelAsset ? (
+        // Tocar la foto la muestra a pantalla completa
+        <TouchableOpacity activeOpacity={0.85} onPress={() => setImageViewerOpen(true)} testID="label-image-open">
+          <Image testID="label-image" source={{ uri: labelAsset.uri }} style={styles.labelImage} resizeMode="cover" />
+        </TouchableOpacity>
+      ) : null}
+      {labelAsset ? <ImageViewerModal visible={imageViewerOpen} uri={labelAsset.uri} onClose={() => setImageViewerOpen(false)} /> : null}
       {labelDraft?.texto_leido ? <Text testID="label-read-text" style={styles.hintText}>{t('scan.readText', { text: labelDraft.texto_leido })}</Text> : null}
       {renderLabelField('nombre', t('product.nombre'), { maxLength: NOMBRE_MAX, placeholder: t('product.nombre') })}
       {onLoadAsExisting && (
@@ -517,26 +556,8 @@ export default function ScanModal({
         </TouchableOpacity>
       )}
       {renderLabelField('marca', t('product.marca'), { maxLength: OPTION_MAX })}
-      {renderLabelField('categoria', t('product.categoria'), { maxLength: OPTION_MAX })}
-      {renderLabelField('ubicacion', t('scan.fieldLocation'), { maxLength: OPTION_MAX })}
-      {renderLabelField('vencimiento', t('product.vencimiento'), {
-        keyboardType: 'number-pad',
-        maxLength: 10,
-        placeholder: t('product.vencimientoPlaceholder'),
-        onChangeText: (v: string) => setLabelField('vencimiento', formatDateDigits(v)),
-      })}
-      {renderLabelField('codigo_barras', t('product.codigoBarras'), {
-        keyboardType: 'number-pad',
-        maxLength: BARCODE_MAX_DIGITS,
-        onChangeText: (v: string) => setLabelField('codigo_barras', onlyDigits(v)),
-      })}
       {renderLabelField('descripcion', t('product.descripcion'), { maxLength: DESCRIPCION_MAX, multiline: true })}
-      {renderLabelField('stock', t('product.stock'), {
-        keyboardType: 'numeric',
-        maxLength: STOCK_MAX_DIGITS,
-        placeholder: '0',
-        onChangeText: (v: string) => setLabelField('stock', v.replace(/[^0-9]/g, '')),
-      })}
+      {confirmError ? <Text testID="label-error" style={styles.fieldError}>{confirmError}</Text> : null}
       <View style={styles.actionsRow}>
         <TouchableOpacity style={styles.cancelAction} onPress={handleClose} testID="label-cancel">
           <Text style={styles.cancelActionText}>{t('common.cancel')}</Text>
@@ -568,13 +589,12 @@ export default function ScanModal({
     const valid = isValidBarcode(barcodeValue);
     return (
       <View>
-        {confirmError && <Text style={styles.errorBanner}>{confirmError}</Text>}
         <Text style={styles.sectionTitle}>
           {barcodeValue ? t('scan.barcodeTitle') : t('scan.barcodeNone')}
         </Text>
         <Text style={styles.label}>{t('product.codigoBarras')}</Text>
         <AppTextInput
-          style={styles.input}
+          style={[styles.input, confirmError ? styles.inputError : null]}
           keyboardType="number-pad"
           maxLength={BARCODE_MAX_DIGITS}
           value={barcodeValue}
@@ -583,6 +603,7 @@ export default function ScanModal({
           placeholderTextColor={Colors.placeholder}
           testID="barcode-input"
         />
+        {confirmError ? <Text testID="scan-error" style={styles.fieldError}>{confirmError}</Text> : null}
         {valid && barcodeProducts.length > 0 && (
           <View style={styles.matchesBox}>
             <Text style={styles.sectionTitle}>{t('scan.barcodeProductsTitle')}</Text>
@@ -628,13 +649,12 @@ export default function ScanModal({
     if (!scanResult) return null;
     return (
       <View>
-        {confirmError && <Text style={styles.errorBanner}>{confirmError}</Text>}
         <Text style={styles.sectionTitle}>
           {expiryRead ? t('scan.expiryTitle', { date: expiryRead }) : t('scan.expiryNoDate')}
         </Text>
         <Text style={styles.label}>{t('product.vencimiento')}</Text>
         <AppTextInput
-          style={styles.input}
+          style={[styles.input, confirmError ? styles.inputError : null]}
           keyboardType="number-pad"
           maxLength={10}
           value={expiryText}
@@ -643,6 +663,7 @@ export default function ScanModal({
           placeholderTextColor={Colors.placeholder}
           testID="expiry-input"
         />
+        {confirmError ? <Text testID="scan-error" style={styles.fieldError}>{confirmError}</Text> : null}
         {renderActions(handleConfirmExpiry, 'expiry')}
       </View>
     );
@@ -799,28 +820,60 @@ export default function ScanModal({
     }
   };
 
+  const header = (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>{scanTitle}</Text>
+      <TouchableOpacity onPress={handleClose} testID="scan-modal-close">
+        <Ionicons name="close" size={24} color={Colors.textPrimary} />
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Mientras la hoja baja (porque se eligió una opción) sigue mostrando lo último que tenía, sin repetir lo de la ventana central
+  if (phase === 'sheet') {
+    sheetBody.current = (
+      <>
+        {header}
+        <View style={styles.content}>{renderStep()}</View>
+      </>
+    );
+  }
+
   return (
-    // Ventana en el centro de la pantalla: solo se cierra con su botón de cerrar o con Cancelar, no al tocar afuera
-    <CenteredModal
-      visible={visible}
-      onRequestClose={handleClose}
-      overlayTestID="scan-overlay"
-      cardTestID="scan-sheet"
-    >
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{scanTitle}</Text>
-        <TouchableOpacity onPress={handleClose} testID="scan-modal-close">
-          <Ionicons name="close" size={24} color={Colors.textPrimary} />
-        </TouchableOpacity>
-      </View>
-      <KeyboardAwareScrollView contentContainerStyle={styles.content}>
-        {renderStep()}
-      </KeyboardAwareScrollView>
-    </CenteredModal>
+    <>
+      {/* Ventana inicial: sube desde abajo y tocar afuera vuelve al formulario */}
+      <BottomSheetModal
+        visible={visible && phase === 'sheet'}
+        onRequestClose={handleClose}
+        sheetStyle={styles.initialSheet}
+        overlayTestID="scan-initial-overlay"
+        sheetTestID="scan-initial-sheet"
+      >
+        {sheetBody.current}
+      </BottomSheetModal>
+      {/* El escaneo en sí, en el centro de la pantalla: solo se cierra con su botón de cerrar o con Cancelar, no al tocar afuera */}
+      <CenteredModal
+        visible={visible && phase === 'window'}
+        onRequestClose={handleClose}
+        overlayTestID="scan-overlay"
+        cardTestID="scan-sheet"
+      >
+        {header}
+        <KeyboardAwareScrollView contentContainerStyle={styles.content} reserveKeyboardSpace={false}>
+          {renderStep()}
+        </KeyboardAwareScrollView>
+      </CenteredModal>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  initialSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '85%',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -865,6 +918,9 @@ const styles = StyleSheet.create({
   queueText: { fontSize: 13, color: Colors.textSecondary },
   errorBanner: { color: Colors.error, fontSize: 13, marginBottom: 8 },
   warningText: { color: Colors.error, fontSize: 12, marginTop: 4 },
+  // Mensaje de un campo: va debajo de él, separado
+  fieldError: { color: Colors.error, fontSize: 12, marginTop: 6 },
+  inputError: { borderColor: Colors.inputBorderError },
   hintText: { color: Colors.textSecondary, fontSize: 13, marginTop: 4 },
   matchesBox: { marginTop: 8, marginBottom: 8 },
   labelImage: { width: '100%', height: 140, borderRadius: 10, marginBottom: 8, backgroundColor: '#f0f0f0' },

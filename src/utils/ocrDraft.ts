@@ -177,7 +177,8 @@ export function labelFieldsToForm(fields: LabelFields, imagenUrl?: string): Part
   if (text(fields.ubicacion)) form.ubicacion = text(fields.ubicacion);
   const vencimiento = displayToIso(fields.vencimiento);
   if (vencimiento) form.vencimiento = vencimiento;
-  if (text(fields.codigo_barras)) form.codigo_barras = text(fields.codigo_barras);
+  // El código de barras no se edita en la revisión: solo pasa al formulario si lo leído es válido
+  if (isValidBarcode(text(fields.codigo_barras))) form.codigo_barras = text(fields.codigo_barras);
   if (text(fields.descripcion)) form.descripcion = text(fields.descripcion);
   const stock = parseInt(fields.stock, 10);
   if (stock > 0) form.stock = stock;

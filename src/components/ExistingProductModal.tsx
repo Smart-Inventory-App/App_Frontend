@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
 import AppTextInput from '@/components/AppTextInput';
+import BottomSheetModal from '@/components/BottomSheetModal';
 import CenteredModal from '@/components/CenteredModal';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import ProductInfoCard from '@/components/ProductInfoCard';
@@ -21,6 +22,10 @@ const STOCK_MAX_DIGITS = 6;
 
 type Method = 'name' | 'barcode' | 'label' | 'receipt';
 type Step = 'menu' | 'name' | 'source' | 'processing' | 'edit' | 'results';
+// El menú inicial sube desde abajo; al elegir una opción se cierra y el resto ocurre en una ventana en el centro
+type Phase = 'sheet' | 'window';
+// Un error de un campo va debajo de él; sin campo, es un aviso general
+type ErrorField = 'name' | 'barcode' | 'stock' | null;
 
 interface Props {
   visible: boolean;
@@ -73,9 +78,12 @@ export default function ExistingProductModal({
 }: Props) {
   const { t } = useTranslation();
 
+  const firstPhase: Phase = initialLabel ? 'window' : 'sheet';
+  const [phase, setPhase] = useState<Phase>(firstPhase);
   const [step, setStep] = useState<Step>(initialLabel ? 'edit' : 'menu');
   const [method, setMethod] = useState<Method | null>(initialLabel ? 'label' : null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; field: ErrorField } | null>(null);
+  const showError = (message: string, field: ErrorField = null) => setError({ message, field });
   const [queueInfo, setQueueInfo] = useState<{ position?: number | null; wait?: number | null }>({});
 
   // Búsqueda por nombre
@@ -95,8 +103,10 @@ export default function ExistingProductModal({
   const [saving, setSaving] = useState(false);
 
   const cancelledRef = useRef(false);
+  const sheetBody = useRef<React.ReactNode>(null);
 
   function resetAll() {
+    setPhase(firstPhase);
     setStep(initialLabel ? 'edit' : 'menu');
     setMethod(initialLabel ? 'label' : null);
     setError(null);
@@ -164,6 +174,7 @@ export default function ExistingProductModal({
     setMethod(picked);
     setError(null);
     setStep(picked === 'name' ? 'name' : 'source');
+    setPhase('window');
   };
 
   const handleBackToMenu = () => {
@@ -198,7 +209,7 @@ export default function ExistingProductModal({
       if (!asset) return;
       await runScan(METHOD_DOC_TYPE[method], asset);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t('scan.errorUpload'));
+      showError(err instanceof Error ? err.message : t('scan.errorUpload'));
       setStep('source');
     }
   };
@@ -223,7 +234,7 @@ export default function ExistingProductModal({
       if (cancelledRef.current) return;
 
       if (finalState.status === 'failed' || !finalState.result) {
-        setError(finalState.error ? t('existing.scanFailed', { reason: finalState.error }) : t('existing.scanFailedNoReason'));
+        showError(finalState.error ? t('existing.scanFailed', { reason: finalState.error }) : t('existing.scanFailedNoReason'));
         setStep('source');
         return;
       }
@@ -244,7 +255,7 @@ export default function ExistingProductModal({
         : err instanceof Error && err.message === 'cancelado'
           ? null
           : getScanErrorMessage(err, stage === 'upload' ? t('scan.errorUpload') : t('scan.errorPoll'));
-      if (message) setError(message);
+      if (message) showError(message);
       setStep('source');
     }
   };
@@ -254,7 +265,7 @@ export default function ExistingProductModal({
     setError(null);
     if (method === 'barcode') {
       if (!isValidBarcode(barcode)) {
-        setError(t('product.validationCodigoBarras'));
+        showError(t('product.validationCodigoBarras'), 'barcode');
         return;
       }
       await search(() => productService.getProductsByBarcode(barcode));
@@ -262,7 +273,7 @@ export default function ExistingProductModal({
     }
     const name = labelName.trim();
     if (!name) {
-      setError(t('existing.nameRequired'));
+      showError(t('existing.nameRequired'), 'name');
       return;
     }
     // Se compara con el nombre, la marca y la descripción de los productos, no solo con el nombre
@@ -285,7 +296,7 @@ export default function ExistingProductModal({
       clearSelection();
       setStep('results');
     } catch {
-      setError(t('existing.searchError'));
+      showError(t('existing.searchError'));
     } finally {
       setSearching(false);
     }
@@ -312,7 +323,7 @@ export default function ExistingProductModal({
   const handleConfirmStock = async () => {
     const quantity = parseInt(stock, 10);
     if (!selected || !quantity || quantity <= 0) {
-      setError(t('product.validationStock'));
+      showError(t('product.validationStock'), 'stock');
       return;
     }
     setError(null);
@@ -323,7 +334,7 @@ export default function ExistingProductModal({
       handleClose();
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      setError(typeof detail === 'string' ? detail : t('product.saveError'));
+      showError(typeof detail === 'string' ? detail : t('product.saveError'));
     } finally {
       setSaving(false);
     }
@@ -331,7 +342,10 @@ export default function ExistingProductModal({
 
   // ── Pantallas ───────────────────────────────────────────────────────────────
 
-  const renderError = () => (error ? <Text testID="existing-error" style={styles.errorBanner}>{error}</Text> : null);
+  // Aviso general (sin campo) y mensaje de un campo, que va debajo de él
+  const renderError = () => (error && !error.field ? <Text testID="existing-error" style={styles.errorBanner}>{error.message}</Text> : null);
+  const renderFieldError = (field: ErrorField) =>
+    error && error.field === field ? <Text testID="existing-error" style={styles.fieldError}>{error.message}</Text> : null;
 
   // `spaced`: debajo de un campo de texto, el título se separa del campo
   const renderOptionsList = (spaced = false) => (
@@ -368,11 +382,6 @@ export default function ExistingProductModal({
     return (
       <View>
         <ProductInfoCard product={selected} testIDPrefix="existing-selected" />
-        {method !== 'name' && (
-          <TouchableOpacity style={styles.changeLink} testID="existing-change" onPress={clearSelection}>
-            <Text style={styles.linkText}>{t('existing.change')}</Text>
-          </TouchableOpacity>
-        )}
         {!exit && (
           <>
             <Text style={styles.label}>{t('existing.stockLabel')} *</Text>
@@ -386,13 +395,21 @@ export default function ExistingProductModal({
               value={stock}
               onChangeText={v => { setStock(v.replace(/[^0-9]/g, '')); setError(null); }}
             />
+            {renderFieldError('stock')}
           </>
         )}
         {renderError()}
         <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.cancelAction} onPress={handleClose} testID="existing-cancel">
-            <Text style={styles.cancelActionText}>{t('existing.cancel')}</Text>
-          </TouchableOpacity>
+          {/* Con un producto reconocido al escanear, en vez de cancelar se puede elegir otro */}
+          {method !== 'name' ? (
+            <TouchableOpacity style={styles.cancelAction} onPress={clearSelection} testID="existing-change">
+              <Text style={styles.cancelActionText}>{t('existing.change')}</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.cancelAction} onPress={handleClose} testID="existing-cancel">
+              <Text style={styles.cancelActionText}>{t('existing.cancel')}</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[styles.confirmAction, saving && styles.disabled]}
             onPress={exit ? handleConfirmExitProduct : handleConfirmStock}
@@ -509,7 +526,7 @@ export default function ExistingProductModal({
           <Text style={styles.label}>{t('product.codigoBarras')}</Text>
           <AppTextInput
             testID="existing-barcode-input"
-            style={styles.input}
+            style={[styles.input, error?.field === 'barcode' && styles.inputError]}
             keyboardType="number-pad"
             maxLength={BARCODE_MAX_DIGITS}
             value={barcode}
@@ -517,6 +534,7 @@ export default function ExistingProductModal({
             placeholder={t('product.codigoBarras')}
             placeholderTextColor={Colors.placeholder}
           />
+          {renderFieldError('barcode')}
         </>
       ) : (
         <>
@@ -529,12 +547,13 @@ export default function ExistingProductModal({
           <Text style={styles.label}>{t('existing.nameLabel')} *</Text>
           <AppTextInput
             testID="existing-label-name-input"
-            style={styles.input}
+            style={[styles.input, error?.field === 'name' && styles.inputError]}
             placeholder={t('existing.namePlaceholder')}
             placeholderTextColor={Colors.placeholder}
             value={labelName}
             onChangeText={v => { setLabelName(v); setError(null); }}
           />
+          {renderFieldError('name')}
         </>
       )}
       <View style={styles.actionsRow}>
@@ -608,28 +627,60 @@ export default function ExistingProductModal({
     }
   };
 
+  const header = (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>{t(mode === 'exit' ? 'scan.title' : 'existing.title')}</Text>
+      <TouchableOpacity onPress={handleClose} testID="existing-modal-close">
+        <Ionicons name="close" size={24} color={Colors.textPrimary} />
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Mientras la hoja baja (porque se eligió una opción) sigue mostrando lo último que tenía, sin repetir lo de la ventana central
+  if (phase === 'sheet') {
+    sheetBody.current = (
+      <>
+        {header}
+        <View style={styles.content}>{renderStep()}</View>
+      </>
+    );
+  }
+
   return (
-    // Ventana en el centro de la pantalla: solo se cierra con su botón de cerrar o con Cancelar, no al tocar afuera
-    <CenteredModal
-      visible={visible}
-      onRequestClose={handleClose}
-      overlayTestID="existing-overlay"
-      cardTestID="existing-sheet"
-    >
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{t(mode === 'exit' ? 'scan.openButton' : 'existing.title')}</Text>
-        <TouchableOpacity onPress={handleClose} testID="existing-modal-close">
-          <Ionicons name="close" size={24} color={Colors.textPrimary} />
-        </TouchableOpacity>
-      </View>
-      <KeyboardAwareScrollView contentContainerStyle={styles.content}>
-        {renderStep()}
-      </KeyboardAwareScrollView>
-    </CenteredModal>
+    <>
+      {/* Menú inicial: sube desde abajo y tocar afuera vuelve al formulario */}
+      <BottomSheetModal
+        visible={visible && phase === 'sheet'}
+        onRequestClose={handleClose}
+        sheetStyle={styles.initialSheet}
+        overlayTestID="existing-initial-overlay"
+        sheetTestID="existing-initial-sheet"
+      >
+        {sheetBody.current}
+      </BottomSheetModal>
+      {/* Lo que el usuario eligió hacer, en el centro de la pantalla: solo se cierra con su botón de cerrar o con Cancelar, no al tocar afuera */}
+      <CenteredModal
+        visible={visible && phase === 'window'}
+        onRequestClose={handleClose}
+        overlayTestID="existing-overlay"
+        cardTestID="existing-sheet"
+      >
+        {header}
+        <KeyboardAwareScrollView contentContainerStyle={styles.content} reserveKeyboardSpace={false}>
+          {renderStep()}
+        </KeyboardAwareScrollView>
+      </CenteredModal>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  initialSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '85%',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -643,7 +694,9 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary, marginBottom: 10 },
   optionsTitleSpaced: { marginTop: 24 },
   notFoundText: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary, marginBottom: 14 },
-  changeLink: { alignSelf: 'flex-end', marginTop: 8 },
+  // Mensaje de un campo: va debajo de él, separado
+  fieldError: { color: Colors.inputBorderError, fontSize: 12, marginTop: 8 },
+  inputError: { borderColor: Colors.inputBorderError },
   label: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginTop: 12 },
   hintText: { fontSize: 13, color: Colors.textSecondary, marginBottom: 6 },
   errorBanner: {
@@ -696,7 +749,6 @@ const styles = StyleSheet.create({
   optionTextBox: { flex: 1 },
   optionText: { fontSize: 14, color: Colors.textPrimary },
   optionSubtext: { fontSize: 11, color: Colors.textSecondary, marginTop: 1 },
-  linkText: { fontSize: 13, color: Colors.primary, fontWeight: '600' },
   actionsRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
   cancelAction: {
     flex: 1,

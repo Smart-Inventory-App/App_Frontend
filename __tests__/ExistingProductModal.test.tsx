@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import ExistingProductModal from '../src/components/ExistingProductModal';
 import { productService } from '@/services/productService';
 import { ocrService } from '@/services/ocrService';
@@ -96,22 +96,47 @@ describe('ExistingProductModal - menu', () => {
     expect(screen.getByText('Escanear código de barras')).toBeTruthy();
   });
 
-  it('is a window in the center of the screen that only closes from its own buttons, not when tapping outside', () => {
+  it('starts as a sheet from the bottom: tapping outside of it closes it, tapping on it does not', () => {
     const { onClose } = setup();
     const { Modal } = require('react-native');
-    expect(screen.UNSAFE_getByType(Modal).props.animationType).toBe('fade');
-    fireEvent.press(screen.getByTestId('existing-overlay'));
-    fireEvent.press(screen.getByTestId('existing-sheet'));
+    expect(screen.UNSAFE_getAllByType(Modal)[0].props.animationType).toBe('none');
+    fireEvent.press(screen.getByTestId('existing-initial-sheet'));
     expect(onClose).not.toHaveBeenCalled();
-    fireEvent.press(screen.getByTestId('existing-modal-close'));
+    fireEvent.press(screen.getByTestId('existing-initial-overlay'));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('closes with the system back button', () => {
+  it('once a way is chosen, the sheet gives way to a window in the center that only closes from its own buttons', () => {
     const { onClose } = setup();
     const { Modal } = require('react-native');
-    act(() => { screen.UNSAFE_getByType(Modal).props.onRequestClose(); });
+    fireEvent.press(screen.getByTestId('existing-method-name'));
+    expect(screen.UNSAFE_getAllByType(Modal)[1].props.animationType).toBe('fade');
+    expect(screen.UNSAFE_getAllByType(Modal)[1].props.visible).toBe(true);
+    fireEvent.press(screen.getByTestId('existing-overlay'));
+    fireEvent.press(screen.getByTestId('existing-sheet'));
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.press(within(screen.getByTestId('existing-sheet')).getByTestId('existing-modal-close'));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes with the system back button, from the sheet and from the window', () => {
+    const { onClose } = setup();
+    const { Modal } = require('react-native');
+    act(() => { screen.UNSAFE_getAllByType(Modal)[0].props.onRequestClose(); });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    fireEvent.press(screen.getByTestId('existing-method-name'));
+    act(() => { screen.UNSAFE_getAllByType(Modal)[1].props.onRequestClose(); });
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('comes back to the sheet from the window with the back link', () => {
+    setup();
+    const { Modal } = require('react-native');
+    fireEvent.press(screen.getByTestId('existing-method-label'));
+    expect(screen.UNSAFE_getAllByType(Modal)[1].props.visible).toBe(true);
+    fireEvent.press(within(screen.getByTestId('existing-sheet')).getByTestId('existing-back'));
+    expect(screen.UNSAFE_getAllByType(Modal)[0].props.visible).toBe(true);
+    expect(screen.UNSAFE_getAllByType(Modal)[1].props.visible).toBe(false);
   });
 
   it('closes with the close button and shows nothing while hidden', () => {
@@ -215,6 +240,11 @@ describe('ExistingProductModal - by name', () => {
     fireEvent.press(screen.getByTestId('existing-option-product-1'));
     await act(async () => { fireEvent.press(screen.getByTestId('existing-confirm')); });
     expect(screen.getByText('El stock debe ser mayor a 0')).toBeTruthy();
+    // el mensaje va debajo del campo de stock, separado de él
+    const { StyleSheet } = require('react-native');
+    expect(StyleSheet.flatten(screen.getByTestId('existing-error').props.style).marginTop).toBeGreaterThanOrEqual(6);
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('"testID":"existing-error"')).toBeGreaterThan(tree.indexOf('"testID":"existing-stock-input"'));
     fireEvent.changeText(screen.getByTestId('existing-stock-input'), '0');
     await act(async () => { fireEvent.press(screen.getByTestId('existing-confirm')); });
     expect(screen.getByText('El stock debe ser mayor a 0')).toBeTruthy();
@@ -310,6 +340,12 @@ describe('ExistingProductModal - by barcode', () => {
     expect(screen.getByTestId('existing-selected-info')).toBeTruthy();
     expect(screen.getByTestId('existing-selected-categoria').props.children).toBe('Lacteos');
     expect(screen.getByTestId('existing-selected-stock').props.children).toBe('7');
+    // "Cambiar" ocupa el lugar de "Cancelar", al lado de "Confirmar", y no hay otro debajo de la información del producto
+    expect(screen.queryByTestId('existing-cancel')).toBeNull();
+    const tree = JSON.stringify(screen.toJSON());
+    const at = (id: string) => tree.indexOf(`"testID":"${id}"`);
+    expect(at('existing-change')).toBeGreaterThan(at('existing-stock-input'));
+    expect(at('existing-change')).toBeLessThan(at('existing-confirm'));
     fireEvent.press(screen.getByTestId('existing-change'));
     expect(screen.getByTestId('existing-option-product-1')).toBeTruthy();
     expect(screen.queryByTestId('existing-stock-input')).toBeNull();
@@ -357,6 +393,11 @@ describe('ExistingProductModal - by barcode', () => {
     fireEvent.changeText(screen.getByTestId('existing-barcode-input'), '123');
     await confirmEdit();
     expect(screen.getByText('El código de barras es inválido')).toBeTruthy();
+    // el mensaje va debajo del campo, antes de los botones
+    const tree = JSON.stringify(screen.toJSON());
+    const at = (id: string) => tree.indexOf(`"testID":"${id}"`);
+    expect(at('existing-error')).toBeGreaterThan(at('existing-barcode-input'));
+    expect(at('existing-error')).toBeLessThan(at('existing-edit-cancel'));
     expect(mockedProducts.getProductsByBarcode).not.toHaveBeenCalled();
   });
 
@@ -523,6 +564,11 @@ describe('ExistingProductModal - by label', () => {
     await scanWith(scanned('product_label', baseDraft({})));
     await confirmEdit();
     expect(screen.getByTestId('existing-error').props.children).toBe('Escribí el nombre del producto');
+    // el mensaje va debajo del campo del nombre, antes de los botones
+    const tree = JSON.stringify(screen.toJSON());
+    const at = (id: string) => tree.indexOf(`"testID":"${id}"`);
+    expect(at('existing-error')).toBeGreaterThan(at('existing-label-name-input'));
+    expect(at('existing-error')).toBeLessThan(at('existing-edit-cancel'));
     expect(mockedProducts.matchProducts).not.toHaveBeenCalled();
   });
 
@@ -573,9 +619,10 @@ describe('ExistingProductModal - exit mode (scan for a stock exit)', () => {
     return { onClose, onSelectProduct, onPickReceipt };
   };
 
-  it('is titled "Escanear imágenes" and offers barcode, label and invoice or receipt, in that order', () => {
+  it('is titled "Escanear imagen" and offers barcode, label and invoice or receipt, in that order', () => {
     setupExit();
-    expect(screen.getByText('Escanear imágenes')).toBeTruthy();
+    expect(screen.getByText('Escanear imagen')).toBeTruthy();
+    expect(screen.queryByText('Escanear imágenes')).toBeNull();
     expect(screen.getByText('¿Qué estás por escanear?')).toBeTruthy();
     const tree = JSON.stringify(screen.toJSON());
     const order = ['Código de barras', 'Etiqueta de producto', 'Ticket, remito o factura'].map(label => tree.indexOf(label));
@@ -651,15 +698,17 @@ describe('ExistingProductModal - exit mode (scan for a stock exit)', () => {
     expect(screen.getByTestId('existing-label-name-input')).toBeTruthy();
   });
 
-  it('can cancel after seeing the chosen product, without returning it', async () => {
-    mockedProducts.getProductsByBarcode.mockResolvedValue([LECHE]);
+  it('can pick another product after seeing the chosen one, without returning anything', async () => {
+    mockedProducts.getProductsByBarcode.mockResolvedValue([LECHE, LECHE_2]);
     const { onSelectProduct, onClose } = setupExit();
     fireEvent.press(screen.getByTestId('existing-method-barcode'));
     await scanWith(scanned('barcode', baseDraft({ codigo_barras: '7791234567898' })));
     await confirmEdit();
     fireEvent.press(screen.getByTestId('existing-option-product-1'));
-    fireEvent.press(screen.getByTestId('existing-cancel'));
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('existing-cancel')).toBeNull();
+    fireEvent.press(screen.getByTestId('existing-change'));
+    expect(screen.getByTestId('existing-option-product-2')).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
     expect(onSelectProduct).not.toHaveBeenCalled();
   });
 

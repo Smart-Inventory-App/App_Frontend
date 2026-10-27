@@ -350,7 +350,7 @@ export default {
   scan: {
     openButton: 'Escanear imágenes',
     title: 'Escanear imagen',
-    titleExpiry: 'Escanear fecha de vencimiento',
+    titleExpiry: 'Escanear vencimiento',
     titleBarcode: 'Escanear código de barras',
     titleReceipt: 'Ticket, remito o factura',
     close: 'Cerrar',

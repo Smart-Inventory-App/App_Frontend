@@ -346,7 +346,7 @@ export default {
   scan: {
     openButton: 'Scan images',
     title: 'Scan image',
-    titleExpiry: 'Scan expiry date',
+    titleExpiry: 'Scan expiry',
     titleBarcode: 'Scan barcode',
     titleReceipt: 'Ticket, receipt or invoice',
     close: 'Close',
