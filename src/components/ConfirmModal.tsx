@@ -16,7 +16,7 @@ interface Props {
 
 export default function ConfirmModal({ visible, message, confirmLabel, cancelLabel, confirmTone = 'danger', stacked = false, onConfirm, onCancel }: Props) {
   return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={onCancel}>
+    <Modal visible={visible} transparent animationType="fade" hardwareAccelerated statusBarTranslucent navigationBarTranslucent onRequestClose={onCancel}>
       <Pressable testID="confirm-backdrop" style={styles.overlay} onPress={onCancel}>
         {/* Pressable interno: tocar la tarjeta no debe cerrar el modal */}
         <Pressable testID="confirm-card" style={styles.card} onPress={() => {}}>

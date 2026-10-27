@@ -41,7 +41,7 @@ export default function AlertDetailModal({ alert, onClose }: Props) {
     <Modal
       visible={!!alert}
       transparent
-      animationType="fade"
+      animationType="fade" hardwareAccelerated
       statusBarTranslucent
       navigationBarTranslucent
       onRequestClose={onClose}

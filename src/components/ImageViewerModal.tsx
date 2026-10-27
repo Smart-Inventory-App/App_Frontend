@@ -168,7 +168,7 @@ export default function ImageViewerModal({ visible, uri, onClose }: Props) {
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="fade" hardwareAccelerated
       statusBarTranslucent
       navigationBarTranslucent
       onRequestClose={onClose}

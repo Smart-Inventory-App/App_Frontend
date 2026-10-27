@@ -1,5 +1,5 @@
 import React from 'react';
-import { Animated, Keyboard, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text } from 'react-native';
+import { Animated, Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import BottomSheetModal from '../src/components/BottomSheetModal';
@@ -83,6 +83,32 @@ describe('BottomSheetModal', () => {
       const configs = entering(timing).map(([, config]) => config);
       expect(configs.every(config => config.useNativeDriver === true)).toBe(true);
       expect(configs.every(config => typeof config.easing === 'function')).toBe(true);
+    });
+
+    it('uses hardware acceleration and leaves faster than it arrives', () => {
+      const timing = jest.spyOn(Animated, 'timing');
+      const { UNSAFE_getAllByType, rerender } = render(sheet(false));
+      rerender(sheet(true));
+      expect(UNSAFE_getAllByType(Modal)[0].props.hardwareAccelerated).toBe(true);
+      act(() => { UNSAFE_getAllByType(Modal)[0].props.onShow(); });
+      const enterMs = Math.max(...entering(timing).map(([, config]) => config.duration ?? 0));
+      timing.mockClear();
+      rerender(sheet(false));
+      const exitMs = Math.max(...timing.mock.calls.map(([, config]) => config.duration ?? 0));
+      expect(exitMs).toBeLessThan(enterMs);
+    });
+
+    it('travels only its own height, so the whole duration is spent on the visible movement', () => {
+      const { rerender } = render(sheet(false));
+      rerender(sheet(true));
+      const offset = () => {
+        const { transform } = StyleSheet.flatten(screen.getByTestId('sheet').props.style);
+        return (transform as { translateY: number }[])[0].translateY;
+      };
+      // todavía no subió: antes de medirla está un alto de pantalla más abajo, y una vez medida, exactamente su alto
+      expect(offset()).toBe(Dimensions.get('window').height);
+      act(() => { fireEvent(screen.getByTestId('sheet'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 360, height: 240 } } }); });
+      expect(offset()).toBe(240);
     });
 
     it('draws the sheet as a single image on Android while it moves, and goes back to normal afterwards', () => {

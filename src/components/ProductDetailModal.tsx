@@ -82,7 +82,7 @@ export default function ProductDetailModal({ product, onClose, generalRules }: P
     <Modal
       visible={!!product}
       transparent
-      animationType="fade"
+      animationType="fade" hardwareAccelerated
       statusBarTranslucent
       navigationBarTranslucent
       onRequestClose={onClose}

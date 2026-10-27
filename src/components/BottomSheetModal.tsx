@@ -13,8 +13,15 @@ interface Props {
   sheetTestID?: string;
 }
 
-const FADE_MS = 200;
-const SLIDE_MS = 260;
+const FADE_MS = 220;
+const SLIDE_MS = 300;
+// Al cerrar la hoja se va un poco más rápido de lo que llegó
+const EXIT_FADE_MS = 180;
+const EXIT_SLIDE_MS = 240;
+// Curvas de Material: la hoja llega frenando suave y se va acelerando, sin el tirón al principio o al final de las
+// curvas cúbicas simples
+const ENTER_EASING = Easing.bezier(0.2, 0, 0, 1);
+const EXIT_EASING = Easing.bezier(0.3, 0, 0.8, 0.15);
 const useNativeDriver = Platform.OS !== 'web';
 // Si el sistema no avisa que la ventana ya se ve (onShow), la hoja empieza a subir igual pasado este tiempo
 const ENTER_FALLBACK_MS = 250;
@@ -43,7 +50,7 @@ export default function BottomSheetModal({
     if (Platform.OS === 'android') setAnimating(true);
     Animated.parallel([
       Animated.timing(fade, { toValue: 1, duration: FADE_MS, easing: Easing.out(Easing.quad), useNativeDriver }),
-      Animated.timing(slide, { toValue: 1, duration: SLIDE_MS, easing: Easing.out(Easing.cubic), useNativeDriver }),
+      Animated.timing(slide, { toValue: 1, duration: SLIDE_MS, easing: ENTER_EASING, useNativeDriver }),
     ]).start(({ finished }) => {
       if (finished && Platform.OS === 'android') setAnimating(false);
     });
@@ -65,8 +72,8 @@ export default function BottomSheetModal({
     }
     if (Platform.OS === 'android') setAnimating(true);
     Animated.parallel([
-      Animated.timing(fade, { toValue: 0, duration: FADE_MS, easing: Easing.in(Easing.quad), useNativeDriver }),
-      Animated.timing(slide, { toValue: 0, duration: SLIDE_MS, easing: Easing.in(Easing.cubic), useNativeDriver }),
+      Animated.timing(fade, { toValue: 0, duration: EXIT_FADE_MS, easing: Easing.in(Easing.quad), useNativeDriver }),
+      Animated.timing(slide, { toValue: 0, duration: EXIT_SLIDE_MS, easing: EXIT_EASING, useNativeDriver }),
     ]).start(({ finished }) => {
       if (finished) {
         shown.current = false;
@@ -92,9 +99,13 @@ export default function BottomSheetModal({
     };
   }, []);
 
+  // La hoja recorre solo su propio alto (lo justo para salir de la pantalla): si recorriera el de toda la pantalla, buena
+  // parte de la duración se iría moviéndola fuera de la vista y el movimiento visible se sentiría brusco
+  const [sheetHeight, setSheetHeight] = useState(0);
+  const travel = sheetHeight > 0 ? sheetHeight : Dimensions.get('window').height;
   const translateY = slide.interpolate({
     inputRange: [0, 1],
-    outputRange: [Dimensions.get('window').height, 0],
+    outputRange: [travel, 0],
   });
 
   // La hoja llega hasta el borde inferior: se le suma el alto de los botones del sistema para que no tapen su contenido
@@ -103,12 +114,12 @@ export default function BottomSheetModal({
 
   return (
     // El modal ocupa toda la pantalla (también bajo la barra de estado y los botones del sistema)
-    <Modal visible={mounted} transparent animationType="none" statusBarTranslucent navigationBarTranslucent onShow={handleShow} onRequestClose={onRequestClose}>
+    <Modal visible={mounted} transparent animationType="none" hardwareAccelerated statusBarTranslucent navigationBarTranslucent onShow={handleShow} onRequestClose={onRequestClose}>
       {/* Con el teclado abierto la hoja sube y se achica para que sus campos queden a la vista */}
       <KeyboardAvoidingView behavior="padding" style={styles.container}>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: fade }]} />
         <Pressable testID={overlayTestID} style={StyleSheet.absoluteFill} onPress={onRequestClose} />
-        <Animated.View testID={sheetTestID} renderToHardwareTextureAndroid={animating} style={[sheetStyle, { paddingBottom: basePaddingBottom + (keyboardOpen ? 0 : insets.bottom), transform: [{ translateY }] }]}>
+        <Animated.View testID={sheetTestID} renderToHardwareTextureAndroid={animating} onLayout={e => setSheetHeight(e.nativeEvent.layout.height)} style={[sheetStyle, { paddingBottom: basePaddingBottom + (keyboardOpen ? 0 : insets.bottom), transform: [{ translateY }] }]}>
           {children}
         </Animated.View>
       </KeyboardAvoidingView>

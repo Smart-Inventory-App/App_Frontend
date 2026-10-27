@@ -38,7 +38,7 @@ export default function CenteredModal({ visible, onRequestClose, children, cardS
   const paddingBottom = keyboardOpen ? EDGE_MARGIN : Math.max(EDGE_MARGIN, insets.bottom + 12);
 
   return (
-    <Modal visible={open} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={onRequestClose}>
+    <Modal visible={open} transparent animationType="fade" hardwareAccelerated statusBarTranslucent navigationBarTranslucent onRequestClose={onRequestClose}>
       {/* Con el teclado abierto la ventana se achica para que sus campos queden a la vista. El margen va en un View
           aparte porque KeyboardAvoidingView pisa el padding inferior de su propio estilo. */}
       <KeyboardAvoidingView behavior="padding" style={styles.container}>
