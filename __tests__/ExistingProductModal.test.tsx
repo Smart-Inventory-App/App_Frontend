@@ -139,6 +139,24 @@ describe('ExistingProductModal - menu', () => {
     expect(screen.UNSAFE_getAllByType(Modal)[1].props.visible).toBe(false);
   });
 
+  it('while the window fades out it keeps what it showed, not the menu that now lives in the sheet', () => {
+    setup();
+    const { Modal } = require('react-native');
+    // ids de todo lo que contiene un elemento de React (los hijos ya armados)
+    const ids = (node: any, found: string[] = []): string[] => {
+      if (!node || typeof node !== 'object') return found;
+      if (Array.isArray(node)) { node.forEach(n => ids(n, found)); return found; }
+      if (node.props?.testID) found.push(node.props.testID);
+      ids(node.props?.children, found);
+      return found;
+    };
+    fireEvent.press(screen.getByTestId('existing-method-label'));
+    fireEvent.press(within(screen.getByTestId('existing-sheet')).getByTestId('existing-back'));
+    const inWindow = ids(screen.UNSAFE_getAllByType(Modal)[1].props.children);
+    expect(inWindow).toContain('existing-source-camera');
+    expect(inWindow).not.toContain('existing-method-name');
+  });
+
   it('closes with the close button and shows nothing while hidden', () => {
     const { onClose } = setup();
     fireEvent.press(screen.getByTestId('existing-modal-close'));

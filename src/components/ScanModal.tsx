@@ -164,6 +164,7 @@ export default function ScanModal({
 
   const cancelledRef = useRef(false);
   const sheetBody = useRef<React.ReactNode>(null);
+  const windowBody = useRef<React.ReactNode>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -839,6 +840,19 @@ export default function ScanModal({
     );
   }
 
+  // Lo mismo con la ventana central: al cerrarla (X, Cancelar, Atrás) los datos se reinician mientras ella todavía se
+  // desvanece, y mostraría un instante la ventana inicial (que ahora es la hoja de abajo). Se queda con lo último que tenía.
+  if (visible && phase === 'window') {
+    windowBody.current = (
+      <>
+        {header}
+        <KeyboardAwareScrollView contentContainerStyle={styles.content} reserveKeyboardSpace={false}>
+          {renderStep()}
+        </KeyboardAwareScrollView>
+      </>
+    );
+  }
+
   return (
     <>
       {/* Ventana inicial: sube desde abajo y tocar afuera vuelve al formulario */}
@@ -858,10 +872,7 @@ export default function ScanModal({
         overlayTestID="scan-overlay"
         cardTestID="scan-sheet"
       >
-        {header}
-        <KeyboardAwareScrollView contentContainerStyle={styles.content} reserveKeyboardSpace={false}>
-          {renderStep()}
-        </KeyboardAwareScrollView>
+        {windowBody.current}
       </CenteredModal>
     </>
   );

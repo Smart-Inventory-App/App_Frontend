@@ -104,6 +104,7 @@ export default function ExistingProductModal({
 
   const cancelledRef = useRef(false);
   const sheetBody = useRef<React.ReactNode>(null);
+  const windowBody = useRef<React.ReactNode>(null);
 
   function resetAll() {
     setPhase(firstPhase);
@@ -646,6 +647,19 @@ export default function ExistingProductModal({
     );
   }
 
+  // Lo mismo con la ventana central: al cerrarla (X, Cancelar, Atrás) los datos se reinician mientras ella todavía se
+  // desvanece, y mostraría un instante el menú inicial (que ahora es la hoja de abajo). Se queda con lo último que tenía.
+  if (visible && phase === 'window') {
+    windowBody.current = (
+      <>
+        {header}
+        <KeyboardAwareScrollView contentContainerStyle={styles.content} reserveKeyboardSpace={false}>
+          {renderStep()}
+        </KeyboardAwareScrollView>
+      </>
+    );
+  }
+
   return (
     <>
       {/* Menú inicial: sube desde abajo y tocar afuera vuelve al formulario */}
@@ -665,10 +679,7 @@ export default function ExistingProductModal({
         overlayTestID="existing-overlay"
         cardTestID="existing-sheet"
       >
-        {header}
-        <KeyboardAwareScrollView contentContainerStyle={styles.content} reserveKeyboardSpace={false}>
-          {renderStep()}
-        </KeyboardAwareScrollView>
+        {windowBody.current}
       </CenteredModal>
     </>
   );

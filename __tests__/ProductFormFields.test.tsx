@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { Image, Alert, StyleSheet } from 'react-native';
 import ProductFormFields from '../src/components/ProductFormFields';
 import { FieldFocusContext } from '../src/components/KeyboardAwareScrollView';
@@ -566,9 +566,9 @@ describe('ProductFormFields - add buttons and similar options', () => {
 });
 
 describe('ProductFormFields - labels and placeholders', () => {
-  it('labels the date field just "Vencimiento", with the format as its placeholder, and "Opcional" in the description', () => {
+  it('labels the date field "Fecha de vencimiento", with the format as its placeholder, and "Opcional" in the description', () => {
     render(<Wrapper />);
-    expect(screen.getByText('Vencimiento')).toBeTruthy();
+    expect(screen.getByText('Fecha de vencimiento')).toBeTruthy();
     expect(screen.queryByText(/DD\/MM\/AAAA/)).toBeNull();
     expect(screen.getByTestId('input-vencimiento').props.placeholder).toBe('DD/MM/AAAA');
     expect(screen.getByTestId('input-descripcion').props.placeholder).toBe('Opcional');
@@ -926,6 +926,25 @@ describe('ProductFormFields - image picker sheet', () => {
     const title = StyleSheet.flatten(screen.getAllByText('Seleccionar imagen').pop()!.props.style);
     expect(title.fontFamily).toBe('Roboto_500Medium');
     expect(title.fontSize).toBe(20);
+  });
+
+  it('has the same format as the scan sheets: header with a close button, then two big buttons', async () => {
+    render(<Wrapper />);
+    fireEvent.press(screen.getByText('Seleccionar imagen'));
+    const sheet = within(screen.getByTestId('image-picker-sheet'));
+    expect(StyleSheet.flatten(screen.getByTestId('image-picker-sheet').props.style).maxHeight).toBe('85%');
+    expect(sheet.getByText('Tomar foto')).toBeTruthy();
+    expect(sheet.getByText('Elegir de la galería')).toBeTruthy();
+    expect(sheet.queryByText('Cancelar')).toBeNull();
+    expect(StyleSheet.flatten(sheet.getByTestId('image-picker-camera').props.style).backgroundColor).toBeDefined();
+    fireEvent.press(sheet.getByTestId('image-picker-close'));
+    await waitFor(() => expect(screen.queryByTestId('image-picker-sheet')).toBeNull(), { timeout: 3000 });
+  });
+
+  it('labels the expiry field "Fecha de vencimiento"', () => {
+    render(<Wrapper />);
+    expect(screen.getByText('Fecha de vencimiento')).toBeTruthy();
+    expect(screen.queryByText('Vencimiento')).toBeNull();
   });
 
   it('closes when tapping outside the sheet but not when tapping the sheet', async () => {

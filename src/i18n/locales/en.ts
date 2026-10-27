@@ -222,6 +222,7 @@ export default {
     stock: 'Stock',
     marca: 'Brand',
     vencimiento: 'Expiry date',
+    fechaVencimiento: 'Expiry date',
     vencimientoPlaceholder: 'DD/MM/YYYY',
     descripcionPlaceholder: 'Optional',
     codigoBarras: 'Barcode',

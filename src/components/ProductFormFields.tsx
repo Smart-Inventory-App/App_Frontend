@@ -354,7 +354,7 @@ export default function ProductFormFields({
         onInputFocus={onFieldFocus}
       />
 
-      <Text style={styles.label}>{t('product.vencimiento')}</Text>
+      <Text style={styles.label}>{t('product.fechaVencimiento')}</Text>
       <View style={styles.dateRow}>
         <TextInput
           testID="input-vencimiento"
@@ -524,26 +524,24 @@ export default function ProductFormFields({
         overlayTestID="image-picker-overlay"
         sheetTestID="image-picker-sheet"
       >
-        <View style={styles.modalHandle} />
-        <Text style={styles.modalTitle}>{t('product.imagenSeleccionar')}</Text>
-
-        <TouchableOpacity style={styles.modalOption} onPress={() => doPick(pickFromCamera)}>
-          <View style={styles.modalOptionIcon}>
-            <Ionicons name="camera-outline" size={22} color={Colors.primary} />
-          </View>
-          <Text style={styles.modalOptionText}>{t('product.imagenCamara')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.modalOption} onPress={() => doPick(pickFromGallery)}>
-          <View style={styles.modalOptionIcon}>
+        {/* Mismo formato que las demás ventanas que suben desde abajo (escanear imagen, producto existente): título con
+            su botón de cerrar y las dos opciones como botones grandes */}
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>{t('product.imagenSeleccionar')}</Text>
+          <TouchableOpacity testID="image-picker-close" accessibilityLabel={t('scan.close')} onPress={() => setShowImagePicker(false)}>
+            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.modalContent}>
+          <TouchableOpacity testID="image-picker-camera" style={styles.bigButton} onPress={() => doPick(pickFromCamera)}>
+            <Ionicons name="camera-outline" size={22} color="#fff" />
+            <Text style={styles.bigButtonText}>{t('product.imagenCamara')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity testID="image-picker-gallery" style={[styles.bigButton, styles.bigButtonSecondary]} onPress={() => doPick(pickFromGallery)}>
             <Ionicons name="images-outline" size={22} color={Colors.primary} />
-          </View>
-          <Text style={styles.modalOptionText}>{t('product.imagenGaleria')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.modalCancel} onPress={() => setShowImagePicker(false)}>
-          <Text style={styles.modalCancelText}>Cancelar</Text>
-        </TouchableOpacity>
+            <Text style={styles.bigButtonSecondaryText}>{t('product.imagenGaleria')}</Text>
+          </TouchableOpacity>
+        </View>
       </BottomSheetModal>
 
 
@@ -694,53 +692,35 @@ const styles = StyleSheet.create({
     backgroundColor: '#fafafa',
   },
   imageRemoveBtnText: { fontSize: 13, color: Colors.error },
+  // Igual que las ventanas que suben desde abajo en el escaneo
   modalSheet: {
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    padding: 24,
-    paddingBottom: 36,
-    gap: 8,
+    maxHeight: '85%',
   },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#ddd',
-    alignSelf: 'center',
-    marginBottom: 12,
-  },
-  // Mismo formato que el título "Flujo de producto", un poco más chico
-  modalTitle: {
-    fontSize: 20,
-    lineHeight: 26,
-    fontFamily: 'Roboto_500Medium',
-    color: Colors.textPrimary,
-    marginBottom: 8,
-  },
-  modalOption: {
+  modalHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 14,
-    paddingVertical: 14,
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  modalOptionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f0f9f6',
+  // Mismo formato que el título "Flujo de producto", un poco más chico
+  modalTitle: { fontSize: 20, lineHeight: 26, fontFamily: 'Roboto_500Medium', color: Colors.textPrimary },
+  modalContent: { padding: 16, paddingBottom: 24 },
+  bigButton: {
+    flexDirection: 'row',
+    gap: 10,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  modalOptionText: { fontSize: 15, color: Colors.textPrimary, fontWeight: '500' },
-  modalCancel: {
-    marginTop: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
+    backgroundColor: Colors.primary,
     borderRadius: 10,
-    backgroundColor: '#f2f3f6',
+    padding: 14,
+    marginTop: 12,
   },
-  modalCancelText: { fontSize: 15, color: Colors.textSecondary, fontWeight: '600' },
+  bigButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  bigButtonSecondary: { backgroundColor: '#fff', borderWidth: 1, borderColor: Colors.primary },
+  bigButtonSecondaryText: { color: Colors.primary, fontWeight: 'bold', fontSize: 15 },
 });

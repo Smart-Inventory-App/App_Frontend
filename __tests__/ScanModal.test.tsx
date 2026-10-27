@@ -887,6 +887,23 @@ describe('ScanModal - the window itself', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('while the window fades out after closing it keeps what it showed, not the initial options that now live in the sheet', () => {
+    setup();
+    const { Modal } = require('react-native');
+    const ids = (node: any, found: string[] = []): string[] => {
+      if (!node || typeof node !== 'object') return found;
+      if (Array.isArray(node)) { node.forEach(n => ids(n, found)); return found; }
+      if (node.props?.testID) found.push(node.props.testID);
+      ids(node.props?.children, found);
+      return found;
+    };
+    fireEvent.press(screen.getByTestId('doc-type-product_label'));
+    fireEvent.press(within(screen.getByTestId('scan-sheet')).getByTestId('scan-modal-close'));
+    const inWindow = ids(screen.UNSAFE_getAllByType(Modal)[1].props.children);
+    expect(inWindow).toContain('scan-source-camera');
+    expect(inWindow).not.toContain('doc-type-product_label');
+  });
+
   it('closes with the system back button, from the sheet and from the window', () => {
     const { onClose } = setup();
     const { Modal } = require('react-native');

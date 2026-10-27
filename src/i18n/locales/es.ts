@@ -226,6 +226,7 @@ export default {
     stock: 'Stock',
     marca: 'Marca',
     vencimiento: 'Vencimiento',
+    fechaVencimiento: 'Fecha de vencimiento',
     vencimientoPlaceholder: 'DD/MM/AAAA',
     descripcionPlaceholder: 'Opcional',
     codigoBarras: 'Código de barras',
