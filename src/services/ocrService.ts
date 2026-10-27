@@ -13,7 +13,11 @@ export interface ScanImageAsset {
   type?: string | null;
 }
 
-async function pickImage(source: 'camera' | 'gallery'): Promise<ImagePicker.ImagePickerAsset | null> {
+/**
+ * Elige o saca la foto a escanear. Con `crop`, antes de seguir se abre la pantalla del sistema para recortarla
+ * (como al cargar la imagen de un producto), siempre: tanto si se saca con la cámara como si se elige de la galería.
+ */
+async function pickImage(source: 'camera' | 'gallery', crop = false): Promise<ImagePicker.ImagePickerAsset | null> {
   const permission = source === 'camera'
     ? await ImagePicker.requestCameraPermissionsAsync()
     : await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -27,8 +31,8 @@ async function pickImage(source: 'camera' | 'gallery'): Promise<ImagePicker.Imag
   }
 
   const result = source === 'camera'
-    ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: false })
-    : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: false });
+    ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: crop })
+    : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: crop });
 
   if (result.canceled || !result.assets || result.assets.length === 0) return null;
   return result.assets[0];

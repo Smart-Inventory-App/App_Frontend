@@ -1,5 +1,6 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
+  Keyboard,
   ScrollView,
   StyleSheet,
   Text,
@@ -26,7 +27,7 @@ import ScreenHeader from '@/components/ScreenHeader';
 import { isValidBarcode } from '@/utils/barcode';
 import ExistingProductModal from '@/components/ExistingProductModal';
 import ScanModal, { ScanSuccessKind } from '@/components/ScanModal';
-import { FixedScanDocType } from '@/types/ocr';
+import { FixedScanDocType, LabelScan } from '@/types/ocr';
 
 const SALIDA_NOTA_MAX = 50;
 
@@ -51,6 +52,10 @@ export default function CargarScreen() {
   const [scanField, setScanField] = useState<FixedScanDocType | null>(null);
   const [exitScanVisible, setExitScanVisible] = useState(false);
   const [scanSuccessKind, setScanSuccessKind] = useState<ScanSuccessKind | null>(null);
+  // Una etiqueta escaneada que pasa de una ventana a la otra: de «Escanear imágenes» a «Ingresar producto existente»
+  // (cargarla como producto existente) y al revés (cargarla como producto nuevo, o volver atrás)
+  const [scanLabel, setScanLabel] = useState<LabelScan | null>(null);
+  const [existingLabel, setExistingLabel] = useState<LabelScan | null>(null);
 
   const [salidaQuery, setSalidaQuery] = useState('');
   const [salidaSuggestions, setSalidaSuggestions] = useState<ProductSuggestion[]>([]);
@@ -60,6 +65,11 @@ export default function CargarScreen() {
   const [salidaMotivo, setSalidaMotivo] = useState<ExitReason | null>(null);
   const motivoChipsRef = useRef<ScrollView>(null);
   const [salidaNota, setSalidaNota] = useState('');
+
+  // Al aparecer la pantalla de «¡Listo!» el teclado no tiene que quedar abierto
+  useEffect(() => {
+    if (success) Keyboard.dismiss();
+  }, [success]);
 
   useFocusEffect(useCallback(() => {
     productService.getFilterOptions()
@@ -301,11 +311,11 @@ export default function CargarScreen() {
       <KeyboardAwareScrollView style={styles.container} contentContainerStyle={styles.content}>
         {direction === 'entrada' ? (
           <>
-          <TouchableOpacity style={styles.scanBtn} onPress={() => setExistingVisible(true)} testID="open-existing-modal">
+          <TouchableOpacity style={styles.scanBtn} onPress={() => { setExistingLabel(null); setExistingVisible(true); }} testID="open-existing-modal">
             <Ionicons name="cube-outline" size={18} color={Colors.primary} />
             <Text style={styles.scanBtnText}>{t('existing.openButton')}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.scanBtn} onPress={() => { setScanField(null); setScanVisible(true); }} testID="open-scan-modal">
+          <TouchableOpacity style={styles.scanBtn} onPress={() => { setScanField(null); setScanLabel(null); setScanVisible(true); }} testID="open-scan-modal">
             <Ionicons name="camera-outline" size={18} color={Colors.primary} />
             <Text style={styles.scanBtnText}>{t('scan.openButton')}</Text>
           </TouchableOpacity>
@@ -319,7 +329,7 @@ export default function CargarScreen() {
             marcaOptions={marcaOptions}
             onAddMarca={handleAddMarca}
             suggestNombre={productService.suggestProducts}
-            onScanField={field => { setScanField(field); setScanVisible(true); }}
+            onScanField={field => { setScanField(field); setScanLabel(null); setScanVisible(true); }}
           />
           </>
         ) : (
@@ -434,13 +444,28 @@ export default function CargarScreen() {
         visible={existingVisible}
         onClose={() => setExistingVisible(false)}
         onSuccess={handleExistingSuccess}
+        initialLabel={existingLabel}
+        // Ningún producto se parece a lo escaneado: se carga uno nuevo con los datos leídos, para que el usuario los valide
+        onLoadAsNew={label => {
+          setExistingVisible(false);
+          setScanField(null);
+          setScanLabel(label);
+          setScanVisible(true);
+        }}
+        // Volver a los datos leídos de la etiqueta, de donde se vino
+        onBackToLabel={label => {
+          setExistingVisible(false);
+          setScanField(null);
+          setScanLabel(label);
+          setScanVisible(true);
+        }}
       />
       <ExistingProductModal
         mode="exit"
         visible={exitScanVisible}
         onClose={() => setExitScanVisible(false)}
         onSelectProduct={pickSalidaSuggestion}
-        onPickReceipt={() => { setScanField('receipt'); setScanVisible(true); }}
+        onPickReceipt={() => { setScanField('receipt'); setScanLabel(null); setScanVisible(true); }}
       />
       <ScanModal
         visible={scanVisible}
@@ -455,6 +480,13 @@ export default function CargarScreen() {
         onApplyToForm={updater => setForm(updater)}
         fixedDocType={scanField}
         receiptDirection={scanField === 'receipt' ? 'salida' : 'entrada'}
+        initialLabel={scanLabel}
+        // «Cargar como producto existente»: el nombre leído viaja al ingreso de un producto existente
+        onLoadAsExisting={label => {
+          setScanVisible(false);
+          setExistingLabel(label);
+          setExistingVisible(true);
+        }}
       />
     </KeyboardAvoidingView>
   );

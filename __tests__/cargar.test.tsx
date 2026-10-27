@@ -72,7 +72,7 @@ jest.mock('@/components/ProductFormFields', () => {
 
 jest.mock('@/components/ExistingProductModal', () => {
   const { View: RNView, Text: RNText, TouchableOpacity } = require('react-native');
-  return function MockExistingProductModal({ visible, mode, onSuccess, onClose, onSelectProduct, onPickReceipt }: any) {
+  return function MockExistingProductModal({ visible, mode, onSuccess, onClose, onSelectProduct, onPickReceipt, initialLabel, onLoadAsNew, onBackToLabel }: any) {
     if (!visible) return null;
     return (
       <RNView testID="mock-existing-modal">
@@ -89,6 +89,13 @@ jest.mock('@/components/ExistingProductModal', () => {
         <TouchableOpacity testID="mock-existing-close" onPress={onClose}>
           <RNText>close</RNText>
         </TouchableOpacity>
+        <RNText testID="mock-existing-initial">{JSON.stringify(initialLabel ?? null)}</RNText>
+        <TouchableOpacity testID="mock-existing-load-new" onPress={() => onLoadAsNew({ draft: { nombre: 'Yogur', confianzas: {}, coincidencias: [] }, asset: { uri: 'file://l.jpg' } })}>
+          <RNText>load new</RNText>
+        </TouchableOpacity>
+        <TouchableOpacity testID="mock-existing-back" onPress={() => onBackToLabel({ draft: { nombre: 'Yogur editado', confianzas: {}, coincidencias: [] }, asset: null })}>
+          <RNText>back</RNText>
+        </TouchableOpacity>
       </RNView>
     );
   };
@@ -96,7 +103,7 @@ jest.mock('@/components/ExistingProductModal', () => {
 
 jest.mock('@/components/ScanModal', () => {
   const { View: RNView, Text: RNText, TouchableOpacity } = require('react-native');
-  return function MockScanModal({ visible, onSuccess, onClose, onApplyToForm, fixedDocType, receiptDirection }: any) {
+  return function MockScanModal({ visible, onSuccess, onClose, onApplyToForm, fixedDocType, receiptDirection, initialLabel, onLoadAsExisting }: any) {
     if (!visible) return null;
     return (
       <RNView testID="mock-scan-modal">
@@ -125,6 +132,10 @@ jest.mock('@/components/ScanModal', () => {
         </TouchableOpacity>
         <TouchableOpacity testID="mock-scan-close" onPress={onClose}>
           <RNText>close</RNText>
+        </TouchableOpacity>
+        <RNText testID="mock-scan-initial">{JSON.stringify(initialLabel ?? null)}</RNText>
+        <TouchableOpacity testID="mock-scan-load-existing" onPress={() => onLoadAsExisting({ draft: { nombre: 'Leche', confianzas: {}, coincidencias: [] }, asset: null })}>
+          <RNText>load existing</RNText>
         </TouchableOpacity>
       </RNView>
     );
@@ -1155,5 +1166,102 @@ describe('CargarScreen - success screen buttons and check mark', () => {
     expect(mockReplace).not.toHaveBeenCalled();
     expect(duration()).toBe(280);
     expect(screen.getByText('Guardar producto')).toBeTruthy();
+  });
+});
+
+describe('CargarScreen - the scanned label moves between the two windows', () => {
+  it('"Cargar como producto existente" closes the scan window and opens the existing product one with the label', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    expect(screen.getByTestId('mock-scan-initial').props.children).toBe('null');
+    fireEvent.press(screen.getByTestId('mock-scan-load-existing'));
+    expect(screen.queryByTestId('mock-scan-modal')).toBeNull();
+    expect(JSON.parse(screen.getByTestId('mock-existing-initial').props.children).draft.nombre).toBe('Leche');
+  });
+
+  it('"Cargar nuevo producto" closes the existing window and opens the scan one on the label data', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-existing-modal'));
+    fireEvent.press(screen.getByTestId('mock-existing-load-new'));
+    expect(screen.queryByTestId('mock-existing-modal')).toBeNull();
+    expect(JSON.parse(screen.getByTestId('mock-scan-initial').props.children).draft.nombre).toBe('Yogur');
+    expect(screen.getByTestId('mock-scan-target').props.children).toBe('null');
+  });
+
+  it('going back from the existing window returns to the label data, as it was edited', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-scan-load-existing'));
+    fireEvent.press(screen.getByTestId('mock-existing-back'));
+    expect(screen.queryByTestId('mock-existing-modal')).toBeNull();
+    expect(JSON.parse(screen.getByTestId('mock-scan-initial').props.children).draft.nombre).toBe('Yogur editado');
+  });
+
+  it('opening the windows again from their buttons starts them clean, without the label', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-existing-modal'));
+    fireEvent.press(screen.getByTestId('mock-existing-load-new'));
+    fireEvent.press(screen.getByTestId('mock-scan-close'));
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    expect(screen.getByTestId('mock-scan-initial').props.children).toBe('null');
+    fireEvent.press(screen.getByTestId('mock-scan-load-existing'));
+    fireEvent.press(screen.getByTestId('mock-existing-close'));
+    fireEvent.press(screen.getByTestId('open-existing-modal'));
+    expect(screen.getByTestId('mock-existing-initial').props.children).toBe('null');
+  });
+
+  it('the invoice scan of an exit and the field scans do not inherit a previous label', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-existing-modal'));
+    fireEvent.press(screen.getByTestId('mock-existing-load-new'));
+    fireEvent.press(screen.getByTestId('mock-scan-close'));
+    fireEvent.press(screen.getByTestId('mock-scan-expiry'));
+    expect(screen.getByTestId('mock-scan-initial').props.children).toBe('null');
+    fireEvent.press(screen.getByTestId('mock-scan-close'));
+    fireEvent.press(screen.getByText('Salida'));
+    fireEvent.press(screen.getByTestId('open-exit-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-existing-receipt'));
+    expect(screen.getByTestId('mock-scan-initial').props.children).toBe('null');
+  });
+});
+
+describe('CargarScreen - the keyboard closes on the success screen', () => {
+  afterEach(() => { jest.restoreAllMocks(); });
+
+  it('closes the keyboard when an entry is confirmed', async () => {
+    mockedProducts.createProduct.mockResolvedValue({ id: 1 } as any);
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    render(<CargarScreen />);
+    fireEvent.changeText(screen.getByTestId('mock-form-nombre'), 'Leche');
+    dismiss.mockClear();
+    await act(async () => { fireEvent.press(screen.getByText('Guardar producto')); });
+    expect(screen.getByText('¡Listo!')).toBeTruthy();
+    expect(dismiss).toHaveBeenCalled();
+  });
+
+  it('closes the keyboard when an exit is confirmed', async () => {
+    mockedProducts.suggestProducts.mockResolvedValue([{ id: 7, nombre: 'Yogur', categoria: 'Lacteos', stock: 5 }]);
+    mockedProducts.registerEvent.mockResolvedValue({ event_type: 'consumed', quantity: 1, remaining_stock: 4 });
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByText('Salida'));
+    fireEvent.press(screen.getByTestId('open-exit-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-existing-select'));
+    fireEvent.changeText(screen.getByPlaceholderText('0'), '1');
+    fireEvent.press(screen.getByTestId('salida-motivo-consumed'));
+    dismiss.mockClear();
+    await act(async () => { fireEvent.press(screen.getByText('Registrar salida')); });
+    expect(screen.getByText('¡Listo!')).toBeTruthy();
+    expect(dismiss).toHaveBeenCalled();
+  });
+
+  it('closes the keyboard when a scan or an existing product entry finishes', () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-existing-modal'));
+    dismiss.mockClear();
+    fireEvent.press(screen.getByTestId('mock-existing-success'));
+    expect(screen.getByText('¡Listo!')).toBeTruthy();
+    expect(dismiss).toHaveBeenCalled();
   });
 });

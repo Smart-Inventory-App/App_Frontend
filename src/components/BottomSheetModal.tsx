@@ -1,6 +1,7 @@
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleProp, StyleSheet, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useOpenAfterKeyboardCloses } from '@/hooks/useOpenAfterKeyboardCloses';
 
 interface Props {
   visible: boolean;
@@ -21,9 +22,11 @@ const ENTER_FALLBACK_MS = 250;
 // Hoja inferior en la que el fondo oscuro aparece solo con un fundido (sin moverse)
 // y únicamente la hoja sube desde abajo. Con animationType="slide" se movían las dos juntas.
 export default function BottomSheetModal({
-  visible, onRequestClose, children, sheetStyle, overlayTestID, sheetTestID,
+  visible: requestedVisible, onRequestClose, children, sheetStyle, overlayTestID, sheetTestID,
 }: Props) {
   const insets = useSafeAreaInsets();
+  // Con el teclado levantado, primero se lo cierra y recién después se abre la hoja: si no, queda un hueco transparente debajo
+  const visible = useOpenAfterKeyboardCloses(requestedVisible);
   const [mounted, setMounted] = useState(visible);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   // Mientras sube, la hoja se dibuja una sola vez como imagen (en Android) y esa imagen es la que se mueve: así el

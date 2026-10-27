@@ -90,6 +90,7 @@ App_Frontend/
 │   │   ├── AlertDetailModal.tsx   # Ventana «Detalle de Alerta»
 │   │   ├── ExistingProductModal.tsx # Ingresar producto existente / elegir producto en una salida
 │   │   ├── ScanModal.tsx          # Escaneo de etiqueta, comprobante, vencimiento y código
+│   │   ├── CenteredModal.tsx      # Ventana centrada que solo se cierra a propósito (no al tocar afuera)
 │   │   ├── ScreenHeader.tsx       # Banner superior (ícono de inicio + título)
 │   │   ├── HomeHeader.tsx         # Banner del home (logo, saludo y estado)
 │   │   ├── BottomSheetModal.tsx   # Hoja inferior que respeta los botones del sistema
@@ -168,6 +169,8 @@ La suite tiene **más de 1.100 tests**, con ~96 % de cobertura de líneas, ~95 %
 - **Stock total de producto:** pantalla completa donde se busca un producto por nombre y se ve la suma del stock de todos los que tienen el mismo nombre y categoría (de cualquier marca). El nombre y el resumen quedan fijos, solo se desplaza el listado de «Productos encontrados», y cada producto tiene una casilla para incluirlo o no en el total.
 
 **Cargar.** Entrada (alta manual, producto existente y escaneo de etiqueta o comprobante, con cámaras para el vencimiento y el código de barras) y Salida (motivos Vendido, Consumido, Vencido y Alquilado en una fila que se desliza hacia los costados, sin ninguno elegido al empezar: el elegido pasa al inicio y vuelve a su lugar al deseleccionarlo; escaneo de comprobante; al elegir un producto se muestra solo su nombre y debajo una tarjeta con categoría, marca, stock actual y vencimiento). **Los campos empiezan siempre vacíos**: no se completan con la categoría o la ubicación de la acción anterior.
+
+**Escaneo de etiquetas.** Antes de procesar la foto de una etiqueta (con la cámara o desde la galería) se abre el recorte del sistema. Al escanear una etiqueta en «Escanear imágenes» no se abre otro formulario: se muestra el texto leído y todos los campos que se autocompletan (también los no reconocidos, vacíos) para editarlos; «Confirmar» los carga en el formulario de producto con la foto como imagen del producto y «Cancelar» termina sin cargar nada. Desde ahí, «Cargar como producto existente» lleva el nombre al ingreso de un producto existente (con botón atrás). En «Ingresar producto existente» (por etiqueta o código de barras) los resultados se titulan «Productos reconocidos», se buscan comparando el texto leído con el nombre, la marca y la descripción (`GET /products/match`), y si ninguno coincide se ofrece «Editar de nuevo» y «Cargar nuevo producto». En una salida el formato es el mismo, pero sin producto solo se avisa y se vuelve atrás. Las ventanas de escaneo y de ingreso de producto existente se muestran en el centro y únicamente se cierran con sus botones; cualquier ventana que sube desde abajo cierra antes el teclado si estaba abierto.
 
 **Alertas.** El resumen cuenta las alertas críticas, las advertencias y las informativas; los filtros son Todas, Críticas, Stocks y Vencidos. Al volver a la pantalla siempre vuelve a «Todas». Cada entrada tiene un alto fijo (título y detalle de hasta dos renglones) y al tocarla se abre **«Detalle de Alerta»**: imagen, nombre, categoría, el motivo con el color de su nivel y su información, marca, stock y vencimiento (si tiene). Los datos vienen de `GET /alerts/*`.
 

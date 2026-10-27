@@ -60,6 +60,12 @@ export const productService = {
     return data;
   },
 
+  /** Los productos que se parecen a un texto leído de una etiqueta: compara con el nombre, la marca y la descripción. */
+  async matchProducts(text: string): Promise<ProductSuggestion[]> {
+    const { data } = await api.get<ProductSuggestion[]>('/products/match', { params: { q: text } });
+    return data;
+  },
+
   async getProductsByBarcode(codigo: string): Promise<ProductSuggestion[]> {
     const { data } = await api.get<ProductSuggestion[]>(`/products/by-barcode/${encodeURIComponent(codigo)}/all`);
     return data;

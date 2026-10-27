@@ -8,6 +8,10 @@ import {
   isValidIsoDate,
   validateProductForm,
   applySuggestionToForm,
+  draftToLabelFields,
+  EMPTY_LABEL_FIELDS,
+  labelFieldsToForm,
+  validateLabelFields,
 } from '../src/utils/ocrDraft';
 import { ProductDraft, ProductMatch } from '../src/types/ocr';
 
@@ -255,5 +259,57 @@ describe('applySuggestionToForm', () => {
     expect(result.descripcion).toBeUndefined();
     expect(result.marca).toBeUndefined();
     expect(result.codigo_barras).toBeUndefined();
+  });
+});
+
+describe('draftToLabelFields', () => {
+  it('has every field, empty, when nothing was read', () => {
+    expect(draftToLabelFields(null)).toEqual(EMPTY_LABEL_FIELDS);
+    expect(draftToLabelFields(undefined)).toEqual(EMPTY_LABEL_FIELDS);
+    expect(draftToLabelFields({ confianzas: {}, coincidencias: [] })).toEqual(EMPTY_LABEL_FIELDS);
+  });
+
+  it('turns what was read into text, with the date as DD/MM/AAAA, and leaves the location to be filled in', () => {
+    expect(draftToLabelFields({
+      nombre: 'Leche', marca: 'Ser', categoria: 'Lacteos', vencimiento: '2027-03-01', codigo_barras: '7791234567898',
+      descripcion: 'Entera', stock: 3, confianzas: {}, coincidencias: [],
+    })).toEqual({
+      nombre: 'Leche', marca: 'Ser', categoria: 'Lacteos', ubicacion: '', vencimiento: '01/03/2027',
+      codigo_barras: '7791234567898', descripcion: 'Entera', stock: '3',
+    });
+  });
+});
+
+describe('validateLabelFields', () => {
+  const ok = { ...EMPTY_LABEL_FIELDS, nombre: 'Leche' };
+
+  it('only requires the name', () => {
+    expect(validateLabelFields(EMPTY_LABEL_FIELDS)).toBe('nombre');
+    expect(validateLabelFields({ ...EMPTY_LABEL_FIELDS, nombre: '   ' })).toBe('nombre');
+    expect(validateLabelFields(ok)).toBeNull();
+  });
+
+  it('rejects a date that does not exist and a wrong barcode, when they were filled in', () => {
+    expect(validateLabelFields({ ...ok, vencimiento: '31/02/2027' })).toBe('vencimiento');
+    expect(validateLabelFields({ ...ok, vencimiento: '01/03/2027' })).toBeNull();
+    expect(validateLabelFields({ ...ok, codigo_barras: '123' })).toBe('codigoBarras');
+    expect(validateLabelFields({ ...ok, codigo_barras: '7791234567898' })).toBeNull();
+  });
+});
+
+describe('labelFieldsToForm', () => {
+  it('only carries the fields that have a value, trimmed, with the date as ISO and the image', () => {
+    expect(labelFieldsToForm({
+      nombre: ' Leche ', marca: '', categoria: 'Lacteos', ubicacion: 'Heladera', vencimiento: '01/03/2027',
+      codigo_barras: '', descripcion: 'Entera', stock: '4',
+    }, 'https://img/x.jpg')).toEqual({
+      nombre: 'Leche', categoria: 'Lacteos', ubicacion: 'Heladera', vencimiento: '2027-03-01', descripcion: 'Entera',
+      stock: 4, imagen_url: 'https://img/x.jpg',
+    });
+  });
+
+  it('leaves out an empty or zero stock, an incomplete date and a missing image', () => {
+    expect(labelFieldsToForm({ ...EMPTY_LABEL_FIELDS, nombre: 'Leche', stock: '0', vencimiento: '01/03' })).toEqual({ nombre: 'Leche' });
+    expect(labelFieldsToForm({ ...EMPTY_LABEL_FIELDS, nombre: 'Leche', codigo_barras: ' 7791234567898 ' }).codigo_barras).toBe('7791234567898');
   });
 });

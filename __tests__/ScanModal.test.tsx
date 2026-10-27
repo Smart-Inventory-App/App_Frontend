@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import ScanModal from '../src/components/ScanModal';
 import { productService } from '@/services/productService';
 import { ocrService } from '@/services/ocrService';
+import { uploadImage } from '@/services/imageService';
 import { ProductDraft, ScanResult, ScanState } from '@/types/ocr';
 
 jest.mock('@/services/productService', () => ({
@@ -28,33 +29,13 @@ jest.mock('@/services/ocrService', () => ({
   }),
 }));
 
-jest.mock('@/components/ProductFormFields', () => {
-  const { View, TextInput } = require('react-native');
-  return function MockProductFormFields({ form, onChange }: any) {
-    return (
-      <View>
-        <TextInput
-          testID="mock-nombre"
-          value={form.nombre ?? ''}
-          onChangeText={(v: string) => onChange({ ...form, nombre: v })}
-        />
-        <TextInput
-          testID="mock-categoria"
-          value={form.categoria ?? ''}
-          onChangeText={(v: string) => onChange({ ...form, categoria: v })}
-        />
-        <TextInput
-          testID="mock-stock"
-          value={form.stock != null ? String(form.stock) : ''}
-          onChangeText={(v: string) => onChange({ ...form, stock: v ? Number(v) : undefined })}
-        />
-      </View>
-    );
-  };
-});
+jest.mock('@/services/imageService', () => ({
+  uploadImage: jest.fn(),
+}));
 
 const mockedOcr = ocrService as jest.Mocked<typeof ocrService>;
 const mockedProducts = productService as jest.Mocked<typeof productService>;
+const mockedUpload = uploadImage as jest.Mock;
 
 const baseDraft = (overrides: Partial<ProductDraft> = {}): ProductDraft => ({
   confianzas: {},
@@ -108,12 +89,32 @@ describe('ScanModal - doc type & source selection', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('moves to the source step after picking a doc type, and back again', () => {
+  it('moves to the source step after picking a doc type, with no back button', () => {
     setup();
     fireEvent.press(screen.getByTestId('doc-type-product_label'));
     expect(screen.getByTestId('scan-source-camera')).toBeTruthy();
-    fireEvent.press(screen.getByText('Atrás'));
-    expect(screen.getByTestId('doc-type-product_label')).toBeTruthy();
+    expect(screen.queryByText('Atrás')).toBeNull();
+  });
+
+  it('calls the receipt option "Ticket, remito o factura"', () => {
+    setup();
+    expect(screen.getByText('Ticket, remito o factura')).toBeTruthy();
+    expect(screen.queryByText('Remito o factura')).toBeNull();
+  });
+
+  it('titles the next window after what is going to be scanned, instead of "Escanear imagen"', () => {
+    setup();
+    expect(screen.getByText('Escanear imagen')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('doc-type-product_label'));
+    expect(screen.getByText('Etiqueta de producto')).toBeTruthy();
+    expect(screen.queryByText('Escanear imagen')).toBeNull();
+  });
+
+  it('titles the receipt window "Ticket, remito o factura"', () => {
+    setup();
+    fireEvent.press(screen.getByTestId('doc-type-receipt'));
+    expect(screen.getAllByText('Ticket, remito o factura')).toHaveLength(1);
+    expect(screen.queryByText('Escanear imagen')).toBeNull();
   });
 
   it('stays on the source step when the user cancels the picker', async () => {
@@ -123,7 +124,7 @@ describe('ScanModal - doc type & source selection', () => {
     await act(async () => {
       fireEvent.press(screen.getByTestId('scan-source-camera'));
     });
-    expect(mockedOcr.pickImage).toHaveBeenCalledWith('camera');
+    expect(mockedOcr.pickImage).toHaveBeenCalledWith('camera', true);
     expect(screen.getByTestId('scan-source-camera')).toBeTruthy();
   });
 
@@ -168,7 +169,7 @@ describe('ScanModal - product_label review flow', () => {
       resolvePoll({ status: 'done', doc_type: 'product_label', result } as ScanState);
     });
 
-    expect(screen.getByTestId('mock-nombre').props.value).toBe('Leche');
+    expect(screen.getByTestId('label-field-nombre').props.value).toBe('Leche');
   });
 
   it('shows an error and resets when the job fails', async () => {
@@ -239,127 +240,196 @@ describe('ScanModal - product_label review flow', () => {
     expect(screen.getByText('El escaneo está tardando más de lo esperado, probá de nuevo')).toBeTruthy();
   });
 
-  it('applies a suggested match onto the form', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    const result = baseResult({
-      draft: baseDraft({
-        nombre: 'yog ser frut',
-        coincidencias: [{ id: 4, nombre: 'Yogur Ser Frutilla', marca: 'Ser', score: 0.9, por_codigo: false, stock: 1 }],
-      }),
-    });
-    mockedOcr.scan.mockResolvedValue({ status: 'done', doc_type: 'product_label', result } as ScanState);
-
+  it('asks for the photo to be cropped for a label, with the camera and the gallery, and not for the other types', async () => {
+    mockedOcr.pickImage.mockResolvedValue(null);
     setup();
     fireEvent.press(screen.getByTestId('doc-type-product_label'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
-
-    fireEvent.press(screen.getByTestId('match-4'));
-    expect(screen.getByTestId('mock-nombre').props.value).toBe('Yogur Ser Frutilla');
+    await act(async () => { fireEvent.press(screen.getByTestId('scan-source-camera')); });
+    await act(async () => { fireEvent.press(screen.getByTestId('scan-source-gallery')); });
+    expect(mockedOcr.pickImage.mock.calls).toEqual([['camera', true], ['gallery', true]]);
   });
 
-  it('validates required fields before confirming', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    mockedOcr.scan.mockResolvedValue({ status: 'done', doc_type: 'product_label', result: baseResult({ draft: baseDraft() }) } as ScanState);
-
+  it('does not ask to crop the photo of a receipt', async () => {
+    mockedOcr.pickImage.mockResolvedValue(null);
     setup();
-    fireEvent.press(screen.getByTestId('doc-type-product_label'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
+    fireEvent.press(screen.getByTestId('doc-type-receipt'));
+    await act(async () => { fireEvent.press(screen.getByTestId('scan-source-camera')); });
+    expect(mockedOcr.pickImage).toHaveBeenCalledWith('camera', false);
+  });
+});
 
-    fireEvent.press(screen.getByTestId('confirm-draft'));
-    expect(screen.getByText('El nombre es requerido')).toBeTruthy();
-    expect(mockedProducts.createProduct).not.toHaveBeenCalled();
+describe('ScanModal - label review (the fields that will fill the form)', () => {
+  const LABEL = { uri: 'file://label.jpg', fileName: 'label.jpg', mimeType: 'image/jpeg' };
+
+  const scanLabel = async (draft: ProductDraft, props: Partial<React.ComponentProps<typeof ScanModal>> = {}) => {
+    mockedOcr.pickImage.mockResolvedValue(LABEL as any);
+    mockedOcr.scan.mockResolvedValue({ status: 'done', doc_type: 'product_label', result: baseResult({ draft }) } as ScanState);
+    const handlers = setup(props);
+    fireEvent.press(screen.getByTestId('doc-type-product_label'));
+    await act(async () => { fireEvent.press(screen.getByTestId('scan-source-camera')); });
+    return handlers;
+  };
+
+  const FIELDS = ['nombre', 'marca', 'categoria', 'ubicacion', 'vencimiento', 'codigo_barras', 'descripcion', 'stock'];
+
+  it('shows the text that was read, the photo and the recognized fields filled in, editable', async () => {
+    await scanLabel(baseDraft({ nombre: 'Leche', marca: 'Ser', vencimiento: '2027-03-01', texto_leido: 'LECHE SER' }));
+    expect(screen.getByText('Datos leídos de la etiqueta')).toBeTruthy();
+    expect(screen.getByTestId('label-read-text').props.children).toBe('Texto leído: LECHE SER');
+    expect(screen.getByTestId('label-image').props.source).toEqual({ uri: 'file://label.jpg' });
+    expect(screen.getByTestId('label-field-nombre').props.value).toBe('Leche');
+    expect(screen.getByTestId('label-field-marca').props.value).toBe('Ser');
+    expect(screen.getByTestId('label-field-vencimiento').props.value).toBe('01/03/2027');
+    fireEvent.changeText(screen.getByTestId('label-field-nombre'), 'Leche entera');
+    expect(screen.getByTestId('label-field-nombre').props.value).toBe('Leche entera');
   });
 
-  it('creates the product and reports "created" on success', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    mockedOcr.scan.mockResolvedValue({
-      status: 'done',
-      doc_type: 'product_label',
-      result: baseResult({ draft: baseDraft({ nombre: 'Leche' }) }),
-    } as ScanState);
-    mockedProducts.createProduct.mockResolvedValue({ id: 1, merged: false } as any);
+  it('always shows every field, also the ones that were not recognized, empty and marked', async () => {
+    await scanLabel(baseDraft({ nombre: 'Leche' }));
+    FIELDS.forEach(field => expect(screen.getByTestId(`label-field-${field}`)).toBeTruthy());
+    expect(screen.getByTestId('label-field-vencimiento').props.value).toBe('');
+    expect(screen.getByTestId('label-field-ubicacion-missing')).toBeTruthy();
+    expect(screen.getByTestId('label-field-vencimiento-missing')).toBeTruthy();
+    expect(screen.queryByTestId('label-field-nombre-missing')).toBeNull();
+    // al completar uno, se saca el aviso
+    fireEvent.changeText(screen.getByTestId('label-field-ubicacion'), 'Heladera');
+    expect(screen.queryByTestId('label-field-ubicacion-missing')).toBeNull();
+  });
 
-    const { onClose, onSuccess } = setup();
-    fireEvent.press(screen.getByTestId('doc-type-product_label'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
+  it('is not the product form: it has no new form fields, only the recognized data', async () => {
+    await scanLabel(baseDraft({ nombre: 'Leche' }));
+    expect(screen.queryByText('Guardar producto')).toBeNull();
+    expect(screen.queryByTestId('select-image-button')).toBeNull();
+  });
+
+  it('formats the date and the numbers while they are typed', async () => {
+    await scanLabel(baseDraft({ nombre: 'Leche' }));
+    fireEvent.changeText(screen.getByTestId('label-field-vencimiento'), '01032027');
+    expect(screen.getByTestId('label-field-vencimiento').props.value).toBe('01/03/2027');
+    fireEvent.changeText(screen.getByTestId('label-field-codigo_barras'), '78a9');
+    expect(screen.getByTestId('label-field-codigo_barras').props.value).toBe('789');
+    fireEvent.changeText(screen.getByTestId('label-field-stock'), '1x2');
+    expect(screen.getByTestId('label-field-stock').props.value).toBe('12');
+  });
+
+  it('has a "Cargar como producto existente" button below the name only when the screen supports it', async () => {
+    await scanLabel(baseDraft({ nombre: 'Leche' }));
+    expect(screen.queryByTestId('label-load-existing')).toBeNull();
+  });
+
+  it('"Cargar como producto existente" hands the (edited) name and the photo to the existing product flow', async () => {
+    const onLoadAsExisting = jest.fn();
+    await scanLabel(baseDraft({ nombre: 'Leche', marca: 'Ser', texto_leido: 'LECHE' }), { onLoadAsExisting });
+    fireEvent.changeText(screen.getByTestId('label-field-nombre'), 'Leche entera');
+    fireEvent.press(screen.getByTestId('label-load-existing'));
+    expect(onLoadAsExisting).toHaveBeenCalledWith({
+      draft: expect.objectContaining({ nombre: 'Leche entera', marca: 'Ser', texto_leido: 'LECHE' }),
+      asset: LABEL,
     });
+  });
 
-    fireEvent.changeText(screen.getByTestId('mock-categoria'), 'Lacteos');
-    fireEvent.changeText(screen.getByTestId('mock-stock'), '2');
+  it('cancel ends the scan without loading anything into the form', async () => {
+    mockedUpload.mockResolvedValue('https://img/x.jpg');
+    const onApplyToForm = jest.fn();
+    const { onClose } = await scanLabel(baseDraft({ nombre: 'Leche' }), { onApplyToForm });
+    fireEvent.press(screen.getByTestId('label-cancel'));
+    expect(onClose).toHaveBeenCalled();
+    expect(onApplyToForm).not.toHaveBeenCalled();
+    expect(mockedUpload).not.toHaveBeenCalled();
+  });
 
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('confirm-draft'));
+  it('confirm loads the validated data into the form, with the photo uploaded as the product image', async () => {
+    mockedUpload.mockResolvedValue('https://img/label.jpg');
+    const onApplyToForm = jest.fn();
+    const onAddCategoria = jest.fn();
+    const onAddUbicacion = jest.fn();
+    const onAddMarca = jest.fn();
+    const { onClose } = await scanLabel(
+      baseDraft({ nombre: 'Leche', marca: 'Ser', categoria: 'Lacteos', vencimiento: '2027-03-01', descripcion: 'Entera', stock: 3 }),
+      { onApplyToForm, onAddCategoria, onAddUbicacion, onAddMarca },
+    );
+    fireEvent.changeText(screen.getByTestId('label-field-ubicacion'), 'Heladera');
+    await act(async () => { fireEvent.press(screen.getByTestId('label-confirm')); });
+
+    expect(mockedUpload).toHaveBeenCalledWith(LABEL);
+    const updater = onApplyToForm.mock.calls[0][0];
+    expect(updater({ codigo_barras: '7790001000011', stock: 9 })).toEqual({
+      nombre: 'Leche', marca: 'Ser', categoria: 'Lacteos', ubicacion: 'Heladera', vencimiento: '2027-03-01',
+      descripcion: 'Entera', stock: 3, codigo_barras: '7790001000011', imagen_url: 'https://img/label.jpg',
     });
-
-    expect(mockedProducts.createProduct).toHaveBeenCalledWith(expect.objectContaining({ nombre: 'Leche', categoria: 'Lacteos', stock: 2 }));
-    expect(onSuccess).toHaveBeenCalledWith('created');
+    expect(onAddCategoria).toHaveBeenCalledWith('Lacteos');
+    expect(onAddUbicacion).toHaveBeenCalledWith('Heladera');
+    expect(onAddMarca).toHaveBeenCalledWith('Ser');
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('reports "merged" when the backend merges into an existing product', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    mockedOcr.scan.mockResolvedValue({
-      status: 'done',
-      doc_type: 'product_label',
-      result: baseResult({ draft: baseDraft({ nombre: 'Leche', categoria: 'Lacteos', stock: 1 }) }),
-    } as ScanState);
-    mockedProducts.createProduct.mockResolvedValue({ id: 1, merged: true } as any);
-
-    const { onSuccess } = setup();
-    fireEvent.press(screen.getByTestId('doc-type-product_label'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
+  it('keeps what the form already had for the fields that were not recognized', async () => {
+    mockedUpload.mockResolvedValue('https://img/label.jpg');
+    const onApplyToForm = jest.fn();
+    await scanLabel(baseDraft({ nombre: 'Leche' }), { onApplyToForm });
+    await act(async () => { fireEvent.press(screen.getByTestId('label-confirm')); });
+    const updater = onApplyToForm.mock.calls[0][0];
+    expect(updater({ categoria: 'Lacteos', stock: 5 })).toEqual({
+      nombre: 'Leche', categoria: 'Lacteos', stock: 5, imagen_url: 'https://img/label.jpg',
     });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('confirm-draft'));
-    });
-
-    expect(onSuccess).toHaveBeenCalledWith('merged');
   });
 
-  it('shows a confirm error and does not close when createProduct fails', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    mockedOcr.scan.mockResolvedValue({
-      status: 'done',
-      doc_type: 'product_label',
-      result: baseResult({ draft: baseDraft({ nombre: 'Leche', categoria: 'Lacteos', stock: 1 }) }),
-    } as ScanState);
-    mockedProducts.createProduct.mockRejectedValue({ response: { data: { detail: 'nombre invalido' } } });
+  it('validates the name, the date and the barcode before confirming', async () => {
+    const onApplyToForm = jest.fn();
+    await scanLabel(baseDraft(), { onApplyToForm });
+    await act(async () => { fireEvent.press(screen.getByTestId('label-confirm')); });
+    expect(screen.getByText('El nombre es requerido')).toBeTruthy();
 
-    const { onClose } = setup();
-    fireEvent.press(screen.getByTestId('doc-type-product_label'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
-    });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('confirm-draft'));
-    });
+    fireEvent.changeText(screen.getByTestId('label-field-nombre'), 'Leche');
+    fireEvent.changeText(screen.getByTestId('label-field-vencimiento'), '31022027');
+    await act(async () => { fireEvent.press(screen.getByTestId('label-confirm')); });
+    expect(screen.getByTestId('label-error')).toBeTruthy();
 
-    expect(screen.getByText('nombre invalido')).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId('label-field-vencimiento'), '');
+    fireEvent.changeText(screen.getByTestId('label-field-codigo_barras'), '123');
+    await act(async () => { fireEvent.press(screen.getByTestId('label-confirm')); });
+    expect(screen.getByTestId('label-error')).toBeTruthy();
+    expect(onApplyToForm).not.toHaveBeenCalled();
+    expect(mockedUpload).not.toHaveBeenCalled();
+  });
+
+  it('does not load anything and shows an error when the photo cannot be uploaded', async () => {
+    mockedUpload.mockRejectedValue(new Error('boom'));
+    const onApplyToForm = jest.fn();
+    const { onClose } = await scanLabel(baseDraft({ nombre: 'Leche' }), { onApplyToForm });
+    await act(async () => { fireEvent.press(screen.getByTestId('label-confirm')); });
+    expect(screen.getByText('No se pudo subir la imagen de la etiqueta. Probá de nuevo.')).toBeTruthy();
+    expect(onApplyToForm).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+    // se puede reintentar
+    mockedUpload.mockResolvedValue('https://img/label.jpg');
+    await act(async () => { fireEvent.press(screen.getByTestId('label-confirm')); });
+    expect(onApplyToForm).toHaveBeenCalled();
   });
 
-  it('resets back to the doc-type step via "scan another"', async () => {
-    mockedOcr.pickImage.mockResolvedValue({ uri: 'file://x.jpg' } as any);
-    mockedOcr.scan.mockResolvedValue({
-      status: 'done',
-      doc_type: 'product_label',
-      result: baseResult({ draft: baseDraft({ nombre: 'Leche' }) }),
-    } as ScanState);
+  it('does not load anything if the window was closed while the photo was uploading', async () => {
+    let resolveUpload: (url: string) => void = () => {};
+    mockedUpload.mockReturnValue(new Promise<string>(resolve => { resolveUpload = resolve; }));
+    const onApplyToForm = jest.fn();
+    await scanLabel(baseDraft({ nombre: 'Leche' }), { onApplyToForm });
+    await act(async () => { fireEvent.press(screen.getByTestId('label-confirm')); });
+    fireEvent.press(screen.getByTestId('scan-modal-close'));
+    await act(async () => { resolveUpload('https://img/label.jpg'); });
+    expect(onApplyToForm).not.toHaveBeenCalled();
+  });
 
-    setup();
-    fireEvent.press(screen.getByTestId('doc-type-product_label'));
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('scan-source-camera'));
+  it('starts on the fields already read when it opens with a scanned label, and goes on without a photo', async () => {
+    const onApplyToForm = jest.fn();
+    setup({
+      initialLabel: { draft: baseDraft({ nombre: 'Yogur', texto_leido: 'YOGUR' }), asset: null },
+      onApplyToForm,
     });
-
-    fireEvent.press(screen.getByText('Escanear otra'));
-    expect(screen.getByTestId('doc-type-product_label')).toBeTruthy();
+    expect(screen.getByText('Etiqueta de producto')).toBeTruthy();
+    expect(screen.getByTestId('label-field-nombre').props.value).toBe('Yogur');
+    expect(screen.queryByTestId('label-image')).toBeNull();
+    await act(async () => { fireEvent.press(screen.getByTestId('label-confirm')); });
+    expect(mockedUpload).not.toHaveBeenCalled();
+    expect(onApplyToForm.mock.calls[0][0]({})).toEqual({ nombre: 'Yogur' });
   });
 });
 
@@ -788,20 +858,28 @@ describe('ScanModal - expiry_date review flow', () => {
 });
 
 describe('ScanModal - the window itself', () => {
-  it('is a bottom sheet titled "Escanear imagen" that closes when tapping outside', () => {
+  it('is a window in the center of the screen that does not close when tapping outside, only from its own buttons', () => {
     const { onClose } = setup();
     expect(screen.getByText('Escanear imagen')).toBeTruthy();
     fireEvent.press(screen.getByTestId('scan-sheet'));
-    expect(onClose).not.toHaveBeenCalled();
     fireEvent.press(screen.getByTestId('scan-overlay'));
+    expect(onClose).not.toHaveBeenCalled();
+    const { Modal } = require('react-native');
+    expect(screen.UNSAFE_getByType(Modal).props.animationType).toBe('fade');
+    fireEvent.press(screen.getByTestId('scan-modal-close'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes with the system back button', () => {
+    const { onClose } = setup();
+    const { Modal } = require('react-native');
+    act(() => { screen.UNSAFE_getByType(Modal).props.onRequestClose(); });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('does not take the whole screen and uses the same title format as "Flujo de producto" but smaller', () => {
     setup();
     const { StyleSheet } = require('react-native');
-    const sheet = StyleSheet.flatten(screen.getByTestId('scan-sheet').props.style);
-    expect(sheet.maxHeight).toBe('85%');
     const title = StyleSheet.flatten(screen.getByText('Escanear imagen').props.style);
     expect(title.fontFamily).toBe('Roboto_500Medium');
     expect(title.fontSize).toBe(20);
@@ -884,11 +962,11 @@ describe('ScanModal - scanning a single field (expiry date or barcode)', () => {
     expect(screen.getByText('Escanear código de barras')).toBeTruthy();
   });
 
-  it('keeps the general title and the back link for the general scan', () => {
+  it('keeps the general title while the type is chosen, and has no back link on the next window', () => {
     setup();
     expect(screen.getByText('Escanear imagen')).toBeTruthy();
     fireEvent.press(screen.getByTestId('doc-type-receipt'));
-    expect(screen.getByText('Atrás')).toBeTruthy();
+    expect(screen.queryByText('Atrás')).toBeNull();
   });
 
   it('comes back to the photo options, with the error, when the scan fails', async () => {
@@ -950,7 +1028,7 @@ describe('ScanModal - receipts: exits and entries are separate', () => {
 
   it('opens a fixed receipt scan straight on the photo options, titled after the invoice or receipt', () => {
     setup({ fixedDocType: 'receipt' });
-    expect(screen.getByText('Escanear factura o remito')).toBeTruthy();
+    expect(screen.getByText('Ticket, remito o factura')).toBeTruthy();
     expect(screen.getByTestId('scan-source-camera')).toBeTruthy();
     expect(screen.queryByTestId('doc-type-receipt')).toBeNull();
   });

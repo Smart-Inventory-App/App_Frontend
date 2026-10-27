@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,20 +17,21 @@ import { productService } from '@/services/productService';
 import { ocrService, getScanErrorMessage } from '@/services/ocrService';
 import { ExitReason, ProductCreate, ProductSuggestion } from '@/types/product';
 import { EXIT_REASONS, EXIT_REASON_LABEL_KEY } from '@/utils/exitReasons';
-import { FixedScanDocType, GENERAL_SCAN_DOC_TYPES, ProductMatch, SalidaOCRResult, ScanDocType, ScanState } from '@/types/ocr';
+import { FixedScanDocType, GENERAL_SCAN_DOC_TYPES, LabelScan, ProductDraft, ProductMatch, SalidaOCRResult, ScanDocType, ScanState } from '@/types/ocr';
 import {
-  applyMatchToForm,
   applySuggestionToForm,
   buildSalidaItems,
-  draftToProductForm,
+  draftToLabelFields,
+  EMPTY_LABEL_FIELDS,
   formatWaitSeconds,
   initReceiptLines,
-  isLowConfidence,
+  LabelFields,
+  labelFieldsToForm,
   ReceiptLineState,
-  validateProductForm,
+  validateLabelFields,
 } from '@/utils/ocrDraft';
-import BottomSheetModal from '@/components/BottomSheetModal';
-import ProductFormFields from '@/components/ProductFormFields';
+import CenteredModal from '@/components/CenteredModal';
+import { PickedImage, uploadImage } from '@/services/imageService';
 import { BARCODE_MAX_DIGITS, isValidBarcode, onlyDigits } from '@/utils/barcode';
 import { displayToIso, formatDateDigits, isoToDisplay } from '@/utils/dateInput';
 import { selectedFirst } from '@/utils/selectedFirst';
@@ -40,6 +42,12 @@ const BARCODE_ROW_GAP = 8;
 const BARCODE_LIST_MAX_HEIGHT = 3.5 * (BARCODE_ROW_HEIGHT + BARCODE_ROW_GAP);
 
 type Step = 'doc-type' | 'source' | 'processing' | 'review' | 'receipt-result';
+
+// Límites de los campos del formulario de producto
+const NOMBRE_MAX = 20;
+const OPTION_MAX = 20;
+const DESCRIPCION_MAX = 400;
+const STOCK_MAX_DIGITS = 6;
 
 export type ScanSuccessKind = 'created' | 'merged' | 'updated' | 'salida' | 'restocked';
 
@@ -68,6 +76,13 @@ interface Props {
    * "salida" lo descuenta (con el motivo que elija el usuario). Las dos lógicas no se mezclan.
    */
   receiptDirection?: 'entrada' | 'salida';
+  /**
+   * Una etiqueta ya escaneada (en "Ingresar producto existente", cuando no había ningún producto parecido): el modal
+   * arranca directamente en sus datos leídos, para que el usuario los valide.
+   */
+  initialLabel?: LabelScan | null;
+  /** "Cargar como producto existente": lleva el nombre leído al formulario de ingreso de un producto existente. */
+  onLoadAsExisting?: (label: LabelScan) => void;
 }
 
 const DOC_TYPE_ICONS: Record<ScanDocType, keyof typeof Ionicons.glyphMap> = {
@@ -90,25 +105,22 @@ export default function ScanModal({
   onApplyToForm,
   fixedDocType = null,
   receiptDirection = 'salida',
+  initialLabel = null,
+  onLoadAsExisting,
 }: Props) {
   const { t } = useTranslation();
   // Primer paso del modal: elegir el tipo de documento, o directamente la foto si el tipo ya está definido
   const firstStep: Step = fixedDocType ? 'source' : 'doc-type';
-  const scanTitle = fixedDocType === 'expiry_date'
-    ? t('scan.titleExpiry')
-    : fixedDocType === 'barcode'
-      ? t('scan.titleBarcode')
-      : fixedDocType === 'receipt'
-        ? t('scan.titleReceipt')
-        : t('scan.title');
-
-  const [step, setStep] = useState<Step>(firstStep);
-  const [docType, setDocType] = useState<ScanDocType | null>(fixedDocType);
+  const [step, setStep] = useState<Step>(initialLabel ? 'review' : firstStep);
+  const [docType, setDocType] = useState<ScanDocType | null>(initialLabel ? 'product_label' : fixedDocType);
   const [error, setError] = useState<string | null>(null);
   const [queueInfo, setQueueInfo] = useState<{ position?: number | null; wait?: number | null }>({});
   const [scanResult, setScanResult] = useState<ScanState['result']>(null);
 
-  const [draftForm, setDraftForm] = useState<Partial<ProductCreate>>({});
+  // Etiqueta escaneada: lo leído, la foto (ya recortada) y los campos que el usuario edita antes de pasarlos al formulario
+  const [labelDraft, setLabelDraft] = useState<ProductDraft | null>(null);
+  const [labelAsset, setLabelAsset] = useState<LabelScan['asset']>(null);
+  const [labelFields, setLabelFields] = useState<LabelFields>({ ...EMPTY_LABEL_FIELDS });
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
 
@@ -127,6 +139,17 @@ export default function ScanModal({
   const [lineSearchResults, setLineSearchResults] = useState<ProductSuggestion[]>([]);
   const [receiptResult, setReceiptResult] = useState<SalidaOCRResult | null>(null);
   const [receiptMotivo, setReceiptMotivo] = useState<ExitReason>('consumed');
+
+  // El título dice qué se está escaneando; mientras se elige el tipo, es el general
+  const scanTitle = (() => {
+    switch (fixedDocType ?? (step === 'doc-type' ? null : docType)) {
+      case 'expiry_date': return t('scan.titleExpiry');
+      case 'barcode': return t('scan.titleBarcode');
+      case 'receipt': return t('scan.docType.receipt');
+      case 'product_label': return t('scan.docType.product_label');
+      default: return t('scan.title');
+    }
+  })();
 
   const cancelledRef = useRef(false);
 
@@ -175,12 +198,14 @@ export default function ScanModal({
   }, [lineSearchQuery, activeSearchIndex]);
 
   function resetAll() {
-    setStep(firstStep);
-    setDocType(fixedDocType);
+    setStep(initialLabel ? 'review' : firstStep);
+    setDocType(initialLabel ? 'product_label' : fixedDocType);
     setError(null);
     setQueueInfo({});
     setScanResult(null);
-    setDraftForm({});
+    setLabelDraft(initialLabel?.draft ?? null);
+    setLabelAsset(initialLabel?.asset ?? null);
+    setLabelFields(draftToLabelFields(initialLabel?.draft));
     setConfirmError(null);
     setConfirming(false);
     setExpiryRead('');
@@ -212,7 +237,8 @@ export default function ScanModal({
     if (!docType) return;
     setError(null);
     try {
-      const asset = await ocrService.pickImage(source);
+      // La etiqueta se recorta siempre antes de procesarla (con la cámara o desde la galería)
+      const asset = await ocrService.pickImage(source, docType === 'product_label');
       if (!asset) return;
       await runScan(docType, asset);
     } catch (err: unknown) {
@@ -247,7 +273,7 @@ export default function ScanModal({
         return;
       }
 
-      applyResult(type, finalState.result);
+      applyResult(type, finalState.result, asset);
     } catch (err: unknown) {
       if (cancelledRef.current) return;
       const message = err instanceof Error && err.message === 'timeout'
@@ -260,7 +286,7 @@ export default function ScanModal({
     }
   };
 
-  const applyResult = (type: ScanDocType, result: NonNullable<ScanState['result']>) => {
+  const applyResult = (type: ScanDocType, result: NonNullable<ScanState['result']>, asset?: LabelScan['asset']) => {
     setScanResult(result);
     if (type === 'receipt') {
       setLines(initReceiptLines(result.items));
@@ -271,32 +297,62 @@ export default function ScanModal({
     } else if (type === 'barcode') {
       setBarcodeValue(onlyDigits(result.draft?.codigo_barras ?? ''));
     } else {
-      setDraftForm(draftToProductForm(result.draft));
+      setLabelDraft(result.draft);
+      setLabelAsset(asset ?? null);
+      setLabelFields(draftToLabelFields(result.draft));
     }
     setStep('review');
   };
 
-  const handleUseMatch = (match: ProductMatch) => {
-    setDraftForm(prev => applyMatchToForm(prev, match));
+  const setLabelField = (key: keyof LabelFields, value: string) => {
+    setLabelFields(prev => ({ ...prev, [key]: value }));
+    setConfirmError(null);
   };
 
-  const handleConfirmDraft = async () => {
-    const errorCode = validateProductForm(draftForm);
+  // Los datos validados por el usuario pasan al formulario de "Flujo de producto" y la foto escaneada, a ser la imagen
+  // del producto; si se cancela, no se carga nada
+  const handleConfirmLabel = async () => {
+    const errorCode = validateLabelFields(labelFields);
     if (errorCode) {
       setConfirmError(t(`product.validation${errorCode.charAt(0).toUpperCase()}${errorCode.slice(1)}`));
       return;
     }
     setConfirmError(null);
     setConfirming(true);
+    let imageUrl: string | undefined;
     try {
-      const created = await productService.createProduct(draftForm as ProductCreate);
-      onSuccess(created.merged ? 'merged' : 'created');
-      handleClose();
-    } catch (err: unknown) {
-      setConfirmError(getScanErrorMessage(err, t('product.saveError')));
-    } finally {
-      setConfirming(false);
+      if (labelAsset) imageUrl = await uploadImage(labelAsset as PickedImage);
+    } catch {
+      if (!cancelledRef.current) {
+        setConfirmError(t('scan.labelImageError'));
+        setConfirming(false);
+      }
+      return;
     }
+    if (cancelledRef.current) return;
+    const values = labelFieldsToForm(labelFields, imageUrl);
+    onApplyToForm?.(form => ({ ...form, ...values }));
+    // Lo que se escribió y todavía no era una opción se suma a las del formulario
+    if (values.categoria) onAddCategoria?.(values.categoria);
+    if (values.ubicacion) onAddUbicacion?.(values.ubicacion);
+    if (values.marca) onAddMarca?.(values.marca);
+    setConfirming(false);
+    handleClose();
+  };
+
+  // El nombre (y lo demás que se corrigió) viaja al formulario de producto existente
+  const handleLoadAsExisting = () => {
+    if (!labelDraft) return;
+    const edited = labelFields;
+    onLoadAsExisting?.({
+      draft: {
+        ...labelDraft,
+        nombre: edited.nombre.trim() || labelDraft.nombre,
+        marca: edited.marca.trim() || labelDraft.marca,
+        descripcion: edited.descripcion.trim() || labelDraft.descripcion,
+      },
+      asset: labelAsset,
+    });
   };
 
   // Vuelve al formulario de "Flujo de producto" con la fecha escaneada, sin tocar el resto de lo completado
@@ -409,11 +465,6 @@ export default function ScanModal({
         <Ionicons name="images-outline" size={22} color={Colors.primary} />
         <Text style={styles.bigButtonSecondaryText}>{t('scan.sourceGallery')}</Text>
       </TouchableOpacity>
-      {!fixedDocType && (
-        <TouchableOpacity style={styles.backLink} onPress={() => setStep('doc-type')}>
-          <Text style={styles.backLinkText}>{t('scan.back')}</Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 
@@ -430,54 +481,77 @@ export default function ScanModal({
     </View>
   );
 
-  const renderMatches = (coincidencias: ProductMatch[]) => {
-    if (!coincidencias.length) return null;
+  // Todos los campos de la etiqueta, también los que no se reconocieron (vacíos, para completarlos); no es un formulario
+  // nuevo: son los datos que van a autocompletar el formulario de producto
+  const renderLabelField = (key: keyof LabelFields, label: string, extra: object = {}) => {
+    const recognized = draftToLabelFields(labelDraft)[key] !== '';
     return (
-      <View style={styles.matchesBox}>
-        <Text style={styles.sectionTitle}>{t('scan.matchesTitle')}</Text>
-        {coincidencias.map(match => (
-          <TouchableOpacity key={match.id} style={styles.matchRow} onPress={() => handleUseMatch(match)} testID={`match-${match.id}`}>
-            <Ionicons name="cube-outline" size={16} color={Colors.textSecondary} />
-            <Text style={styles.matchText}>
-              {match.nombre}{match.marca ? ` · ${match.marca}` : ''} ({Math.round(match.score * 100)}%)
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View key={key}>
+        <Text style={styles.label}>{label}{key === 'nombre' ? ' *' : ''}</Text>
+        <AppTextInput
+          testID={`label-field-${key}`}
+          style={styles.input}
+          value={labelFields[key]}
+          onChangeText={v => setLabelField(key, v)}
+          placeholderTextColor={Colors.placeholder}
+          {...extra}
+        />
+        {!recognized && !labelFields[key] ? (
+          <Text testID={`label-field-${key}-missing`} style={styles.missingHint}>{t('scan.labelNotRecognized')}</Text>
+        ) : null}
       </View>
     );
   };
 
-  const renderSingleReview = () => {
-    if (!scanResult) return null;
-    const draft = scanResult.draft;
-    return (
-      <View>
-        {confirmError && <Text style={styles.errorBanner}>{confirmError}</Text>}
-        {draft?.texto_leido ? <Text style={styles.hintText}>{t('scan.readText', { text: draft.texto_leido })}</Text> : null}
-        {scanResult.advertencias.length > 0 && <Text style={styles.warningText}>{t('scan.warnings')}</Text>}
-        {draft && renderMatches(draft.coincidencias)}
-        {draft && isLowConfidence(draft.confianzas, 'nombre') && (
-          <Text style={styles.warningText}>{t('scan.lowConfidenceHint')}</Text>
-        )}
-        <ProductFormFields
-          form={draftForm}
-          onChange={setDraftForm}
-          categoriaOptions={categoriaOptions}
-          onAddCategoria={onAddCategoria}
-          ubicacionOptions={ubicacionOptions}
-          onAddUbicacion={onAddUbicacion}
-          marcaOptions={marcaOptions}
-          onAddMarca={onAddMarca}
-        />
-        <TouchableOpacity style={styles.confirmButton} onPress={handleConfirmDraft} disabled={confirming} testID="confirm-draft">
-          <Text style={styles.confirmButtonText}>{confirming ? t('scan.confirming') : t('scan.confirm')}</Text>
+  const renderLabelReview = () => (
+    <View>
+      {confirmError && <Text testID="label-error" style={styles.errorBanner}>{confirmError}</Text>}
+      <Text style={styles.sectionTitle}>{t('scan.labelReviewTitle')}</Text>
+      {labelAsset ? <Image testID="label-image" source={{ uri: labelAsset.uri }} style={styles.labelImage} resizeMode="cover" /> : null}
+      {labelDraft?.texto_leido ? <Text testID="label-read-text" style={styles.hintText}>{t('scan.readText', { text: labelDraft.texto_leido })}</Text> : null}
+      {renderLabelField('nombre', t('product.nombre'), { maxLength: NOMBRE_MAX, placeholder: t('product.nombre') })}
+      {onLoadAsExisting && (
+        <TouchableOpacity style={styles.existingButton} onPress={handleLoadAsExisting} testID="label-load-existing">
+          <Ionicons name="cube-outline" size={18} color={Colors.primary} />
+          <Text style={styles.existingButtonText}>{t('scan.loadAsExisting')}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.backLink} onPress={resetAll}>
-          <Text style={styles.backLinkText}>{t('scan.scanAnother')}</Text>
+      )}
+      {renderLabelField('marca', t('product.marca'), { maxLength: OPTION_MAX })}
+      {renderLabelField('categoria', t('product.categoria'), { maxLength: OPTION_MAX })}
+      {renderLabelField('ubicacion', t('scan.fieldLocation'), { maxLength: OPTION_MAX })}
+      {renderLabelField('vencimiento', t('product.vencimiento'), {
+        keyboardType: 'number-pad',
+        maxLength: 10,
+        placeholder: t('product.vencimientoPlaceholder'),
+        onChangeText: (v: string) => setLabelField('vencimiento', formatDateDigits(v)),
+      })}
+      {renderLabelField('codigo_barras', t('product.codigoBarras'), {
+        keyboardType: 'number-pad',
+        maxLength: BARCODE_MAX_DIGITS,
+        onChangeText: (v: string) => setLabelField('codigo_barras', onlyDigits(v)),
+      })}
+      {renderLabelField('descripcion', t('product.descripcion'), { maxLength: DESCRIPCION_MAX, multiline: true })}
+      {renderLabelField('stock', t('product.stock'), {
+        keyboardType: 'numeric',
+        maxLength: STOCK_MAX_DIGITS,
+        placeholder: '0',
+        onChangeText: (v: string) => setLabelField('stock', v.replace(/[^0-9]/g, '')),
+      })}
+      <View style={styles.actionsRow}>
+        <TouchableOpacity style={styles.cancelAction} onPress={handleClose} testID="label-cancel">
+          <Text style={styles.cancelActionText}>{t('common.cancel')}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.confirmAction, confirming && styles.disabled]}
+          onPress={handleConfirmLabel}
+          disabled={confirming}
+          testID="label-confirm"
+        >
+          <Text style={styles.confirmActionText}>{confirming ? t('scan.confirming') : t('scan.confirm')}</Text>
         </TouchableOpacity>
       </View>
-    );
-  };
+    </View>
+  );
 
   const renderActions = (onConfirm: () => void, testPrefix: string) => (
     <View style={styles.actionsRow}>
@@ -687,7 +761,7 @@ export default function ScanModal({
     if (docType === 'receipt') return renderReceiptReview();
     if (docType === 'expiry_date') return renderExpiryReview();
     if (docType === 'barcode') return renderBarcodeReview();
-    return renderSingleReview();
+    return renderLabelReview();
   };
 
   const renderReceiptResult = () => (
@@ -726,13 +800,12 @@ export default function ScanModal({
   };
 
   return (
-    // Hoja inferior como el historial de consumo: no ocupa toda la pantalla y tocar afuera la cierra
-    <BottomSheetModal
+    // Ventana en el centro de la pantalla: solo se cierra con su botón de cerrar o con Cancelar, no al tocar afuera
+    <CenteredModal
       visible={visible}
       onRequestClose={handleClose}
-      sheetStyle={styles.sheet}
       overlayTestID="scan-overlay"
-      sheetTestID="scan-sheet"
+      cardTestID="scan-sheet"
     >
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{scanTitle}</Text>
@@ -743,17 +816,11 @@ export default function ScanModal({
       <KeyboardAwareScrollView contentContainerStyle={styles.content}>
         {renderStep()}
       </KeyboardAwareScrollView>
-    </BottomSheetModal>
+    </CenteredModal>
   );
 }
 
 const styles = StyleSheet.create({
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '85%',
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -764,7 +831,7 @@ const styles = StyleSheet.create({
   },
   // Mismo formato que el título "Flujo de producto", un poco más chico
   headerTitle: { fontSize: 20, lineHeight: 26, fontFamily: 'Roboto_500Medium', color: Colors.textPrimary },
-  content: { padding: 16, paddingBottom: 40 },
+  content: { padding: 16, paddingBottom: 24 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary, marginTop: 12, marginBottom: 8 },
   docTypeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   docTypeCard: {
@@ -800,7 +867,22 @@ const styles = StyleSheet.create({
   warningText: { color: Colors.error, fontSize: 12, marginTop: 4 },
   hintText: { color: Colors.textSecondary, fontSize: 13, marginTop: 4 },
   matchesBox: { marginTop: 8, marginBottom: 8 },
-  matchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
+  labelImage: { width: '100%', height: 140, borderRadius: 10, marginBottom: 8, backgroundColor: '#f0f0f0' },
+  missingHint: { color: Colors.textSecondary, fontSize: 11, marginTop: 3, fontStyle: 'italic' },
+  existingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 12,
+    backgroundColor: '#fff',
+  },
+  existingButtonText: { color: Colors.primary, fontWeight: '600', fontSize: 14 },
+  disabled: { opacity: 0.6 },
   productRow: {
     flexDirection: 'row',
     alignItems: 'center',

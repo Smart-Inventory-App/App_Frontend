@@ -50,6 +50,12 @@ describe('productService', () => {
     expect(mockedApi.get).toHaveBeenCalledWith('/products/suggest', { params: { q: 'yog' } });
   });
 
+  it('matchProducts compares a scanned text with the name, brand and description of the products', async () => {
+    mockedApi.get.mockResolvedValue({ data: [{ id: 3, nombre: 'Yogur' }] });
+    await expect(productService.matchProducts('yogur ser entero')).resolves.toEqual([{ id: 3, nombre: 'Yogur' }]);
+    expect(mockedApi.get).toHaveBeenCalledWith('/products/match', { params: { q: 'yogur ser entero' } });
+  });
+
   it('getProductsByBarcode lists every product with the code (url-encoded)', async () => {
     mockedApi.get.mockResolvedValue({ data: [{ id: 1 }, { id: 2 }] });
     await expect(productService.getProductsByBarcode('779 123')).resolves.toEqual([{ id: 1 }, { id: 2 }]);

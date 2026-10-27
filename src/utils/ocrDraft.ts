@@ -1,5 +1,6 @@
 import { ProductCreate, ProductSuggestion } from '../types/product';
 import { isValidBarcode } from './barcode';
+import { displayToIso, isoToDisplay } from './dateInput';
 import { CONFIDENCE_THRESHOLD, ProductDraft, ProductMatch } from '../types/ocr';
 
 /**
@@ -114,4 +115,72 @@ export function formatWaitSeconds(seconds: number | null | undefined): string {
   if (seconds == null) return '';
   if (seconds < 60) return `${seconds} s`;
   return `${Math.round(seconds / 60)} min`;
+}
+
+/**
+ * Los campos de una etiqueta escaneada tal como los edita el usuario antes de pasarlos al formulario: todos como
+ * texto (la fecha en DD/MM/AAAA), incluidos los que no se reconocieron, que quedan vacíos.
+ */
+export interface LabelFields {
+  nombre: string;
+  marca: string;
+  categoria: string;
+  ubicacion: string;
+  vencimiento: string;
+  codigo_barras: string;
+  descripcion: string;
+  stock: string;
+}
+
+export const EMPTY_LABEL_FIELDS: LabelFields = {
+  nombre: '',
+  marca: '',
+  categoria: '',
+  ubicacion: '',
+  vencimiento: '',
+  codigo_barras: '',
+  descripcion: '',
+  stock: '',
+};
+
+export function draftToLabelFields(draft: ProductDraft | null | undefined): LabelFields {
+  if (!draft) return { ...EMPTY_LABEL_FIELDS };
+  return {
+    nombre: draft.nombre ?? '',
+    marca: draft.marca ?? '',
+    categoria: draft.categoria ?? '',
+    // La etiqueta no dice dónde se guarda el producto: se completa a mano
+    ubicacion: '',
+    vencimiento: isoToDisplay(draft.vencimiento),
+    codigo_barras: draft.codigo_barras ?? '',
+    descripcion: draft.descripcion ?? '',
+    stock: draft.stock != null ? String(draft.stock) : '',
+  };
+}
+
+export type LabelFieldsError = 'nombre' | 'vencimiento' | 'codigoBarras' | null;
+
+export function validateLabelFields(fields: LabelFields): LabelFieldsError {
+  if (!fields.nombre.trim()) return 'nombre';
+  if (fields.vencimiento && !displayToIso(fields.vencimiento)) return 'vencimiento';
+  if (fields.codigo_barras && !isValidBarcode(fields.codigo_barras)) return 'codigoBarras';
+  return null;
+}
+
+/** Lo que los campos aportan al formulario: solo lo que tiene valor, así no se pisa lo que el usuario ya había completado. */
+export function labelFieldsToForm(fields: LabelFields, imagenUrl?: string): Partial<ProductCreate> {
+  const form: Partial<ProductCreate> = {};
+  const text = (value: string) => value.trim();
+  if (text(fields.nombre)) form.nombre = text(fields.nombre);
+  if (text(fields.marca)) form.marca = text(fields.marca);
+  if (text(fields.categoria)) form.categoria = text(fields.categoria);
+  if (text(fields.ubicacion)) form.ubicacion = text(fields.ubicacion);
+  const vencimiento = displayToIso(fields.vencimiento);
+  if (vencimiento) form.vencimiento = vencimiento;
+  if (text(fields.codigo_barras)) form.codigo_barras = text(fields.codigo_barras);
+  if (text(fields.descripcion)) form.descripcion = text(fields.descripcion);
+  const stock = parseInt(fields.stock, 10);
+  if (stock > 0) form.stock = stock;
+  if (imagenUrl) form.imagen_url = imagenUrl;
+  return form;
 }
