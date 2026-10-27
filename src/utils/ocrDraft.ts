@@ -167,21 +167,17 @@ export function validateLabelFields(fields: LabelFields): LabelFieldsError {
   return null;
 }
 
-/** Lo que los campos aportan al formulario: solo lo que tiene valor, así no se pisa lo que el usuario ya había completado. */
+/**
+ * Lo que la etiqueta aporta al formulario de un producto nuevo: solo el nombre, la marca y la descripción (los que se
+ * revisan) y la imagen. Lo demás que se haya leído (categoría, vencimiento, código de barras, stock) no se carga: se
+ * completa a mano, o con su propio escaneo. Solo pasa lo que tiene valor, así no se pisa lo que el usuario ya completó.
+ */
 export function labelFieldsToForm(fields: LabelFields, imagenUrl?: string): Partial<ProductCreate> {
   const form: Partial<ProductCreate> = {};
   const text = (value: string) => value.trim();
   if (text(fields.nombre)) form.nombre = text(fields.nombre);
   if (text(fields.marca)) form.marca = text(fields.marca);
-  if (text(fields.categoria)) form.categoria = text(fields.categoria);
-  if (text(fields.ubicacion)) form.ubicacion = text(fields.ubicacion);
-  const vencimiento = displayToIso(fields.vencimiento);
-  if (vencimiento) form.vencimiento = vencimiento;
-  // El código de barras no se edita en la revisión: solo pasa al formulario si lo leído es válido
-  if (isValidBarcode(text(fields.codigo_barras))) form.codigo_barras = text(fields.codigo_barras);
   if (text(fields.descripcion)) form.descripcion = text(fields.descripcion);
-  const stock = parseInt(fields.stock, 10);
-  if (stock > 0) form.stock = stock;
   if (imagenUrl) form.imagen_url = imagenUrl;
   return form;
 }

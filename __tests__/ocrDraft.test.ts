@@ -298,18 +298,20 @@ describe('validateLabelFields', () => {
 });
 
 describe('labelFieldsToForm', () => {
-  it('only carries the fields that have a value, trimmed, with the date as ISO and the image', () => {
+  it('only carries the name, brand and description (trimmed, when they have a value) and the image', () => {
     expect(labelFieldsToForm({
-      nombre: ' Leche ', marca: '', categoria: 'Lacteos', ubicacion: 'Heladera', vencimiento: '01/03/2027',
-      codigo_barras: '', descripcion: 'Entera', stock: '4',
+      nombre: ' Leche ', marca: ' La Serenísima ', categoria: 'Lacteos', ubicacion: 'Heladera', vencimiento: '01/03/2027',
+      codigo_barras: '7791234567898', descripcion: 'Entera', stock: '4',
     }, 'https://img/x.jpg')).toEqual({
-      nombre: 'Leche', categoria: 'Lacteos', ubicacion: 'Heladera', vencimiento: '2027-03-01', descripcion: 'Entera',
-      stock: 4, imagen_url: 'https://img/x.jpg',
+      nombre: 'Leche', marca: 'La Serenísima', descripcion: 'Entera', imagen_url: 'https://img/x.jpg',
     });
   });
 
-  it('leaves out an empty or zero stock, an incomplete date and a missing image', () => {
-    expect(labelFieldsToForm({ ...EMPTY_LABEL_FIELDS, nombre: 'Leche', stock: '0', vencimiento: '01/03' })).toEqual({ nombre: 'Leche' });
-    expect(labelFieldsToForm({ ...EMPTY_LABEL_FIELDS, nombre: 'Leche', codigo_barras: ' 7791234567898 ' }).codigo_barras).toBe('7791234567898');
+  it('does not carry the category, expiry date, barcode or stock that were scanned, and leaves out empty values', () => {
+    const form = labelFieldsToForm({
+      ...EMPTY_LABEL_FIELDS, nombre: 'Leche', categoria: 'Lacteos', vencimiento: '01/03/2027', codigo_barras: '7791234567898', stock: '4',
+    });
+    expect(form).toEqual({ nombre: 'Leche' });
+    expect(labelFieldsToForm({ ...EMPTY_LABEL_FIELDS, nombre: 'Leche' })).toEqual({ nombre: 'Leche' });
   });
 });

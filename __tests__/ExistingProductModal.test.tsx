@@ -316,11 +316,11 @@ describe('ExistingProductModal - by barcode', () => {
     return handlers;
   };
 
-  it('does not ask to crop the photo of a barcode', async () => {
+  it('lets the photo of a barcode be cropped', async () => {
     openByBarcode();
     mockedOcr.pickImage.mockResolvedValue(null);
     await act(async () => { fireEvent.press(screen.getByTestId('existing-source-camera')); });
-    expect(mockedOcr.pickImage).toHaveBeenCalledWith('camera', false);
+    expect(mockedOcr.pickImage).toHaveBeenCalledWith('camera');
   });
 
   it('asks how to load the photo, with a way back', () => {
@@ -509,12 +509,12 @@ describe('ExistingProductModal - by label', () => {
     expect(screen.getByTestId('existing-label-name-input').props.value).toBe('Leche');
   });
 
-  it('asks to crop the photo of the label, from the camera and from the gallery', async () => {
+  it('lets the photo of the label be cropped, from the camera and from the gallery', async () => {
     openByLabel();
     mockedOcr.pickImage.mockResolvedValue(null);
     await act(async () => { fireEvent.press(screen.getByTestId('existing-source-camera')); });
     await act(async () => { fireEvent.press(screen.getByTestId('existing-source-gallery')); });
-    expect(mockedOcr.pickImage.mock.calls).toEqual([['camera', true], ['gallery', true]]);
+    expect(mockedOcr.pickImage.mock.calls).toEqual([['camera'], ['gallery']]);
   });
 
   it('once the name is confirmed, lists the recognized products and then asks for the stock of the chosen one', async () => {
@@ -541,7 +541,44 @@ describe('ExistingProductModal - by label', () => {
     await scanWith(scanned('product_label', baseDraft({ nombre: 'Leche', marca: 'Ser', descripcion: 'Entera 1L' })));
     await confirmEdit();
     expect(mockedProducts.matchProducts).toHaveBeenCalledWith('Leche Ser Entera 1L');
-    expect(mockedProducts.suggestProducts).not.toHaveBeenCalled();
+  });
+
+  it('always lists the products with a name similar to the (edited) name, even if the brand and description pull them away', async () => {
+    const YOGUR = { id: 3, nombre: 'Yogur natural', categoria: 'Lacteos', stock: 2 };
+    const YOGUR_2 = { id: 4, nombre: 'Yogur natural light', categoria: 'Lacteos', stock: 1 };
+    // La comparación con la marca y la descripción no encuentra ninguno; el nombre solo, sí
+    mockedProducts.matchProducts.mockImplementation(async (text: string) => (text === 'Yogur natural' ? [YOGUR] : []));
+    mockedProducts.suggestProducts.mockResolvedValue([YOGUR, YOGUR_2]);
+    openByLabel();
+    await scanWith(scanned('product_label', baseDraft({ nombre: 'Leche', marca: 'Ser', descripcion: 'Entera 1L' })));
+    fireEvent.changeText(screen.getByTestId('existing-label-name-input'), 'Yogur natural');
+    await confirmEdit();
+    expect(mockedProducts.matchProducts).toHaveBeenCalledWith('Yogur natural Ser Entera 1L');
+    expect(mockedProducts.matchProducts).toHaveBeenCalledWith('Yogur natural');
+    expect(mockedProducts.suggestProducts).toHaveBeenCalledWith('Yogur natural');
+    expect(screen.getByTestId('existing-option-product-3')).toBeTruthy();
+    expect(screen.getByTestId('existing-option-product-4')).toBeTruthy();
+    // sin repetir el que aparece en más de una búsqueda
+    expect(screen.getAllByTestId('existing-option-product-3')).toHaveLength(1);
+  });
+
+  it('still lists what the other searches found when one of them fails, and only reports an error when all fail', async () => {
+    mockedProducts.matchProducts.mockRejectedValue(new Error('boom'));
+    mockedProducts.suggestProducts.mockResolvedValue([LECHE]);
+    openByLabel();
+    await scanWith(scanned('product_label', baseDraft({ nombre: 'Leche', marca: 'Ser' })));
+    await confirmEdit();
+    expect(screen.getByTestId('existing-option-product-1')).toBeTruthy();
+  });
+
+  it('shows the search error when every search fails', async () => {
+    mockedProducts.matchProducts.mockRejectedValue(new Error('boom'));
+    mockedProducts.suggestProducts.mockRejectedValue(new Error('boom'));
+    openByLabel();
+    await scanWith(scanned('product_label', baseDraft({ nombre: 'Leche', marca: 'Ser' })));
+    await confirmEdit();
+    expect(screen.queryByText('Productos reconocidos')).toBeNull();
+    expect(screen.getByTestId('existing-error')).toBeTruthy();
   });
 
   it('uses the matches found by the scan when the name was kept as read and the search finds nothing', async () => {

@@ -126,7 +126,7 @@ describe('ScanModal - doc type & source selection', () => {
     await act(async () => {
       fireEvent.press(screen.getByTestId('scan-source-camera'));
     });
-    expect(mockedOcr.pickImage).toHaveBeenCalledWith('camera', true);
+    expect(mockedOcr.pickImage).toHaveBeenCalledWith('camera');
     expect(screen.getByTestId('scan-source-camera')).toBeTruthy();
   });
 
@@ -242,21 +242,21 @@ describe('ScanModal - product_label review flow', () => {
     expect(screen.getByText('El escaneo está tardando más de lo esperado, probá de nuevo')).toBeTruthy();
   });
 
-  it('asks for the photo to be cropped for a label, with the camera and the gallery, and not for the other types', async () => {
+  it('lets the photo be cropped for a label, with the camera and the gallery (the default of the picker)', async () => {
     mockedOcr.pickImage.mockResolvedValue(null);
     setup();
     fireEvent.press(screen.getByTestId('doc-type-product_label'));
     await act(async () => { fireEvent.press(screen.getByTestId('scan-source-camera')); });
     await act(async () => { fireEvent.press(screen.getByTestId('scan-source-gallery')); });
-    expect(mockedOcr.pickImage.mock.calls).toEqual([['camera', true], ['gallery', true]]);
+    expect(mockedOcr.pickImage.mock.calls).toEqual([['camera'], ['gallery']]);
   });
 
-  it('does not ask to crop the photo of a receipt', async () => {
+  it('also lets the photo of a receipt be cropped: no photo is requested without cropping', async () => {
     mockedOcr.pickImage.mockResolvedValue(null);
     setup();
     fireEvent.press(screen.getByTestId('doc-type-receipt'));
     await act(async () => { fireEvent.press(screen.getByTestId('scan-source-camera')); });
-    expect(mockedOcr.pickImage).toHaveBeenCalledWith('camera', false);
+    expect(mockedOcr.pickImage).toHaveBeenCalledWith('camera');
   });
 });
 
@@ -358,12 +358,13 @@ describe('ScanModal - label review (the fields that will fill the form)', () => 
 
     expect(mockedUpload).toHaveBeenCalledWith(LABEL);
     const updater = onApplyToForm.mock.calls[0][0];
-    // lo demás que se leyó (aunque no se muestre) pasa al formulario, y lo que el formulario ya tenía se conserva
+    // solo pasan el nombre, la marca, la descripción y la imagen: la categoría, el vencimiento, el código de barras y el
+    // stock que se leyeron no se cargan, y lo que el formulario ya tenía se conserva
     expect(updater({ codigo_barras: '7790001000011', stock: 9 })).toEqual({
-      nombre: 'Leche', marca: 'Ser', categoria: 'Lacteos', vencimiento: '2027-03-01',
-      descripcion: 'Entera', stock: 3, codigo_barras: '7790001000011', imagen_url: 'https://img/label.jpg',
+      nombre: 'Leche', marca: 'Ser', descripcion: 'Entera', stock: 9, codigo_barras: '7790001000011',
+      imagen_url: 'https://img/label.jpg',
     });
-    expect(onAddCategoria).toHaveBeenCalledWith('Lacteos');
+    expect(onAddCategoria).not.toHaveBeenCalled();
     expect(onAddUbicacion).not.toHaveBeenCalled();
     expect(onAddMarca).toHaveBeenCalledWith('Ser');
     expect(onClose).toHaveBeenCalled();
@@ -1000,7 +1001,7 @@ describe('ScanModal - scanning a single field (expiry date or barcode)', () => {
       mockedOcr.pickImage.mockClear();
       const { unmount } = render(<ScanModal visible onClose={jest.fn()} onSuccess={jest.fn()} fixedDocType={fixedDocType} />);
       await act(async () => { fireEvent.press(screen.getByTestId('scan-source-camera')); });
-      expect(mockedOcr.pickImage).toHaveBeenCalledWith('camera', true);
+      expect(mockedOcr.pickImage).toHaveBeenCalledWith('camera');
       unmount();
     }
   });

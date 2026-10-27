@@ -69,6 +69,20 @@ const toSuggestion = (match: ProductMatch): ProductSuggestion => ({
   stock: match.stock,
 });
 
+// Une las listas de productos en ese orden, sin repetir ninguno
+const mergeSuggestions = (...lists: (ProductSuggestion[] | undefined)[]): ProductSuggestion[] => {
+  const seen = new Set<number>();
+  const merged: ProductSuggestion[] = [];
+  for (const list of lists) {
+    for (const product of Array.isArray(list) ? list : []) {
+      if (seen.has(product.id)) continue;
+      seen.add(product.id);
+      merged.push(product);
+    }
+  }
+  return merged;
+};
+
 const productLabel = (p: ProductSuggestion) => p.nombre + (p.marca ? ` · ${p.marca}` : '');
 
 // "Ingresar producto existente": se suma stock a un producto que el usuario ya tiene cargado,
@@ -205,8 +219,8 @@ export default function ExistingProductModal({
     if (!method || method === 'name' || method === 'receipt') return;
     setError(null);
     try {
-      // La etiqueta se recorta siempre antes de procesarla (con la cámara o desde la galería)
-      const asset = await ocrService.pickImage(source, method === 'label');
+      // La foto se puede recortar siempre antes de procesarla (con la cámara o desde la galería), también el código de barras
+      const asset = await ocrService.pickImage(source);
       if (!asset) return;
       await runScan(METHOD_DOC_TYPE[method], asset);
     } catch (err: unknown) {
@@ -280,7 +294,17 @@ export default function ExistingProductModal({
     // Se compara con el nombre, la marca y la descripción de los productos, no solo con el nombre
     const text = [name, labelDraft?.marca, labelDraft?.descripcion].filter(Boolean).join(' ');
     await search(async () => {
-      const found = await productService.matchProducts(text);
+      // Además de esa comparación, se buscan siempre los productos con un nombre parecido al que quedó escrito (el
+      // usuario pudo corregirlo): así aparecen sí o sí, aunque la marca y la descripción leídas los alejen
+      const [byText, byName, similar] = await Promise.allSettled([
+        productService.matchProducts(text),
+        text === name ? Promise.resolve([] as ProductSuggestion[]) : productService.matchProducts(name),
+        productService.suggestProducts(name),
+      ]);
+      if (byText.status === 'rejected' && byName.status === 'rejected' && similar.status === 'rejected') {
+        throw byText.reason;
+      }
+      const found = mergeSuggestions(...[byText, byName, similar].map(r => (r.status === 'fulfilled' ? r.value : [])));
       // Con el nombre tal cual lo leyó la etiqueta, también sirven las coincidencias que armó el escaneo
       if (found.length === 0 && name === (labelDraft?.nombre ?? '').trim()) {
         return (labelDraft?.coincidencias ?? []).map(toSuggestion);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Keyboard, KeyboardAvoidingView, Modal, StyleSheet, Text } from 'react-native';
+import { Keyboard, Modal, StyleSheet, Text, View } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import CenteredModal from '../src/components/CenteredModal';
@@ -44,8 +44,66 @@ describe('CenteredModal', () => {
 
   it('shrinks to leave room for the keyboard', () => {
     render(centered(true));
-    expect(screen.UNSAFE_getByType(KeyboardAvoidingView).props.behavior).toBe('padding');
     expect(StyleSheet.flatten(screen.getByTestId('card').props.style).flexShrink).toBe(1);
+  });
+
+  describe('lifting for the keyboard', () => {
+    const handlers: Record<string, (event?: unknown) => void> = {};
+    // Dónde queda, en la pantalla, el fondo de la ventana (se mide con measureInWindow)
+    let windowBottom = 800;
+    const inner = () => StyleSheet.flatten(screen.getByTestId('centered-modal-inner').props.style);
+
+    beforeEach(() => {
+      jest.spyOn(Keyboard, 'addListener').mockImplementation(((event: string, cb: () => void) => {
+        handlers[event] = cb;
+        return { remove: jest.fn() };
+      }) as any);
+      jest.spyOn(View.prototype as any, 'measureInWindow').mockImplementation(((cb: (x: number, y: number, w: number, h: number) => void) => {
+        cb(0, 0, 360, windowBottom);
+      }) as any);
+    });
+    afterEach(() => { jest.restoreAllMocks(); });
+
+    const showKeyboard = (screenY: number) => act(() => { handlers.keyboardDidShow({ endCoordinates: { screenY, height: 800 - screenY } }); });
+
+    it('lifts only as much as the keyboard covers, and goes back to its place when the keyboard closes', () => {
+      render(centered(true));
+      const resting = inner().paddingBottom;
+      windowBottom = 800;
+      showKeyboard(500);
+      expect(inner().paddingBottom).toBe(24 + 300);
+      act(() => { handlers.keyboardDidHide(); });
+      expect(inner().paddingBottom).toBe(resting);
+    });
+
+    it('does not lift when the system already shrank the window above the keyboard', () => {
+      render(centered(true));
+      windowBottom = 500;
+      showKeyboard(500);
+      expect(inner().paddingBottom).toBe(24);
+    });
+
+    it('measures again when the window changes size, so the lift never outlasts the keyboard', () => {
+      render(centered(true));
+      windowBottom = 800;
+      showKeyboard(500);
+      expect(inner().paddingBottom).toBe(324);
+      // el sistema achica la ventana mientras el teclado sigue abierto
+      windowBottom = 500;
+      act(() => { screen.getByTestId('centered-modal-root').props.onLayout(); });
+      expect(inner().paddingBottom).toBe(24);
+      // y al cerrarse el teclado, un cambio de tamaño tardío no vuelve a elevarla
+      act(() => { handlers.keyboardDidHide(); });
+      windowBottom = 800;
+      act(() => { screen.getByTestId('centered-modal-root').props.onLayout(); });
+      expect(inner().paddingBottom).toBe(24);
+    });
+
+    it('does not lift when the keyboard does not say where it is', () => {
+      render(centered(true));
+      act(() => { handlers.keyboardDidShow(); });
+      expect(inner().paddingBottom).toBe(24);
+    });
   });
 
   describe('Android system buttons', () => {
@@ -53,7 +111,6 @@ describe('CenteredModal', () => {
     const withInsets = () => (
       <SafeAreaProvider initialMetrics={metrics}>{centered(true)}</SafeAreaProvider>
     );
-    // El margen va en un View aparte: KeyboardAvoidingView pisa el padding inferior de su propio estilo
     const inner = () => StyleSheet.flatten(screen.getByTestId('centered-modal-inner').props.style);
 
     afterEach(() => { jest.restoreAllMocks(); });
@@ -65,7 +122,6 @@ describe('CenteredModal', () => {
       expect(modal.props.navigationBarTranslucent).toBe(true);
       expect(inner().paddingBottom).toBe(60);
       expect(inner().paddingTop).toBe(42);
-      expect(StyleSheet.flatten(screen.UNSAFE_getByType(KeyboardAvoidingView).props.style).paddingBottom).toBeUndefined();
     });
 
     it('does not leave room for the system buttons while the keyboard covers them', () => {

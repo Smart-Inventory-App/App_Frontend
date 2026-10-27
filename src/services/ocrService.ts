@@ -14,10 +14,11 @@ export interface ScanImageAsset {
 }
 
 /**
- * Elige o saca la foto a escanear. Con `crop`, antes de seguir se abre la pantalla del sistema para recortarla
- * (como al cargar la imagen de un producto), siempre: tanto si se saca con la cámara como si se elige de la galería.
+ * Elige o saca la foto a escanear. Con `crop` (lo normal), antes de seguir se abre la pantalla del sistema para
+ * recortarla (como al cargar la imagen de un producto), siempre: tanto si se saca con la cámara como si se elige de la
+ * galería. Toda foto que pide la app se puede recortar.
  */
-async function pickImage(source: 'camera' | 'gallery', crop = false): Promise<ImagePicker.ImagePickerAsset | null> {
+async function pickImage(source: 'camera' | 'gallery', crop = true): Promise<ImagePicker.ImagePickerAsset | null> {
   const permission = source === 'camera'
     ? await ImagePicker.requestCameraPermissionsAsync()
     : await ImagePicker.requestMediaLibraryPermissionsAsync();

@@ -55,13 +55,24 @@ describe('ocrService.pickImage', () => {
     await expect(ocrService.pickImage('camera')).resolves.toBe(asset);
   });
 
-  it('does not open the system crop screen by default', async () => {
+  it('opens the system crop screen by default: every photo the app asks for can be cropped', async () => {
     (ImagePicker.requestCameraPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
     (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
     (ImagePicker.launchCameraAsync as jest.Mock).mockResolvedValue({ canceled: true });
     (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({ canceled: true });
     await ocrService.pickImage('camera');
     await ocrService.pickImage('gallery');
+    expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: true }));
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: true }));
+  });
+
+  it('does not open the system crop screen when told not to', async () => {
+    (ImagePicker.requestCameraPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+    (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+    (ImagePicker.launchCameraAsync as jest.Mock).mockResolvedValue({ canceled: true });
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({ canceled: true });
+    await ocrService.pickImage('camera', false);
+    await ocrService.pickImage('gallery', false);
     expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: false }));
     expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: false }));
   });

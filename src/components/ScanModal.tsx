@@ -264,8 +264,8 @@ export default function ScanModal({
     // Desde la ventana de abajo, esta se cierra mientras el usuario saca o elige la foto
     if (fromSheet) setPhase('hidden');
     try {
-      // Todo se recorta antes de procesarlo, menos los comprobantes (con la cámara o desde la galería)
-      const asset = await ocrService.pickImage(source, docType !== 'receipt');
+      // Todo se puede recortar antes de procesarlo, también los comprobantes (con la cámara o desde la galería)
+      const asset = await ocrService.pickImage(source);
       if (!asset) {
         // Sin foto no hay nada que escanear: desde la ventana de abajo se vuelve al formulario
         if (fromSheet) handleClose();
@@ -345,7 +345,7 @@ export default function ScanModal({
   // Los datos validados por el usuario pasan al formulario de "Flujo de producto" y la foto escaneada, a ser la imagen
   // del producto; si se cancela, no se carga nada
   const handleConfirmLabel = async () => {
-    // Solo el nombre se edita (y es obligatorio): lo demás que se leyó pasa al formulario tal cual, si es válido
+    // Solo el nombre se edita (y es obligatorio); al formulario pasan el nombre, la marca, la descripción y la imagen
     if (validateLabelFields(labelFields) === 'nombre') {
       setNameError(t('product.validationNombre'));
       return;
@@ -367,8 +367,6 @@ export default function ScanModal({
     const values = labelFieldsToForm(labelFields, imageUrl);
     onApplyToForm?.(form => ({ ...form, ...values }));
     // Lo que se escribió y todavía no era una opción se suma a las del formulario
-    if (values.categoria) onAddCategoria?.(values.categoria);
-    if (values.ubicacion) onAddUbicacion?.(values.ubicacion);
     if (values.marca) onAddMarca?.(values.marca);
     setConfirming(false);
     handleClose();
