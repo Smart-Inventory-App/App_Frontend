@@ -210,7 +210,12 @@ describe('validateProductForm - código de barras', () => {
 
   it('rejects an invalid barcode', () => {
     expect(validateProductForm({ ...base, codigo_barras: '123' })).toBe('codigoBarras');
-    expect(validateProductForm({ ...base, codigo_barras: '7791234567899' })).toBe('codigoBarras');
+    expect(validateProductForm({ ...base, codigo_barras: '779123456789012' })).toBe('codigoBarras');
+  });
+
+  it('accepts a barcode of a valid length even if its check digit does not close', () => {
+    expect(validateProductForm({ ...base, codigo_barras: '7791234567899' })).toBeNull();
+    expect(validateProductForm({ ...base, codigo_barras: '2800283327677' })).toBeNull();
   });
 });
 

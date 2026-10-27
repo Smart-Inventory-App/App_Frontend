@@ -1,24 +1,14 @@
-// Mismo criterio que el backend (app_backend/app/core/barcode.py): EAN-8, UPC-A, EAN-13 y GTIN-14,
-// con dígito verificador GS1. Si cambia allá, tiene que cambiar acá.
+// Mismo criterio que el backend (app_backend/app/core/barcode.py): solo números y de 8, 12, 13 o 14 dígitos
+// (EAN-8, UPC-A, EAN-13 y GTIN-14). No se exige que cierre el dígito verificador. Si cambia allá, tiene que cambiar acá.
 export const BARCODE_VALID_LENGTHS = [8, 12, 13, 14];
 export const BARCODE_MAX_DIGITS = 14;
-
-function checkDigit(body: string): number {
-  const total = body
-    .split('')
-    .reverse()
-    .reduce((sum, digit, i) => sum + Number(digit) * (i % 2 === 0 ? 3 : 1), 0);
-  return (10 - (total % 10)) % 10;
-}
 
 export function onlyDigits(value: string): string {
   return value.replace(/\D/g, '');
 }
 
 export function isValidBarcode(value: string): boolean {
-  if (!/^\d+$/.test(value)) return false;
-  if (!BARCODE_VALID_LENGTHS.includes(value.length)) return false;
-  return checkDigit(value.slice(0, -1)) === Number(value[value.length - 1]);
+  return /^\d+$/.test(value) && BARCODE_VALID_LENGTHS.includes(value.length);
 }
 
 // "8, 12, 13 o 14": todos los largos que acepta, con la palabra de unión del idioma.
