@@ -76,7 +76,7 @@ App_Frontend/
 │       ├── index.tsx           # Home — estado del inventario, últimos cambios y productos recientes
 │       ├── inventario.tsx      # Lista paginada de productos con filtros y orden
 │       ├── cargar.tsx          # Entrada y salida de productos
-│       ├── alertas.tsx         # Centro de Alertas
+│       ├── alertas.tsx         # Centro de Alertas: «Según tus reglas» (vencimiento y stock mínimo) primero y «Generadas por el sistema» (ritmo lento); las del modelo predictivo llevan la marca «Predicción»
 │       └── perfil.tsx          # Perfil y configuración
 ├── src/
 │   ├── components/

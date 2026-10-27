@@ -7,7 +7,6 @@ import {
   ProductDefaults,
   ProductSuggestion,
   StockTotal,
-  ReposicionSuggestion,
   StockChange,
   TrendsResponse,
 } from '../types/product';
@@ -137,11 +136,6 @@ export const productService = {
 
   async deleteConsumptionEvent(productId: number, eventId: number): Promise<{ remaining_stock: number }> {
     const { data } = await api.delete(`/products/${productId}/events/${eventId}`);
-    return data;
-  },
-
-  async getReposicionSugerida(): Promise<ReposicionSuggestion[]> {
-    const { data } = await api.get<ReposicionSuggestion[]>('/products/reposicion-sugerida');
     return data;
   },
 

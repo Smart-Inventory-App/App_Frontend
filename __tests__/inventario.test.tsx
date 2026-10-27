@@ -562,7 +562,7 @@ describe('InventarioScreen - product details', () => {
     await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
     await waitFor(() => expect(mockedProfile.getProfile).toHaveBeenCalled());
     fireEvent.press(screen.getByTestId('product-info-5'));
-    await waitFor(() => expect(screen.getByTestId('detail-stock-minimo').props.children).toEqual('7 unidades'));
+    await waitFor(() => expect(screen.getByTestId('detail-stock-minimo').props.children).toEqual('7 días'));
     expect(screen.getByTestId('detail-dias-alerta').props.children).toEqual('10 días');
     expect(screen.getByTestId('detail-dias-alerta-note').props.children).toEqual('Usando tu regla general');
   });

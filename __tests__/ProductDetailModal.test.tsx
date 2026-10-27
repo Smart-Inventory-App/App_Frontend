@@ -40,7 +40,7 @@ describe('ProductDetailModal', () => {
     expect(text('detail-vencimiento')).toEqual('05/03/2027');
     expect(text('detail-codigo-barras')).toEqual('7791234567898');
     expect(text('detail-descripcion')).toEqual('Entera, larga vida');
-    expect(text('detail-stock-minimo')).toEqual('4 unidades');
+    expect(text('detail-stock-minimo')).toEqual('4 días');
     expect(text('detail-dias-alerta')).toEqual('6 días');
     expect(text('detail-created-at')).toEqual('12:30:00 01/10/2026');
   });
@@ -80,7 +80,7 @@ describe('ProductDetailModal', () => {
   it('shows the zero stock of a product that ran out', () => {
     render(<ProductDetailModal product={{ ...FULL, stock: 0, stock_minimo: 0, dias_alerta_vencimiento: 0 }} onClose={jest.fn()} />);
     expect(text('detail-stock')).toEqual('0');
-    expect(text('detail-stock-minimo')).toEqual('0 unidades');
+    expect(text('detail-stock-minimo')).toEqual('0 días');
     expect(text('detail-dias-alerta')).toEqual('0 días');
     expect(screen.queryByTestId('detail-stock-minimo-note')).toBeNull();
   });
@@ -282,7 +282,7 @@ describe('ProductDetailModal - details', () => {
 
   it('shows the general rules in use, with a smaller note below saying so', () => {
     render(<ProductDetailModal product={BARE} generalRules={{ coverageDays: 7, expiryDays: 10 }} onClose={jest.fn()} />);
-    expect(text('detail-stock-minimo')).toEqual('7 unidades');
+    expect(text('detail-stock-minimo')).toEqual('7 días');
     expect(text('detail-stock-minimo-note')).toEqual('Usando tu regla general');
     expect(text('detail-dias-alerta')).toEqual('10 días');
     expect(text('detail-dias-alerta-note')).toEqual('Usando tu regla general');
@@ -300,7 +300,7 @@ describe('ProductDetailModal - details', () => {
         onClose={jest.fn()}
       />,
     );
-    expect(text('detail-stock-minimo')).toEqual('2 unidades');
+    expect(text('detail-stock-minimo')).toEqual('2 días');
     expect(screen.queryByTestId('detail-stock-minimo-note')).toBeNull();
     const tree = JSON.stringify(screen.toJSON());
     expect(tree.indexOf('detail-dias-alerta"')).toBeLessThan(tree.indexOf('detail-dias-alerta-note'));
@@ -314,7 +314,7 @@ describe('ProductDetailModal - details', () => {
         onClose={jest.fn()}
       />,
     );
-    expect(text('detail-stock-minimo')).toEqual('1 unidad');
+    expect(text('detail-stock-minimo')).toEqual('1 día');
     expect(text('detail-dias-alerta')).toEqual('1 día');
   });
 

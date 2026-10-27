@@ -5,8 +5,11 @@ import AlertDetailModal from '../src/components/AlertDetailModal';
 import { Alert } from '../src/services/alertService';
 import { ALERT_TONES, getAlertLines, getAlertType } from '../src/utils/alertInfo';
 
-const DAY = 24 * 60 * 60 * 1000;
-const inDays = (n: number) => new Date(Date.now() + n * DAY).toISOString();
+const inDays = (n: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 const alert = (overrides: Partial<Alert> = {}): Alert => ({
   id: 1,
@@ -54,25 +57,24 @@ describe('AlertDetailModal', () => {
 
   it('describes a low stock alert in the color of its level', () => {
     render(<AlertDetailModal alert={alert()} onClose={jest.fn()} />);
-    expect(screen.getByTestId('alert-detail-reason-title').props.children).toBe('Stock crítico');
-    expect(screen.getByText('Stock Restante: 2 ud.')).toBeTruthy();
-    expect(screen.getByText('El stock actual alcanza para 3 días')).toBeTruthy();
+    expect(screen.getByTestId('alert-detail-reason-title').props.children).toBe('Se agota en 3 días');
+    expect(screen.getByText('Stock restante: 2 ud.')).toBeTruthy();
     const box = StyleSheet.flatten(screen.getByTestId('alert-detail-reason').props.style);
     expect(box.backgroundColor).toBe(ALERT_TONES.critical.background);
     expect(StyleSheet.flatten(screen.getByTestId('alert-detail-reason-title').props.style).color).toBe(ALERT_TONES.critical.text);
   });
 
-  it('describes an expiry alert with the limit date', () => {
+  it('describes an expiry alert with how many days are left', () => {
     render(<AlertDetailModal alert={alert({ type: 'expiry', level: 'warning', product_expiry: inDays(5) })} onClose={jest.fn()} />);
-    expect(screen.getByTestId('alert-detail-reason-title').props.children).toMatch(/Vence en \d+ días/);
-    expect(screen.getByText(/Fecha Límite: /)).toBeTruthy();
+    expect(screen.getByTestId('alert-detail-reason-title').props.children).toBe('Vence en 5 días');
+    expect(screen.getByText('Stock restante: 2 ud.')).toBeTruthy();
     expect(StyleSheet.flatten(screen.getByTestId('alert-detail-reason').props.style).backgroundColor).toBe(ALERT_TONES.warning.background);
   });
 
   it('describes a slow pace alert with the units in conflict', () => {
     render(<AlertDetailModal alert={alert({ type: 'slow_pace', level: 'info', units_wasted: 4, product_expiry: inDays(10) })} onClose={jest.fn()} />);
-    expect(screen.getByText('Stock en conflicto: 4 ud.')).toBeTruthy();
-    expect(screen.getByText(/Al ritmo actual, 4 unidades se vencerán en \d+ días/)).toBeTruthy();
+    expect(screen.queryByText(/Stock en conflicto/)).toBeNull();
+    expect(screen.getByText('Al ritmo actual, 4 unidades se vencerán en 10 días')).toBeTruthy();
     expect(StyleSheet.flatten(screen.getByTestId('alert-detail-reason').props.style).backgroundColor).toBe(ALERT_TONES.info.background);
   });
 
@@ -116,7 +118,7 @@ describe('alertInfo', () => {
   it('titles the expiry alerts by how close they are', () => {
     const expiry = (days: number) => alert({ type: 'expiry', product_expiry: inDays(days) });
     expect(getAlertType(expiry(1))).toBe('Vence mañana');
-    expect(getAlertType(expiry(-2))).toBe('Vencido');
+    expect(getAlertType(expiry(-2))).toBe('Venció hace 2 días');
     expect(getAlertType(alert({ type: 'info' }))).toBe('Información');
   });
 

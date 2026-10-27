@@ -128,7 +128,7 @@ export default function ProductDetailModal({ product, onClose, generalRules }: P
                 <Row testID="detail-codigo-barras" label={t('product.codigoBarras')} value={product.codigo_barras} />
 
                 <Text style={styles.sectionTitle}>{t('detail.alertsTitle')}</Text>
-                {ruleRow('detail-stock-minimo', t('product.stockMinimo'), product.stock_minimo, generalRules?.coverageDays, units, true)}
+                {ruleRow('detail-stock-minimo', t('product.stockMinimo'), product.stock_minimo, generalRules?.coverageDays, days, true)}
                 {ruleRow('detail-dias-alerta', t('product.diasAlertaVencimiento'), product.dias_alerta_vencimiento, generalRules?.expiryDays, days)}
 
                 {product.created_at ? (

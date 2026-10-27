@@ -51,16 +51,6 @@ export interface ProductDefaults {
   last_ubicacion?: string;
 }
 
-export interface ReposicionSuggestion {
-  product_id: number;
-  nombre: string;
-  stock: number;
-  imagen_url?: string;
-  daily_rate: number;
-  days_until_stockout?: number;
-  suggested_qty: number;
-}
-
 export interface ConsumoPorDia {
   day: string;
   quantity: number;
