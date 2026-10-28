@@ -137,6 +137,7 @@ export default function HomeScreen() {
                 value={alertCount(alertSummary?.low_stock)}
                 label={t('home.lowStockLabel')}
                 labelColor="red"
+                labelSolid
                 onPress={() => goToAlerts('Stock')}
               />
             </View>

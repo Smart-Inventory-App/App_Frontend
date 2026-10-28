@@ -29,7 +29,7 @@ jest.mock('@/services/alertService', () => ({
 const mockedAlerts = alertService as jest.Mocked<typeof alertService>;
 
 const alert = (id: number, overrides: Partial<Alert> = {}): Alert => ({
-  id, userId: 'u1', productId: 1, type: 'info', level: 'info', product_name: `P${id}`, ...overrides,
+  id, user_id: 'u1', product_id: 1, type: 'info', level: 'info', product_name: `P${id}`, ...overrides,
 });
 
 beforeEach(() => {
@@ -378,6 +378,54 @@ describe('AlertasScreen - alert detail window', () => {
 
     fireEvent.press(screen.getByTestId('alert-detail-close'));
     expect(screen.queryByTestId('alert-detail-card')).toBeNull();
+  });
+});
+
+describe('AlertasScreen - count of alerts and products', () => {
+  // Cinco alertas sobre cuatro productos: el producto 10 tiene una de stock y una de vencimiento
+  const data = () => [
+    alert(1, { product_id: 10, type: 'stock_low_coverage', level: 'critical', product_name: 'Leche' }),
+    alert(2, { product_id: 10, type: 'expiry', level: 'warning', product_name: 'Leche', product_expiry: inDays(9), limit_days: 7 }),
+    alert(3, { product_id: 11, type: 'expiry', level: 'critical', product_name: 'Yogur', product_expiry: inDays(2), limit_days: 7 }),
+    alert(4, { product_id: 12, type: 'stock_low_coverage', level: 'warning', product_name: 'Arroz' }),
+    alert(5, { product_id: 13, type: 'slow_pace', level: 'warning', product_name: 'Miel', product_expiry: inDays(20) }),
+  ];
+  const text = () => screen.getByTestId('alerts-count').props.children;
+
+  it('says how many alerts there are and for how many different products, under the type options and before the first section', async () => {
+    mockedAlerts.getAlerts.mockResolvedValue(data());
+    render(<AlertasScreen />);
+    await waitFor(() => expect(screen.getByTestId('alerts-count')).toBeTruthy());
+    expect(text()).toBe('5 alertas para 4 productos');
+    expect(at('alert-filter-Vencimiento')).toBeLessThan(at('alerts-count'));
+    expect(at('alerts-count')).toBeLessThan(at('alerts-section-rule'));
+  });
+
+  it('follows the type option and the level box that are selected', async () => {
+    mockedAlerts.getAlerts.mockResolvedValue(data());
+    render(<AlertasScreen />);
+    await waitFor(() => expect(screen.getByTestId('alerts-count')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('alert-filter-Stock'));
+    expect(text()).toBe('2 alertas para 2 productos');
+    fireEvent.press(screen.getByTestId('alert-summary-critical'));
+    expect(text()).toBe('1 alerta para 1 producto');
+    fireEvent.press(screen.getByTestId('alert-summary-critical'));
+    fireEvent.press(screen.getByTestId('alert-filter-Vencimiento'));
+    expect(text()).toBe('3 alertas para 3 productos');
+  });
+
+  it('counts a product once even if it has two alerts', async () => {
+    mockedAlerts.getAlerts.mockResolvedValue(data().slice(0, 2));
+    render(<AlertasScreen />);
+    await waitFor(() => expect(screen.getByTestId('alerts-count')).toBeTruthy());
+    expect(text()).toBe('2 alertas para 1 producto');
+  });
+
+  it('is not shown when there is nothing to show', async () => {
+    mockedAlerts.getAlerts.mockResolvedValue([]);
+    render(<AlertasScreen />);
+    await waitFor(() => expect(screen.getByText('No hay alertas para mostrar.')).toBeTruthy());
+    expect(screen.queryByTestId('alerts-count')).toBeNull();
   });
 });
 

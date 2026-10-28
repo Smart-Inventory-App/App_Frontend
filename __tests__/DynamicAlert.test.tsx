@@ -6,8 +6,8 @@ import { FlatList, Image, StyleSheet } from 'react-native';
 
 const baseAlert = (overrides: Partial<Alert> = {}): Alert => ({
   id: 1,
-  userId: 'u1',
-  productId: 1,
+  user_id: 'u1',
+  product_id: 1,
   type: 'info',
   level: 'info',
   product_name: 'Leche',

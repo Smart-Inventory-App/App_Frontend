@@ -61,6 +61,9 @@ export default function AlertasScreen() {
   const counts = { critical: ofType.filter(a => a.level === 'critical').length, warning: ofType.filter(a => a.level === 'warning').length };
   const visible = levelFilter ? ofType.filter(alert => alert.level === levelFilter) : ofType;
   const { rule: ruleAlerts, system: systemAlerts } = splitByOrigin(visible);
+  // «3 alertas para 2 productos»: lo que se ve con los filtros elegidos
+  const productCount = new Set(visible.map(alert => alert.product_id)).size;
+  const summaryText = `${visible.length} ${visible.length === 1 ? 'alerta' : 'alertas'} para ${productCount} ${productCount === 1 ? 'producto' : 'productos'}`;
 
   return (
     <>
@@ -99,6 +102,7 @@ export default function AlertasScreen() {
             </Pressable>
           ))}
         </View>
+        {visible.length > 0 && <Text testID="alerts-count" style={styles.alertsCount}>{summaryText}</Text>}
         {visible.length === 0 ? (
           <View style={{alignItems: 'center', marginTop: 32}}>
             <Text style={{fontFamily: 'Figtree_400Regular', color: '#828282'}}>No hay alertas para mostrar.</Text>
@@ -153,6 +157,7 @@ const styles = StyleSheet.create({
   systemHeader: { borderLeftColor: '#bdbdbd', marginTop: 20 },
   sectionTitle: { fontFamily: 'Figtree_400Regular', fontSize: 16, fontWeight: '700' },
   sectionSubtitle: { fontFamily: 'Figtree_400Regular', fontSize: 12, color: '#828282', marginTop: 1 },
+  alertsCount: { fontFamily: 'Figtree_400Regular', fontSize: 13, color: Colors.textSecondary, textAlign: 'center', marginBottom: 4 },
   filterBar: { flexDirection: 'row', justifyContent: 'space-between', gap: 6, marginVertical: 16 },
   filterBarItem: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 4, paddingVertical: 9 },
   filterBarItemText: { fontFamily: 'Figtree_400Regular', fontSize: 14, color: '#828282' },

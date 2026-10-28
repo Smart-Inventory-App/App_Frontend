@@ -525,12 +525,12 @@ describe('HomeScreen - titles and the stock part of the entries', () => {
 });
 
 describe('HomeScreen - short labels and compact cards', () => {
-  it('calls the cards "Vencimientos" and "Stock bajo", with "Alertas de productos" and "Alertas de stock" as comments', async () => {
+  it('calls the cards "Vencimientos" and "Stock bajo", with "Productos con alertas" and "Stock con alertas" as comments', async () => {
     await load();
     expect(screen.getByText('Vencimientos')).toBeTruthy();
     expect(screen.queryByText('Por vencer')).toBeNull();
-    expect(screen.getByText('Alertas de productos')).toBeTruthy();
-    expect(screen.getByText('Alertas de stock')).toBeTruthy();
+    expect(screen.getByText('Productos con alertas')).toBeTruthy();
+    expect(screen.getByText('Stock con alertas')).toBeTruthy();
     expect(screen.queryByText(/Próximos|Mínimo/)).toBeNull();
   });
 
@@ -540,6 +540,13 @@ describe('HomeScreen - short labels and compact cards', () => {
       .map(id => StyleSheet.flatten(screen.getByTestId(`${id}-label`).props.style).width);
     expect(new Set(widths).size).toBe(1);
     expect(widths[0]).toBeGreaterThan(0);
+  });
+
+  it('writes "Stock con alertas" in white letters, on the red of its card', async () => {
+    await load();
+    const label = StyleSheet.flatten(screen.getByTestId('stat-low-label').props.style);
+    expect(label.color).toBe('#fff');
+    expect(label.backgroundColor).toBe('#e5484d');
   });
 
   it('paints "Total inventario" with the color of the icon of "Productos", in white letters', async () => {

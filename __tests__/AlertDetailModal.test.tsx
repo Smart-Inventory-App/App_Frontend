@@ -13,8 +13,8 @@ const inDays = (n: number) => {
 
 const alert = (overrides: Partial<Alert> = {}): Alert => ({
   id: 1,
-  userId: 'u1',
-  productId: 1,
+  user_id: 'u1',
+  product_id: 1,
   type: 'stock_low_coverage',
   level: 'critical',
   product_name: 'Leche',

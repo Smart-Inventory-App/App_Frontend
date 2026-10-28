@@ -4,7 +4,7 @@ import {
 } from '../src/utils/alertInfo';
 
 const alert = (id: number, overrides: Partial<Alert> = {}): Alert => ({
-  id, userId: 'u1', productId: 1, type: 'info', level: 'info', product_name: `P${id}`, ...overrides,
+  id, user_id: 'u1', product_id: 1, type: 'info', level: 'info', product_name: `P${id}`, ...overrides,
 });
 
 // Fecha de calendario (AAAA-MM-DD) a tantos días de hoy, en la zona del dispositivo

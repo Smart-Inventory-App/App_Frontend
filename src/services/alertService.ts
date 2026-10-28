@@ -2,8 +2,8 @@ import api from './api';
 
 export interface Alert {
     id: number;
-    userId: string;
-    productId: number;
+    user_id: string;
+    product_id: number;
     type: 'stock_low_coverage' | 'expiry' | 'slow_pace' | 'info';
     level: 'critical' | 'warning' | 'info';
     units_wasted?: number;
@@ -29,9 +29,9 @@ export interface AlertSummary {
     warning: number;
     info: number;
     total: number;
-    /** Productos vencidos o por vencer dentro de su límite (alertas críticas de vencimiento). */
+    /** Productos con alertas de vencimiento o de ritmo lento (los de la opción «Vencimiento»), de cualquier nivel. */
     expiring: number;
-    /** Productos bajo su stock mínimo (alertas críticas de stock). */
+    /** Productos con alertas de stock (los de la opción «Stock»), de cualquier nivel. */
     low_stock: number;
 }
 

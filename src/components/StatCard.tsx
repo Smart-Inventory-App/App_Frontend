@@ -20,7 +20,7 @@ type Props = {
   testID?: string;
 };
 
-// Alcanza para el comentario más largo («Alertas de productos»)
+// Alcanza para el comentario más largo («Productos con alertas»)
 export const LABEL_WIDTH = 140;
 
 const LABEL_ACCENT = { green: '#2db7a3', yellow: '#f59e0b', red: '#e5484d' } as const;
