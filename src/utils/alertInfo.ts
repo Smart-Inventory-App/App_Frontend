@@ -97,10 +97,9 @@ export function getAlertDescription(alert: Alert): string {
     }
     case 'stock_low_coverage': {
       const days = coverageText(alert.days_until_stockout ?? 0);
-      const minimum = alert.limit_days != null ? ` y tu mínimo es de ${daysText(alert.limit_days)}` : '';
-      const restock = alert.suggested_qty ? ` Reponer ${alert.suggested_qty} ud.` : '';
-      const lasts = alert.product_stock === 1 ? 'alcanza' : 'alcanzan';
-      return `${left(alert.product_stock ?? 0)}, ${lasts} para ${days}${minimum}.${restock}`;
+      const minimum = alert.limit_days != null ? ` Mínimo configurado de ${daysText(alert.limit_days)}.` : '';
+      const single = alert.product_stock === 1;
+      return `${left(alert.product_stock ?? 0)} ${single ? 'restante que alcanza' : 'restantes que alcanzan'} para ${days}.${minimum}`;
     }
     case 'slow_pace': {
       const units = alert.units_wasted ?? 0;
@@ -127,7 +126,8 @@ export function getAlertDetails(alert: Alert): string[] {
       else if (days === 1) paragraphs.push(`Vence mañana, ${when}.`);
       else paragraphs.push(`Vence el ${when}, en ${daysText(days)}.`);
       paragraphs.push(`${(alert.product_stock ?? 0) === 1 ? 'Queda' : 'Quedan'} ${unitsText(alert.product_stock ?? 0)} en stock.`);
-      if (alert.limit_days != null) {
+      // A un producto que ya venció no le sirve "te avisamos cuando falten menos de..."
+      if (alert.limit_days != null && days >= 0) {
         paragraphs.push(`Te avisamos cuando faltan menos de ${daysText(alert.limit_days)} para el vencimiento (${scopeText(alert)}).`);
       }
       paragraphs.push(critical

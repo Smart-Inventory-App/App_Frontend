@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { Dimensions, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import TrendsModal from '../src/components/TrendsModal';
 import { productService } from '@/services/productService';
@@ -36,7 +36,6 @@ const response = (period: number, overrides: Partial<TrendsResponse> = {}): Tren
     { product_id: 1, nombre: 'Leche', cantidad: 8 },
     { product_id: 2, nombre: 'Pan', cantidad: 4 },
   ],
-  productos_menos_usados: [],
   ...overrides,
 });
 
@@ -99,16 +98,18 @@ describe('TrendsModal - window', () => {
 describe('TrendsModal - period', () => {
   beforeEach(() => respond());
 
-  it('offers 7, 14, 30 and 90 days, starting at 14', async () => {
+  it('offers 7, 14 and 30 days, starting at 14, and no 90 days option', async () => {
     await open();
-    [7, 14, 30, 90].forEach(n => expect(screen.getByTestId(`trends-period-${n}`)).toBeTruthy());
+    [7, 14, 30].forEach(n => expect(screen.getByTestId(`trends-period-${n}`)).toBeTruthy());
+    expect(screen.queryByTestId('trends-period-90')).toBeNull();
+    expect(screen.queryByText('90 días')).toBeNull();
     expect(screen.getByTestId('trends-period-14').props.accessibilityState).toMatchObject({ selected: true });
     expect(screen.getByTestId('trends-period-7').props.accessibilityState).toMatchObject({ selected: false });
     expect(mockedProducts.getTrends).toHaveBeenCalledWith(14);
     expect(mockedProducts.getTrends).toHaveBeenCalledWith(28);
   });
 
-  it.each([7, 30, 90])('asks for the %i days, and for twice as many to compare, when that period is chosen', async period => {
+  it.each([7, 30])('asks for the %i days, and for twice as many to compare, when that period is chosen', async period => {
     await open();
     mockedProducts.getTrends.mockClear();
     fireEvent.press(screen.getByTestId(`trends-period-${period}`));
@@ -135,7 +136,35 @@ describe('TrendsModal - summary', () => {
     expect(screen.getByTestId('trends-restocked').props.children).toBe(20);
     expect(screen.getByTestId('trends-average').props.children).toBe(0.9);
     expect(screen.getByTestId('trends-peak').props.children).toBe(7);
-    expect(screen.getByText('Mayor consumo (21 oct)')).toBeTruthy();
+  });
+
+  it('calls the average "Promedio de consumidos por día"', async () => {
+    respond();
+    await open();
+    expect(screen.getByText('Promedio de consumidos por día')).toBeTruthy();
+    expect(screen.queryByText('Promedio por día')).toBeNull();
+  });
+
+  it('writes "Día de mayor consumo" and, in another line below it, which day it was', async () => {
+    respond();
+    await open();
+    const label = screen.getByTestId('trends-peak-label');
+    expect(label.props.children.join('')).toBe('Día de mayor consumo\n21 oct');
+    expect(screen.queryByText(/Mayor consumo \(/)).toBeNull();
+  });
+
+  it('always keeps two lines for the labels of the four cards', async () => {
+    respond();
+    await open();
+    ['Consumido', 'Repuesto', 'Promedio de consumidos por día'].forEach(text => {
+      const label = screen.getByText(text);
+      const style = StyleSheet.flatten(label.props.style);
+      expect(label.props.numberOfLines).toBe(2);
+      expect(style.minHeight).toBe(style.lineHeight * 2);
+    });
+    const peak = screen.getByTestId('trends-peak-label');
+    expect(peak.props.numberOfLines).toBe(2);
+    expect(StyleSheet.flatten(peak.props.style).minHeight).toBe(StyleSheet.flatten(peak.props.style).lineHeight * 2);
   });
 
   it('says it consumed the same when the previous period was the same', async () => {
@@ -175,8 +204,11 @@ describe('TrendsModal - summary', () => {
     respond(12, { total_consumido: 0, consumo_por_dia: lastDays(14), top_productos: [] });
     await open();
     expect(screen.getByTestId('trends-peak').props.children).toBe('–');
+    expect(screen.getByTestId('trends-peak-label').props.children.join('')).toBe('Día de mayor consumo\nSin consumo');
     expect(screen.getByTestId('trends-empty-period').props.children).toBe('No hubo consumo en estos 14 días.');
-    expect(screen.getByTestId('trends-day-hint').props.children).toBe('Tocá una barra para ver cuánto se consumió ese día.');
+    // sin consumo en el período, arranca en el último día
+    expect(screen.getByTestId('trends-day-title').props.children).toBe('Jueves 22 de octubre');
+    expect(screen.getByTestId('trends-day-units').props.children).toBe('Ese día no hubo consumo');
   });
 });
 
@@ -228,27 +260,123 @@ describe('TrendsModal - interactive chart', () => {
   });
 
   it('abbreviates the month when its part of the chart is narrow', async () => {
-    // 90 días que terminan el 2 de octubre: octubre ocupa solo dos barras
-    respond(12, { consumo_por_dia: lastDays(90, [1], new Date(2026, 9, 2)) });
+    // 30 días que terminan el 2 de octubre: octubre ocupa solo dos barras
+    respond(12, { consumo_por_dia: lastDays(30, [1], new Date(2026, 9, 2)) });
     await open();
-    fireEvent.press(screen.getByTestId('trends-period-90'));
+    fireEvent.press(screen.getByTestId('trends-period-30'));
     await settle();
     const labels = screen.getAllByTestId(/trends-month-/).map(node => within(node).getByText(/./).props.children);
-    expect(labels).toEqual(['Julio', 'Agosto', 'Septiembre', 'Oct']);
+    expect(labels).toEqual(['Septiembre', 'Oct']);
   });
 
-  it('can be scrolled sideways, starting on the latest days', async () => {
+  it('does not scroll sideways: the whole chart fits in the screen', async () => {
     await open();
-    const scroll = screen.getByTestId('trends-chart-scroll');
-    expect(scroll.props.horizontal).toBe(true);
-    expect(typeof scroll.props.onContentSizeChange).toBe('function');
-    act(() => { scroll.props.onContentSizeChange(); });
+    expect(screen.queryByTestId('trends-chart-scroll')).toBeNull();
+    expect(StyleSheet.flatten(screen.getByTestId('trends-chart').props.style).width).toBeLessThanOrEqual(Dimensions.get('window').width - 56);
+  });
+
+  it.each([7, 14, 30])('shows the %i days of the period all together, with every bar inside the chart', async period => {
+    await open();
+    fireEvent.press(screen.getByTestId(`trends-period-${period}`));
+    await settle();
+    const width = StyleSheet.flatten(screen.getByTestId('trends-chart').props.style).width;
+    expect(width).toBeLessThanOrEqual(Dimensions.get('window').width - 56);
+    expect(screen.getByTestId(`trends-bar-${period - 1}`)).toBeTruthy();
+    expect(screen.queryByTestId('trends-chart-scroll')).toBeNull();
+    const slot = StyleSheet.flatten(screen.getByTestId(`trends-bar-${period - 1}`).props.style).width;
+    expect(slot * period).toBe(width);
+  });
+
+  it('writes the number of each day when there is room, and only some of them when the 30 bars are narrow', async () => {
+    await open();
+    expect(screen.getAllByTestId(/trends-day-label-/)).toHaveLength(14);
+    fireEvent.press(screen.getByTestId('trends-period-30'));
+    await settle();
+    const { width } = Dimensions.get('window');
+    const barWidth = Math.floor((width - 56) / 30);
+    const labels = screen.getAllByTestId(/trends-day-label-/);
+    expect(labels).toHaveLength(Math.ceil(30 / (barWidth >= 16 ? 1 : barWidth >= 10 ? 2 : 3)));
   });
 
   it('lets a screen reader hear the day and the units of each bar', async () => {
     await open();
     expect(screen.getByTestId('trends-bar-12').props.accessibilityLabel).toBe('Miércoles 21 de octubre: 7 unidades');
     expect(screen.getByTestId('trends-bar-11').props.accessibilityLabel).toBe('Martes 20 de octubre: 0 unidades');
+  });
+});
+
+describe('TrendsModal - day detail with arrows', () => {
+  beforeEach(() => respond());
+
+  it('centers the day and what was consumed that day', async () => {
+    await open();
+    const text = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
+    expect(text('trends-day-title').textAlign).toBe('center');
+    expect(text('trends-day-units').textAlign).toBe('center');
+  });
+
+  it('has a "<" button to its left and a ">" to its right', async () => {
+    await open();
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('trends-day-prev')).toBeLessThan(tree.indexOf('trends-day-title'));
+    expect(tree.indexOf('trends-day-title')).toBeLessThan(tree.indexOf('trends-day-next'));
+    expect(screen.getByTestId('trends-day-prev').props.accessibilityLabel).toBe('Día anterior');
+    expect(screen.getByTestId('trends-day-next').props.accessibilityLabel).toBe('Día siguiente');
+    const { Ionicons } = require('@expo/vector-icons');
+    const names = screen.UNSAFE_getAllByType(Ionicons).map((icon: any) => icon.props.name);
+    expect(names).toContain('chevron-back');
+    expect(names).toContain('chevron-forward');
+  });
+
+  it('goes back one day with "<" and forward one day with ">", moving the selected bar too', async () => {
+    await open();
+    expect(screen.getByTestId('trends-day-title').props.children).toBe('Miércoles 21 de octubre');
+    fireEvent.press(screen.getByTestId('trends-day-prev'));
+    expect(screen.getByTestId('trends-day-title').props.children).toBe('Martes 20 de octubre');
+    expect(screen.getByTestId('trends-day-units').props.children).toBe('Ese día no hubo consumo');
+    expect(screen.getByTestId('trends-bar-11').props.accessibilityState).toMatchObject({ selected: true });
+    expect(screen.getByTestId('trends-bar-12').props.accessibilityState).toMatchObject({ selected: false });
+    fireEvent.press(screen.getByTestId('trends-day-next'));
+    fireEvent.press(screen.getByTestId('trends-day-next'));
+    expect(screen.getByTestId('trends-day-title').props.children).toBe('Jueves 22 de octubre');
+    expect(screen.getByTestId('trends-day-units').props.children).toBe('Se consumieron 3 unidades');
+  });
+
+  it('can not go past the last day of the period: ">" is disabled there', async () => {
+    await open();
+    fireEvent.press(screen.getByTestId('trends-day-next'));
+    expect(screen.getByTestId('trends-day-next').props.accessibilityState).toMatchObject({ disabled: true });
+    fireEvent.press(screen.getByTestId('trends-day-next'));
+    expect(screen.getByTestId('trends-day-title').props.children).toBe('Jueves 22 de octubre');
+  });
+
+  it('can not go before the first day of the period: "<" is disabled there', async () => {
+    await open();
+    fireEvent.press(screen.getByTestId('trends-bar-0'));
+    expect(screen.getByTestId('trends-day-prev').props.accessibilityState).toMatchObject({ disabled: true });
+    fireEvent.press(screen.getByTestId('trends-day-prev'));
+    expect(screen.getByTestId('trends-bar-0').props.accessibilityState).toMatchObject({ selected: true });
+    expect(screen.getByTestId('trends-day-next').props.accessibilityState).toMatchObject({ disabled: false });
+  });
+
+  it('works together with tapping a bar', async () => {
+    await open();
+    fireEvent.press(screen.getByTestId('trends-bar-5'));
+    fireEvent.press(screen.getByTestId('trends-day-next'));
+    expect(screen.getByTestId('trends-bar-6').props.accessibilityState).toMatchObject({ selected: true });
+  });
+
+  it('tells how to use the chart', async () => {
+    await open();
+    expect(screen.getByTestId('trends-day-hint').props.children).toBe('Tocá una barra o usá las flechas para ver cada día.');
+  });
+
+  it('keeps the arrows but with no day when the period is empty of days', async () => {
+    respond(12, { consumo_por_dia: [] });
+    await open();
+    expect(screen.queryByTestId('trends-day-title')).toBeNull();
+    expect(screen.getByTestId('trends-day-prev').props.accessibilityState).toMatchObject({ disabled: true });
+    expect(screen.getByTestId('trends-day-next').props.accessibilityState).toMatchObject({ disabled: true });
   });
 });
 
@@ -269,14 +397,21 @@ describe('TrendsModal - rankings', () => {
     expect(screen.getByTestId('trends-no-top').props.children).toBe('Todavía no hay suficiente historial.');
   });
 
-  it('shows the least used products only when there are some', async () => {
-    respond(12, { productos_menos_usados: [{ product_id: 9, nombre: 'Sal', cantidad: 1 }] });
-    await open();
-    expect(screen.getByText('Menos usados')).toBeTruthy();
-    expect(within(screen.getByTestId('trends-low-0')).getByText('1 unidad')).toBeTruthy();
+  it('never shows the least used products: only the top', async () => {
     respond();
-    fireEvent.press(screen.getByTestId('trends-period-7'));
-    await waitFor(() => expect(screen.queryByText('Menos usados')).toBeNull());
+    await open();
+    expect(screen.queryByText('Menos usados')).toBeNull();
+    expect(screen.queryByTestId('trends-low-0')).toBeNull();
+  });
+
+  it('shows up to five distinct products, one row each', async () => {
+    respond(12, {
+      top_productos: ['Leche', 'Pan', 'Arroz', 'Fideos', 'Yogur'].map((nombre, i) => ({ product_id: i + 1, nombre, cantidad: 10 - i })),
+    });
+    await open();
+    expect(screen.getAllByTestId(/^trends-top-\d$/)).toHaveLength(5);
+    expect(screen.queryByTestId('trends-top-5')).toBeNull();
+    ['Leche', 'Pan', 'Arroz', 'Fideos', 'Yogur'].forEach(name => expect(screen.getAllByText(name)).toHaveLength(1));
   });
 });
 

@@ -115,20 +115,22 @@ describe('getAlertDescription', () => {
       .toBe('Venció el 10 de enero. Quedan 2 ud. que ya no conviene consumirlo.'.replace('consumirlo', 'consumir'));
   });
 
-  it('a low stock says how long it lasts, the minimum and how much to restock', () => {
+  it('a low stock says what is left, how long it lasts and the minimum that was configured', () => {
     const text = getAlertDescription(alert(1, {
       type: 'stock_low_coverage', product_stock: 2, days_until_stockout: 3, suggested_qty: 12, limit_days: 7,
     }));
-    expect(text).toBe('Quedan 2 ud., alcanzan para 3 días y tu mínimo es de 7 días. Reponer 12 ud.');
+    expect(text).toBe('Quedan 2 ud. restantes que alcanzan para 3 días. Mínimo configurado de 7 días.');
   });
 
-  it('a low stock without restock or limit stays short, and never says zero days', () => {
+  it('a low stock without a limit stays short, uses the singular, and never says zero days', () => {
     expect(getAlertDescription(alert(1, { type: 'stock_low_coverage', product_stock: 2, days_until_stockout: 1 })))
-      .toBe('Quedan 2 ud., alcanzan para 1 día.');
+      .toBe('Quedan 2 ud. restantes que alcanzan para 1 día.');
     expect(getAlertDescription(alert(1, { type: 'stock_low_coverage', product_stock: 1, days_until_stockout: 2 })))
-      .toBe('Queda 1 ud., alcanza para 2 días.');
+      .toBe('Queda 1 ud. restante que alcanza para 2 días.');
     expect(getAlertDescription(alert(1, { type: 'stock_low_coverage', product_stock: 2, days_until_stockout: 0 })))
-      .toBe('Quedan 2 ud., alcanzan para menos de 1 día.');
+      .toBe('Quedan 2 ud. restantes que alcanzan para menos de 1 día.');
+    expect(getAlertDescription(alert(1, { type: 'stock_low_coverage', product_stock: 4, days_until_stockout: 5, limit_days: 1 })))
+      .toBe('Quedan 4 ud. restantes que alcanzan para 5 días. Mínimo configurado de 1 día.');
   });
 
   it('the slow pace is a sentence about the pace', () => {
@@ -172,6 +174,15 @@ describe('getAlertDetails', () => {
   it('an expired product is no longer worth eating', () => {
     expect(getAlertDetails(alert(1, { type: 'expiry', level: 'critical', product_expiry: inDays(-2), product_stock: 2 })))
       .toContain('Ya no conviene consumirlo.');
+  });
+
+  it('does not say "te avisamos cuando faltan menos de..." about a product that already expired', () => {
+    const expired = getAlertDetails(alert(1, { type: 'expiry', level: 'critical', product_expiry: inDays(-2), product_stock: 2, limit_days: 7, rule_scope: 'general' }));
+    expect(expired.join(' ')).not.toMatch(/te avisamos/i);
+    expect(expired).toHaveLength(3);
+    // el que vence hoy sí lo dice: todavía no venció
+    const today = getAlertDetails(alert(1, { type: 'expiry', level: 'critical', product_expiry: inDays(0), product_stock: 2, limit_days: 7, rule_scope: 'general' }));
+    expect(today.join(' ')).toMatch(/Te avisamos cuando faltan menos de 7 días/);
   });
 
   it('explains a low stock: what is left, the minimum, how much to restock and that a model calculated it', () => {

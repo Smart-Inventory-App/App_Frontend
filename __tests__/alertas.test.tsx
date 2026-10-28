@@ -213,8 +213,19 @@ describe('AlertasScreen - critical and warning boxes', () => {
     expect(screen.getByTestId('alert-summary-critical').props.accessibilityState).toMatchObject({ selected: false });
     fireEvent.press(screen.getByTestId('alert-summary-critical'));
     expect(screen.getByTestId('alert-summary-critical').props.accessibilityState).toMatchObject({ selected: true });
-    expect(StyleSheet.flatten(screen.getByTestId('alert-summary-critical').props.style).borderColor).toBe('#671a1c');
+    // el contorno es rojo para las críticas y amarillo para las advertencias
+    expect(StyleSheet.flatten(screen.getByTestId('alert-summary-critical').props.style).borderColor).toBe('#e5484d');
     expect(StyleSheet.flatten(screen.getByTestId('alert-summary-warning').props.style).borderColor).toBe('transparent');
+    fireEvent.press(screen.getByTestId('alert-summary-warning'));
+    expect(StyleSheet.flatten(screen.getByTestId('alert-summary-warning').props.style).borderColor).toBe('#fbbc05');
+    expect(StyleSheet.flatten(screen.getByTestId('alert-summary-critical').props.style).borderColor).toBe('transparent');
+  });
+
+  it('paints the two boxes with a softer background than before, so the outline stands out', async () => {
+    render(<AlertasScreen />);
+    await waitFor(() => expect(screen.getByTestId('alert-summary-critical')).toBeTruthy());
+    expect(StyleSheet.flatten(screen.getByTestId('alert-summary-critical').props.style).backgroundColor).toBe('#e5484d40');
+    expect(StyleSheet.flatten(screen.getByTestId('alert-summary-warning').props.style).backgroundColor).toBe('#fbbc0540');
   });
 
   it('combines the box with the type option: the numbers follow the option and match what is shown', async () => {

@@ -41,7 +41,7 @@ const mockedAlerts = alertService as jest.Mocked<typeof alertService>;
 
 const trends = () => ({
   period_days: 14, total_consumido: 0, total_entradas: 0, consumo_por_dia: [{ day: '2026-10-10', quantity: 0 }],
-  top_productos: [], productos_menos_usados: [],
+  top_productos: [],
 });
 
 const summary = (overrides: Record<string, number> = {}) => ({

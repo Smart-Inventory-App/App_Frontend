@@ -35,6 +35,8 @@ export default function AlertasScreen() {
   const [detailAlert, setDetailAlert] = useState<Alert | null>(null);
   const levelContainer = { critical: styles.criticalContainer, warning: styles.warningContainer }
   const levelTextColor = { critical: '#671a1c', warning: '#564209' };
+  // El contorno del recuadro elegido: rojo o amarillo, como el nivel
+  const levelBorderColor = { critical: '#e5484d', warning: '#fbbc05' };
 
   const load = useCallback(async () => {
     try {
@@ -71,7 +73,7 @@ export default function AlertasScreen() {
               accessibilityRole="button"
               accessibilityState={{ selected: levelFilter === key }}
               onPress={() => setLevelFilter(current => (current === key ? null : key))}
-              style={[styles.alertSummaryItem, levelContainer[key], levelFilter === key && { borderColor: levelTextColor[key] }]}
+              style={[styles.alertSummaryItem, levelContainer[key], levelFilter === key && { borderColor: levelBorderColor[key] }]}
             >
               <Text testID={`alert-summary-value-${key}`} style={[styles.alertSummaryItemValue, { color: levelTextColor[key] }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{counts[key]}</Text>
               <Text testID={`alert-summary-text-${key}`} style={[styles.alertSummaryItemText, { color: levelTextColor[key] }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{label}</Text>
@@ -141,8 +143,9 @@ const styles = StyleSheet.create({
   alertSummaryItemValue: { alignSelf: 'stretch', textAlign: 'center', fontSize: 28, lineHeight: 34, fontFamily: 'Figtree_400Regular' },
   // El texto se achica solo si el cuadrado es angosto, para que "Advertencias" entre siempre en un renglón
   alertSummaryItemText: { alignSelf: 'stretch', textAlign: 'center', fontSize: 16, lineHeight: 22, marginTop: 2, fontFamily: 'Figtree_400Regular' },
-  criticalContainer: { backgroundColor: '#e5484d8f' },
-  warningContainer: { backgroundColor: '#fbbc059d' },
+  // Fondos más suaves que los de las alertas, para que el contorno del recuadro elegido se note
+  criticalContainer: { backgroundColor: '#e5484d40' },
+  warningContainer: { backgroundColor: '#fbbc0540' },
   // Sin ícono: un ícono acá parecería un botón, y es solo un título
   sectionHeader: { marginTop: 8, marginBottom: 2, paddingLeft: 10, borderLeftWidth: 4 },
   ruleHeader: { borderLeftColor: Colors.primary },

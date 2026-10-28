@@ -1,13 +1,13 @@
 import {
-  averagePerDay, barHeight, changeVsPrevious, DayPoint, formatDayLong, formatDayShort, monthSegments, parseDay, peakIndex, TREND_PERIODS,
+  averagePerDay, barHeight, labelStep, changeVsPrevious, DayPoint, formatDayLong, formatDayShort, monthSegments, parseDay, peakIndex, TREND_PERIODS,
 } from '../src/utils/trends';
 
 const days = (...quantities: number[]): DayPoint[] =>
   quantities.map((quantity, i) => ({ day: `2026-10-${String(10 + i).padStart(2, '0')}`, quantity }));
 
 describe('TREND_PERIODS', () => {
-  it('offers 7, 14, 30 and 90 days', () => {
-    expect([...TREND_PERIODS]).toEqual([7, 14, 30, 90]);
+  it('offers 7, 14 and 30 days: there is no 90 days option', () => {
+    expect([...TREND_PERIODS]).toEqual([7, 14, 30]);
   });
 });
 
@@ -95,5 +95,16 @@ describe('barHeight', () => {
     expect(barHeight(0, 10, 120)).toBe(3);
     expect(barHeight(1, 1000, 120)).toBe(3);
     expect(barHeight(5, 0, 120)).toBe(3);
+  });
+});
+
+describe('labelStep', () => {
+  it('writes every day when the bars are wide, every other one when they are narrower, every third when they are tiny', () => {
+    expect(labelStep(24)).toBe(1);
+    expect(labelStep(16)).toBe(1);
+    expect(labelStep(15)).toBe(2);
+    expect(labelStep(10)).toBe(2);
+    expect(labelStep(9)).toBe(3);
+    expect(labelStep(1)).toBe(3);
   });
 });

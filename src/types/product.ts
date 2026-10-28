@@ -68,7 +68,6 @@ export interface TrendsResponse {
   total_entradas: number;
   consumo_por_dia: ConsumoPorDia[];
   top_productos: ProductoConsumo[];
-  productos_menos_usados: ProductoConsumo[];
 }
 
 // Motivos de una salida de stock

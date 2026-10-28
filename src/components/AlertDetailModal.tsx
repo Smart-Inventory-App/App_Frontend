@@ -53,9 +53,11 @@ export default function AlertDetailModal({ alert, onClose }: Props) {
       navigationBarTranslucent
       onRequestClose={onClose}
     >
-      <Pressable testID="alert-detail-backdrop" style={styles.overlay} onPress={onClose}>
-        {/* Pressable interno: tocar la tarjeta no debe cerrar la ventana */}
-        <Pressable testID="alert-detail-card" style={styles.card} onPress={() => {}}>
+      <View testID="alert-detail-overlay" style={styles.overlay}>
+        {/* El fondo es un hermano de la tarjeta (no su padre): tocar la tarjeta no lo toca, y los gestos de desplazar
+            no pasan por un botón que se quede con ellos */}
+        <Pressable testID="alert-detail-backdrop" style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View testID="alert-detail-card" style={styles.card}>
           {alert && tone && (
             <>
               <View style={styles.header}>
@@ -96,8 +98,8 @@ export default function AlertDetailModal({ alert, onClose }: Props) {
               </ScrollView>
             </>
           )}
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

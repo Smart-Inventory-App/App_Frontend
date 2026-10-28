@@ -9,7 +9,7 @@ export interface DayPoint {
 }
 
 /** Los períodos que se pueden elegir, en días. */
-export const TREND_PERIODS = [7, 14, 30, 90] as const;
+export const TREND_PERIODS = [7, 14, 30] as const;
 export type TrendPeriod = (typeof TREND_PERIODS)[number];
 
 /** Una fecha AAAA-MM-DD como fecha local (sin correrse de día por la zona horaria). */
@@ -87,6 +87,13 @@ export function monthSegments(days: DayPoint[]): MonthSegment[] {
     }
   }
   return segments;
+}
+
+/** Cada cuántos días se escribe el número del día bajo el gráfico, según lo ancha que queda cada barra. */
+export function labelStep(barWidth: number): number {
+  if (barWidth >= 16) return 1;
+  if (barWidth >= 10) return 2;
+  return 3;
 }
 
 /** Alto de una barra: proporcional al día de mayor consumo, con un mínimo para que un día sin consumo igual se vea. */

@@ -8,15 +8,16 @@ import ScreenHeader from '@/components/ScreenHeader';
 import { productService } from '@/services/productService';
 import { TrendsResponse } from '@/types/product';
 import {
-  averagePerDay, barHeight, changeVsPrevious, formatDayLong, formatDayShort, monthSegments, peakIndex, TREND_PERIODS, TrendPeriod,
+  averagePerDay, barHeight, changeVsPrevious, formatDayLong, formatDayShort, labelStep, monthSegments, peakIndex, TREND_PERIODS, TrendPeriod,
 } from '@/utils/trends';
 
 const CHART_HEIGHT = 120;
-const MIN_BAR_WIDTH = 18;
 // Márgenes de la pantalla y de la tarjeta del gráfico: lo que no es del gráfico
 const CHART_SIDE_SPACE = 2 * 16 + 2 * 12;
 // A partir de este ancho de tramo, el nombre del mes se escribe entero
 const LONG_MONTH_WIDTH = 80;
+// Alto de dos renglones de los rótulos de las tarjetas: siempre ocupan los dos
+const LABEL_LINE_HEIGHT = 16;
 
 interface Props {
   visible: boolean;
@@ -37,7 +38,6 @@ export default function TrendsModal({ visible, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
-  const chartRef = useRef<ScrollView>(null);
   // Para ignorar la respuesta de una carga vieja si el usuario cambió de período o cerró la ventana
   const requestRef = useRef(0);
 
@@ -54,7 +54,8 @@ export default function TrendsModal({ visible, onClose }: Props) {
         if (request !== requestRef.current) return;
         setData(current);
         setPreviousTotal(wide ? Math.max(0, wide.total_consumido - current.total_consumido) : null);
-        setSelected(peakIndex(current.consumo_por_dia));
+        // Arranca en el día de mayor consumo; sin consumo, en el último día
+        setSelected(peakIndex(current.consumo_por_dia) ?? Math.max(0, current.consumo_por_dia.length - 1));
       })
       .catch(() => {
         if (request !== requestRef.current) return;
@@ -72,12 +73,16 @@ export default function TrendsModal({ visible, onClose }: Props) {
 
   const days = data?.consumo_por_dia ?? [];
   const max = Math.max(0, ...days.map(point => point.quantity));
-  const barWidth = Math.max(MIN_BAR_WIDTH, Math.floor((width - CHART_SIDE_SPACE) / period));
+  // El gráfico entra entero en la pantalla, sea cual sea el período: no se desliza de costado
+  const barWidth = Math.max(1, Math.floor((width - CHART_SIDE_SPACE) / Math.max(1, days.length || period)));
+  const gap = barWidth >= 16 ? 8 : 2;
+  const step = labelStep(barWidth);
   const change = data ? changeVsPrevious(data.total_consumido, previousTotal) : null;
   const peak = peakIndex(days);
   const chosen = selected !== null ? days[selected] : null;
   const rankMax = Math.max(1, ...(data?.top_productos ?? []).map(p => p.cantidad));
-  const lowMax = Math.max(1, ...(data?.productos_menos_usados ?? []).map(p => p.cantidad));
+  const goToDay = (delta: number) =>
+    setSelected(current => Math.min(days.length - 1, Math.max(0, (current ?? days.length - 1) + delta)));
   const units = (n: number) => t(n === 1 ? 'tendencias.unitOne' : 'tendencias.unitMany', { count: n });
 
   const changeText = () => {
@@ -128,19 +133,22 @@ export default function TrendsModal({ visible, onClose }: Props) {
               <View style={styles.statsGrid}>
                 <View style={styles.statCard}>
                   <Text testID="trends-consumed" style={styles.statValue}>{data.total_consumido}</Text>
-                  <Text style={styles.statLabel}>{t('tendencias.consumed')}</Text>
+                  <Text style={styles.statLabel} numberOfLines={2}>{t('tendencias.consumed')}</Text>
                 </View>
                 <View style={styles.statCard}>
                   <Text testID="trends-restocked" style={[styles.statValue, { color: Colors.primaryDark }]}>{data.total_entradas}</Text>
-                  <Text style={styles.statLabel}>{t('tendencias.restocked')}</Text>
+                  <Text style={styles.statLabel} numberOfLines={2}>{t('tendencias.restocked')}</Text>
                 </View>
                 <View style={styles.statCard}>
                   <Text testID="trends-average" style={styles.statValue}>{averagePerDay(data.total_consumido, period)}</Text>
-                  <Text style={styles.statLabel}>{t('tendencias.average')}</Text>
+                  <Text style={styles.statLabel} numberOfLines={2}>{t('tendencias.average')}</Text>
                 </View>
                 <View style={styles.statCard}>
                   <Text testID="trends-peak" style={styles.statValue}>{peak !== null ? days[peak].quantity : '–'}</Text>
-                  <Text style={styles.statLabel}>{peak !== null ? t('tendencias.peakOn', { date: formatDayShort(days[peak].day) }) : t('tendencias.peak')}</Text>
+                  {/* «Día de mayor consumo» y, en otro renglón, cuál fue: siempre dos renglones */}
+                  <Text testID="trends-peak-label" style={styles.statLabel} numberOfLines={2}>
+                    {t('tendencias.peak')}{'\n'}{peak !== null ? formatDayShort(days[peak].day) : t('tendencias.noPeakDay')}
+                  </Text>
                 </View>
               </View>
 
@@ -161,67 +169,86 @@ export default function TrendsModal({ visible, onClose }: Props) {
                 {data.total_consumido === 0 && (
                   <Text testID="trends-empty-period" style={styles.emptyPeriod}>{t('tendencias.emptyPeriod', { days: period })}</Text>
                 )}
-                <ScrollView
-                  ref={chartRef}
-                  testID="trends-chart-scroll"
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  onContentSizeChange={() => chartRef.current?.scrollToEnd({ animated: false })}
-                >
-                  <View style={{ width: barWidth * days.length }}>
-                    <View style={styles.monthRow}>
-                      {monthSegments(days).map(segment => (
-                        <View key={segment.key} testID={`trends-month-${segment.key}`} style={[styles.monthSegment, { width: segment.count * barWidth }]}>
-                          <Text style={styles.monthText} numberOfLines={1}>
-                            {segment.count * barWidth >= LONG_MONTH_WIDTH ? segment.long : segment.short}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                    <View style={styles.bars}>
-                      {days.map((point, index) => (
-                        <TouchableOpacity
-                          key={point.day}
-                          testID={`trends-bar-${index}`}
-                          accessibilityLabel={`${formatDayLong(point.day)}: ${units(point.quantity)}`}
-                          accessibilityState={{ selected: selected === index }}
-                          activeOpacity={0.7}
-                          style={[styles.barSlot, { width: barWidth }]}
-                          onPress={() => setSelected(index)}
-                        >
-                          <View
-                            testID={`trends-bar-fill-${index}`}
-                            style={[
-                              styles.bar,
-                              { height: barHeight(point.quantity, max, CHART_HEIGHT), width: Math.max(8, barWidth - 8) },
-                              point.quantity === 0 && styles.barEmpty,
-                              selected === index && styles.barSelected,
-                            ]}
-                          />
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                    <View style={styles.dayRow}>
-                      {days.map((point, index) => (
-                        <Text key={point.day} style={[styles.dayLabel, { width: barWidth }, selected === index && styles.dayLabelSelected]}>
-                          {Number(point.day.slice(8, 10))}
+                <View testID="trends-chart" style={{ width: barWidth * days.length, alignSelf: 'center' }}>
+                  <View style={styles.monthRow}>
+                    {monthSegments(days).map(segment => (
+                      <View key={segment.key} testID={`trends-month-${segment.key}`} style={[styles.monthSegment, { width: segment.count * barWidth }]}>
+                        <Text style={styles.monthText} numberOfLines={1}>
+                          {segment.count * barWidth >= LONG_MONTH_WIDTH ? segment.long : segment.short}
                         </Text>
-                      ))}
-                    </View>
+                      </View>
+                    ))}
                   </View>
-                </ScrollView>
-                <View testID="trends-day-detail" style={styles.dayDetail}>
-                  {chosen ? (
-                    <>
-                      <Text testID="trends-day-title" style={styles.dayDetailTitle}>{formatDayLong(chosen.day)}</Text>
-                      <Text testID="trends-day-units" style={styles.dayDetailUnits}>
-                        {chosen.quantity > 0 ? t(chosen.quantity === 1 ? 'tendencias.consumedThatDayOne' : 'tendencias.consumedThatDay', { units: units(chosen.quantity) }) : t('tendencias.noConsumption')}
-                      </Text>
-                    </>
-                  ) : (
-                    <Text testID="trends-day-hint" style={styles.dayDetailHint}>{t('tendencias.chartHint')}</Text>
-                  )}
+                  <View style={styles.bars}>
+                    {days.map((point, index) => (
+                      <TouchableOpacity
+                        key={point.day}
+                        testID={`trends-bar-${index}`}
+                        accessibilityLabel={`${formatDayLong(point.day)}: ${units(point.quantity)}`}
+                        accessibilityState={{ selected: selected === index }}
+                        activeOpacity={0.7}
+                        style={[styles.barSlot, { width: barWidth }]}
+                        onPress={() => setSelected(index)}
+                      >
+                        <View
+                          testID={`trends-bar-fill-${index}`}
+                          style={[
+                            styles.bar,
+                            { height: barHeight(point.quantity, max, CHART_HEIGHT), width: Math.max(2, barWidth - gap) },
+                            point.quantity === 0 && styles.barEmpty,
+                            selected === index && styles.barSelected,
+                          ]}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <View style={styles.dayRow}>
+                    {days.map((point, index) => (
+                      <View key={point.day} style={{ width: barWidth }}>
+                        {index % step === 0 && (
+                          <Text
+                            testID={`trends-day-label-${index}`}
+                            numberOfLines={1}
+                            style={[styles.dayLabel, { width: barWidth * step, textAlign: step > 1 ? 'left' : 'center' }, selected === index && styles.dayLabelSelected]}
+                          >
+                            {Number(point.day.slice(8, 10))}
+                          </Text>
+                        )}
+                      </View>
+                    ))}
+                  </View>
                 </View>
+                <View testID="trends-day-detail" style={styles.dayDetail}>
+                  <TouchableOpacity
+                    testID="trends-day-prev"
+                    accessibilityLabel={t('tendencias.prevDay')}
+                    disabled={!chosen || selected === 0}
+                    style={[styles.dayArrow, (!chosen || selected === 0) && styles.dayArrowDisabled]}
+                    onPress={() => goToDay(-1)}
+                  >
+                    <Ionicons name="chevron-back" size={22} color={Colors.primaryDark} />
+                  </TouchableOpacity>
+                  <View style={styles.dayDetailText}>
+                    {chosen && (
+                      <>
+                        <Text testID="trends-day-title" style={styles.dayDetailTitle}>{formatDayLong(chosen.day)}</Text>
+                        <Text testID="trends-day-units" style={styles.dayDetailUnits}>
+                          {chosen.quantity > 0 ? t(chosen.quantity === 1 ? 'tendencias.consumedThatDayOne' : 'tendencias.consumedThatDay', { units: units(chosen.quantity) }) : t('tendencias.noConsumption')}
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    testID="trends-day-next"
+                    accessibilityLabel={t('tendencias.nextDay')}
+                    disabled={!chosen || selected === days.length - 1}
+                    style={[styles.dayArrow, (!chosen || selected === days.length - 1) && styles.dayArrowDisabled]}
+                    onPress={() => goToDay(1)}
+                  >
+                    <Ionicons name="chevron-forward" size={22} color={Colors.primaryDark} />
+                  </TouchableOpacity>
+                </View>
+                <Text testID="trends-day-hint" style={styles.dayDetailHint}>{t('tendencias.chartHint')}</Text>
               </View>
 
               <Text style={styles.section}>{t('tendencias.topProducts')}</Text>
@@ -242,23 +269,6 @@ export default function TrendsModal({ visible, onClose }: Props) {
                 ))
               )}
 
-              {data.productos_menos_usados.length > 0 && (
-                <>
-                  <Text style={styles.section}>{t('tendencias.leastUsed')}</Text>
-                  {data.productos_menos_usados.map((p, i) => (
-                    <View key={p.product_id} testID={`trends-low-${i}`} style={styles.rankRow}>
-                      <View style={styles.rankHead}>
-                        <Ionicons name="trending-down-outline" size={16} color={Colors.placeholder} />
-                        <Text style={styles.rankName} numberOfLines={1}>{p.nombre}</Text>
-                        <Text style={styles.rankQty}>{units(p.cantidad)}</Text>
-                      </View>
-                      <View style={styles.rankTrack}>
-                        <View style={[styles.rankFill, styles.rankFillLow, { width: `${Math.round((p.cantidad / lowMax) * 100)}%` }]} />
-                      </View>
-                    </View>
-                  ))}
-                </>
-              )}
             </>
           )}
         </ScrollView>
@@ -295,7 +305,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   statValue: { fontSize: 26, fontWeight: '700', color: Colors.primary },
-  statLabel: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  statLabel: { fontSize: 12, lineHeight: LABEL_LINE_HEIGHT, minHeight: LABEL_LINE_HEIGHT * 2, color: Colors.textSecondary, marginTop: 2 },
   changeBox: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: '#fff' },
   changeUp: { backgroundColor: '#fff4e0' },
   changeDown: { backgroundColor: '#e6f7f5' },
@@ -314,10 +324,13 @@ const styles = StyleSheet.create({
   dayRow: { flexDirection: 'row', marginTop: 4 },
   dayLabel: { fontSize: 10, color: Colors.textSecondary, textAlign: 'center' },
   dayLabelSelected: { color: Colors.primaryDark, fontWeight: '700' },
-  dayDetail: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f0f0f0', minHeight: 48, justifyContent: 'center' },
-  dayDetailTitle: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
-  dayDetailUnits: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
-  dayDetailHint: { fontSize: 13, color: Colors.textSecondary },
+  dayDetail: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f0f0f0', minHeight: 56 },
+  dayDetailText: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  dayDetailTitle: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center' },
+  dayDetailUnits: { fontSize: 13, color: Colors.textSecondary, marginTop: 2, textAlign: 'center' },
+  dayDetailHint: { fontSize: 11, color: Colors.placeholder, textAlign: 'center', marginTop: 6 },
+  dayArrow: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#eef3fb', alignItems: 'center', justifyContent: 'center' },
+  dayArrowDisabled: { opacity: 0.35 },
   empty: { color: '#888', textAlign: 'center', marginTop: 8 },
   rankRow: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8 },
   rankHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -326,5 +339,4 @@ const styles = StyleSheet.create({
   rankQty: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
   rankTrack: { height: 6, borderRadius: 3, backgroundColor: '#eef0f3', marginTop: 8, overflow: 'hidden' },
   rankFill: { height: 6, borderRadius: 3, backgroundColor: Colors.primary },
-  rankFillLow: { backgroundColor: Colors.placeholder },
 });

@@ -33,7 +33,7 @@ describe('DynamicAlert', () => {
     })]} />);
     expect(screen.getByText('Leche')).toBeTruthy();
     expect(screen.getByTestId('alert-kind-1').props.children).toBe('Se agota en 3 días');
-    expect(screen.getByTestId('alert-description-1').props.children).toBe('Quedan 2 ud., alcanzan para 3 días y tu mínimo es de 7 días. Reponer 12 ud.');
+    expect(screen.getByTestId('alert-description-1').props.children).toBe('Quedan 2 ud. restantes que alcanzan para 3 días. Mínimo configurado de 7 días.');
   });
 
   it('shows an expiry alert with the date, the stock and the limit of the user', () => {
