@@ -145,23 +145,25 @@ describe('TrendsModal - summary', () => {
     expect(screen.queryByText('Promedio por día')).toBeNull();
   });
 
-  it('writes "Día de mayor consumo" and, in another line below it, which day it was', async () => {
+  it('writes "Día de mayor consumo: 21 de octubre", with the full name of the month', async () => {
     respond();
     await open();
     const label = screen.getByTestId('trends-peak-label');
-    expect(label.props.children.join('')).toBe('Día de mayor consumo\n21 oct');
+    expect(label.props.children.join('')).toBe('Día de mayor consumo: 21 de octubre');
     expect(screen.queryByText(/Mayor consumo \(/)).toBeNull();
   });
 
-  it('always keeps two lines for the labels of the four cards', async () => {
+  it('keeps one line for "Consumido" and "Repuesto" (no blank space below) and two for the other two cards', async () => {
     respond();
     await open();
-    ['Consumido', 'Repuesto', 'Promedio de consumidos por día'].forEach(text => {
+    ['Consumido', 'Repuesto'].forEach(text => {
       const label = screen.getByText(text);
-      const style = StyleSheet.flatten(label.props.style);
-      expect(label.props.numberOfLines).toBe(2);
-      expect(style.minHeight).toBe(style.lineHeight * 2);
+      expect(label.props.numberOfLines).toBe(1);
+      expect(StyleSheet.flatten(label.props.style).minHeight).toBeUndefined();
     });
+    const average = screen.getByText('Promedio de consumidos por día');
+    expect(average.props.numberOfLines).toBe(2);
+    expect(StyleSheet.flatten(average.props.style).minHeight).toBe(StyleSheet.flatten(average.props.style).lineHeight * 2);
     const peak = screen.getByTestId('trends-peak-label');
     expect(peak.props.numberOfLines).toBe(2);
     expect(StyleSheet.flatten(peak.props.style).minHeight).toBe(StyleSheet.flatten(peak.props.style).lineHeight * 2);
@@ -204,7 +206,7 @@ describe('TrendsModal - summary', () => {
     respond(12, { total_consumido: 0, consumo_por_dia: lastDays(14), top_productos: [] });
     await open();
     expect(screen.getByTestId('trends-peak').props.children).toBe('–');
-    expect(screen.getByTestId('trends-peak-label').props.children.join('')).toBe('Día de mayor consumo\nSin consumo');
+    expect(screen.getByTestId('trends-peak-label').props.children.join('')).toBe('Día de mayor consumo: Sin consumo');
     expect(screen.getByTestId('trends-empty-period').props.children).toBe('No hubo consumo en estos 14 días.');
     // sin consumo en el período, arranca en el último día
     expect(screen.getByTestId('trends-day-title').props.children).toBe('Jueves 22 de octubre');

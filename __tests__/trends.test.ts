@@ -1,5 +1,5 @@
 import {
-  averagePerDay, barHeight, labelStep, changeVsPrevious, DayPoint, formatDayLong, formatDayShort, monthSegments, parseDay, peakIndex, TREND_PERIODS,
+  averagePerDay, barHeight, labelStep, changeVsPrevious, DayPoint, formatDayLong, formatDayMonth, formatDayShort, monthSegments, parseDay, peakIndex, TREND_PERIODS,
 } from '../src/utils/trends';
 
 const days = (...quantities: number[]): DayPoint[] =>
@@ -24,6 +24,8 @@ describe('parseDay and the way a day is written', () => {
 
   it('writes a short day', () => {
     expect(formatDayShort('2026-10-22')).toMatch(/^22 oct/);
+    expect(formatDayMonth('2026-10-22')).toBe('22 de octubre');
+    expect(formatDayMonth('2026-09-03')).toBe('3 de septiembre');
   });
 });
 

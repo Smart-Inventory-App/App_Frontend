@@ -8,7 +8,7 @@ import ScreenHeader from '@/components/ScreenHeader';
 import { productService } from '@/services/productService';
 import { TrendsResponse } from '@/types/product';
 import {
-  averagePerDay, barHeight, changeVsPrevious, formatDayLong, formatDayShort, labelStep, monthSegments, peakIndex, TREND_PERIODS, TrendPeriod,
+  averagePerDay, barHeight, changeVsPrevious, formatDayLong, formatDayMonth, labelStep, monthSegments, peakIndex, TREND_PERIODS, TrendPeriod,
 } from '@/utils/trends';
 
 const CHART_HEIGHT = 120;
@@ -133,21 +133,21 @@ export default function TrendsModal({ visible, onClose }: Props) {
               <View style={styles.statsGrid}>
                 <View style={styles.statCard}>
                   <Text testID="trends-consumed" style={styles.statValue}>{data.total_consumido}</Text>
-                  <Text style={styles.statLabel} numberOfLines={2}>{t('tendencias.consumed')}</Text>
+                  <Text style={styles.statLabel} numberOfLines={1}>{t('tendencias.consumed')}</Text>
                 </View>
                 <View style={styles.statCard}>
                   <Text testID="trends-restocked" style={[styles.statValue, { color: Colors.primaryDark }]}>{data.total_entradas}</Text>
-                  <Text style={styles.statLabel} numberOfLines={2}>{t('tendencias.restocked')}</Text>
+                  <Text style={styles.statLabel} numberOfLines={1}>{t('tendencias.restocked')}</Text>
                 </View>
                 <View style={styles.statCard}>
                   <Text testID="trends-average" style={styles.statValue}>{averagePerDay(data.total_consumido, period)}</Text>
-                  <Text style={styles.statLabel} numberOfLines={2}>{t('tendencias.average')}</Text>
+                  <Text style={[styles.statLabel, styles.statLabelTwoLines]} numberOfLines={2}>{t('tendencias.average')}</Text>
                 </View>
                 <View style={styles.statCard}>
                   <Text testID="trends-peak" style={styles.statValue}>{peak !== null ? days[peak].quantity : '–'}</Text>
-                  {/* «Día de mayor consumo» y, en otro renglón, cuál fue: siempre dos renglones */}
-                  <Text testID="trends-peak-label" style={styles.statLabel} numberOfLines={2}>
-                    {t('tendencias.peak')}{'\n'}{peak !== null ? formatDayShort(days[peak].day) : t('tendencias.noPeakDay')}
+                  {/* «Día de mayor consumo: 22 de octubre»: ocupa siempre dos renglones */}
+                  <Text testID="trends-peak-label" style={[styles.statLabel, styles.statLabelTwoLines]} numberOfLines={2}>
+                    {t('tendencias.peak')}: {peak !== null ? formatDayMonth(days[peak].day) : t('tendencias.noPeakDay')}
                   </Text>
                 </View>
               </View>
@@ -305,7 +305,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   statValue: { fontSize: 26, fontWeight: '700', color: Colors.primary },
-  statLabel: { fontSize: 12, lineHeight: LABEL_LINE_HEIGHT, minHeight: LABEL_LINE_HEIGHT * 2, color: Colors.textSecondary, marginTop: 2 },
+  statLabel: { fontSize: 12, lineHeight: LABEL_LINE_HEIGHT, color: Colors.textSecondary, marginTop: 2 },
+  statLabelTwoLines: { minHeight: LABEL_LINE_HEIGHT * 2 },
   changeBox: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: '#fff' },
   changeUp: { backgroundColor: '#fff4e0' },
   changeDown: { backgroundColor: '#e6f7f5' },

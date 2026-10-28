@@ -26,6 +26,11 @@ export function formatDayLong(day: string): string {
   return capitalize(parseDay(day).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }).replace(',', ''));
 }
 
+/** «22 de octubre» */
+export function formatDayMonth(day: string): string {
+  return parseDay(day).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
+}
+
 /** «22 oct» */
 export function formatDayShort(day: string): string {
   return parseDay(day).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }).replace('.', '');
