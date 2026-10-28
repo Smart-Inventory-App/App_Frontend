@@ -4,6 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import StatCard from '@/components/StatCard';
+import { AlertTypeFilter, requestAlertFilter } from '@/utils/alertFilterRequest';
 import HomeHeader from '@/components/HomeHeader';
 import ChangesHistoryModal from '@/components/ChangesHistoryModal';
 import TrendsModal from '@/components/TrendsModal';
@@ -83,7 +84,10 @@ export default function HomeScreen() {
   const generalRules: GeneralAlertRules = { coverageDays: coverageDaysThreshold, expiryDays: expiryDaysThreshold };
 
   const goToInventory = () => router.navigate('/(tabs)/inventario');
-  const goToAlerts = () => router.navigate('/(tabs)/alertas');
+  const goToAlerts = (filter: AlertTypeFilter) => {
+    requestAlertFilter(filter);
+    router.navigate('/(tabs)/alertas');
+  };
 
   return (
     <>
@@ -102,6 +106,7 @@ export default function HomeScreen() {
                 value={formatThousands(products.length)}
                 label={t('home.productsLabel')}
                 labelColor="green"
+                labelSolid
                 onPress={goToInventory}
               />
               <StatCard
@@ -121,18 +126,18 @@ export default function HomeScreen() {
                 icon="time"
                 title={t('home.expiringSoon')}
                 value={alertCount(alertSummary?.expiring)}
-                label={t('home.expiringSoonLabel', { days: expiryDaysThreshold })}
+                label={t('home.expiringSoonLabel')}
                 labelColor="yellow"
-                onPress={goToAlerts}
+                onPress={() => goToAlerts('Vencimiento')}
               />
               <StatCard
                 testID="stat-low"
                 icon="trending-down"
                 title={t('home.lowStock')}
                 value={alertCount(alertSummary?.low_stock)}
-                label={t('home.lowStockLabel', { days: coverageDaysThreshold })}
+                label={t('home.lowStockLabel')}
                 labelColor="red"
-                onPress={goToAlerts}
+                onPress={() => goToAlerts('Stock')}
               />
             </View>
 

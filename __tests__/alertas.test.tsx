@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 
 import AlertasScreen from '../app/(tabs)/alertas';
 import { alertService, Alert } from '@/services/alertService';
+import { requestAlertFilter } from '@/utils/alertFilterRequest';
 
 const mockNavigate = jest.fn();
 let mockFocusCallback: () => void = () => {};
@@ -377,6 +378,28 @@ describe('AlertasScreen - alert detail window', () => {
 
     fireEvent.press(screen.getByTestId('alert-detail-close'));
     expect(screen.queryByTestId('alert-detail-card')).toBeNull();
+  });
+});
+
+describe('AlertasScreen - opened from the home', () => {
+  beforeEach(() => mockedAlerts.getAlerts.mockResolvedValue(mixed()));
+
+  it.each(['Vencimiento', 'Stock'] as const)('opens with the %s option already selected', async name => {
+    const { Colors } = require('../src/constants/colors');
+    requestAlertFilter(name);
+    render(<AlertasScreen />);
+    await waitFor(() => expect(screen.getByTestId(`alert-filter-${name}`)).toBeTruthy());
+    expect(StyleSheet.flatten(screen.getByTestId(`alert-filter-${name}`).props.style).backgroundColor).toBe(Colors.primary);
+    expect(StyleSheet.flatten(screen.getByTestId('alert-filter-Todas').props.style).backgroundColor).toBe('#fff');
+  });
+
+  it('shows only that kind of alerts, and the next time it opens shows all of them again', async () => {
+    requestAlertFilter('Stock');
+    render(<AlertasScreen />);
+    await waitFor(() => expect(screen.getByTestId('alert-item-1')).toBeTruthy());
+    expect(screen.queryAllByTestId(/alert-item-/).length).toBeLessThan(5);
+    act(() => { mockFocusCallback(); });
+    await waitFor(() => shown([1, 2, 3, 4, 5]));
   });
 });
 

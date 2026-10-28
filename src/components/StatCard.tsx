@@ -9,6 +9,8 @@ type Props = {
   value: string;
   label: string;
   labelColor: 'green' | 'yellow' | 'red';
+  /** El comentario va con el fondo del color de acento y la letra blanca. */
+  labelSolid?: boolean;
   /** Ícono de la tarjeta, dentro de un círculo del color de acento. */
   icon?: keyof typeof Ionicons.glyphMap;
   /** Color de acento del ícono y del número (por defecto, el del texto de abajo). */
@@ -17,6 +19,9 @@ type Props = {
   onPress?: () => void;
   testID?: string;
 };
+
+// Alcanza para el comentario más largo («Alertas de productos»)
+export const LABEL_WIDTH = 140;
 
 const LABEL_ACCENT = { green: '#2db7a3', yellow: '#f59e0b', red: '#e5484d' } as const;
 
@@ -28,7 +33,7 @@ export function valueFontSize(value: string): number {
   return 17;
 }
 
-export default function StatCard({ title, value, label, labelColor, icon, accent, onPress, testID }: Props) {
+export default function StatCard({ title, value, label, labelColor, labelSolid, icon, accent, onPress, testID }: Props) {
   useFonts({ Figtree_400Regular, RobotoFlex_400Regular });
   const getLabelStyle = () => {
     switch (labelColor) {
@@ -64,7 +69,7 @@ export default function StatCard({ title, value, label, labelColor, icon, accent
         {value}
       </Text>
       <Text style={styles.title}>{title}</Text>
-      <Text style={[styles.label, getLabelStyle()]}>{label}</Text>
+      <Text testID={testID ? `${testID}-label` : undefined} style={[styles.label, getLabelStyle(), labelSolid && { backgroundColor: color, color: '#fff' }]} numberOfLines={1}>{label}</Text>
     </>
   );
 
@@ -101,8 +106,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Figtree_400Regular',
     fontSize: 10,
     borderRadius: 10,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
+    alignSelf: 'center',
+    // Mismo largo en los cuatro comentarios
+    width: LABEL_WIDTH,
+    maxWidth: '100%',
+    paddingHorizontal: 4,
     height: 18,
     lineHeight: 18,
     overflow: 'hidden',

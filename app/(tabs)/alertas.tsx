@@ -9,6 +9,7 @@ import { Alert, alertService } from '@/services/alertService';
 import { router, useFocusEffect } from 'expo-router';
 import { Colors } from '@/constants/colors';
 import { splitByOrigin } from '@/utils/alertInfo';
+import { takeRequestedAlertFilter } from '@/utils/alertFilterRequest';
 
 type TypeFilter = 'Todas' | 'Stock' | 'Vencimiento';
 type LevelFilter = 'critical' | 'warning';
@@ -48,8 +49,8 @@ export default function AlertasScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      // Al volver a la pantalla siempre se ven todas las alertas, sin filtros
-      setTypeFilter('Todas');
+      // Al volver a la pantalla se ven todas las alertas, salvo que el home pida una opción (Vencimiento o Stock)
+      setTypeFilter(takeRequestedAlertFilter() ?? 'Todas');
       setLevelFilter(null);
       load();
     }, [load])

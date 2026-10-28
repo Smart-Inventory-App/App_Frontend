@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import StatCard, { valueFontSize } from '../src/components/StatCard';
+import StatCard, { LABEL_WIDTH, valueFontSize } from '../src/components/StatCard';
 
 describe('StatCard', () => {
   it('renders title, value and label', () => {
@@ -45,6 +45,21 @@ describe('StatCard', () => {
     render(<StatCard testID="card" title="Productos" value="12" label="x" labelColor="green" icon="cube" accent="#1B3A8F" />);
     expect(StyleSheet.flatten(screen.getByTestId('card-value').props.style).color).toBe('#1B3A8F');
     expect(StyleSheet.flatten(screen.getByTestId('card-icon').props.style).backgroundColor).toBe('#1B3A8F22');
+  });
+
+  it('can paint the label with the accent color and white letters', () => {
+    render(<StatCard testID="card" title="P" value="1" label="Total" labelColor="green" accent="#1B3A8F" labelSolid />);
+    expect(StyleSheet.flatten(screen.getByTestId('card-label').props.style)).toMatchObject({ backgroundColor: '#1B3A8F', color: '#fff' });
+  });
+
+  it('gives every label the same width', () => {
+    render(<StatCard testID="card" title="P" value="1" label="Total" labelColor="green" />);
+    expect(StyleSheet.flatten(screen.getByTestId('card-label').props.style).width).toBe(LABEL_WIDTH);
+  });
+
+  it('centers the label under the card', () => {
+    render(<StatCard testID="card" title="P" value="1" label="Total" labelColor="green" />);
+    expect(StyleSheet.flatten(screen.getByTestId('card-label').props.style)).toMatchObject({ alignSelf: 'center', textAlign: 'center' });
   });
 
   it('uses the color of its label as the accent when none is given', () => {

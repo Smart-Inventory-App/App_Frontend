@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { router } from 'expo-router';
+import { takeRequestedAlertFilter } from '@/utils/alertFilterRequest';
 import HomeScreen from '../app/(tabs)/index';
 import { useAuth } from '@/context/AuthContext';
 import { productService } from '@/services/productService';
@@ -227,7 +228,7 @@ describe('HomeScreen - cards', () => {
     await load();
     expect(cards.map(at).every(i => i > 0)).toBe(true);
     expect([...cards.map(at)].sort((a, b) => a - b)).toEqual(cards.map(at));
-    ['Productos', 'Productos en stock', 'Por vencer', 'Stock bajo'].forEach(title => expect(screen.getByText(title)).toBeTruthy());
+    ['Productos', 'Productos en stock', 'Vencimientos', 'Stock bajo'].forEach(title => expect(screen.getByText(title)).toBeTruthy());
   });
 
   it('counts the products and the units in stock, and takes the expiring and low stock ones from the alerts', async () => {
@@ -282,18 +283,18 @@ describe('HomeScreen - cards', () => {
     expect(router.navigate).toHaveBeenNthCalledWith(2, '/(tabs)/inventario');
   });
 
-  it('takes the user to the alerts from "Por vencer" and from "Stock bajo"', async () => {
+  it('takes the user to the alerts from "Vencimientos" with that option selected', async () => {
     await load();
     fireEvent.press(screen.getByTestId('stat-expiring'));
-    fireEvent.press(screen.getByTestId('stat-low'));
-    expect(router.navigate).toHaveBeenNthCalledWith(1, '/(tabs)/alertas');
-    expect(router.navigate).toHaveBeenNthCalledWith(2, '/(tabs)/alertas');
+    expect(router.navigate).toHaveBeenCalledWith('/(tabs)/alertas');
+    expect(takeRequestedAlertFilter()).toBe('Vencimiento');
   });
 
-  it('shows the thresholds of the profile in the labels', async () => {
-    await load({ profile: { coverageDaysThreshold: 9, expiryDaysThreshold: 12 } });
-    expect(screen.getByText('Próximos 12 días')).toBeTruthy();
-    expect(screen.getByText('Mínimo 9 días')).toBeTruthy();
+  it('takes the user to the alerts from "Stock bajo" with the stock option selected', async () => {
+    await load();
+    fireEvent.press(screen.getByTestId('stat-low'));
+    expect(router.navigate).toHaveBeenCalledWith('/(tabs)/alertas');
+    expect(takeRequestedAlertFilter()).toBe('Stock');
   });
 });
 
@@ -524,13 +525,29 @@ describe('HomeScreen - titles and the stock part of the entries', () => {
 });
 
 describe('HomeScreen - short labels and compact cards', () => {
-  it('describes "Por vencer" and "Stock bajo" in at most three words', async () => {
-    await load({ profile: { coverageDaysThreshold: 9, expiryDaysThreshold: 12 } });
-    const labels = ['Próximos 12 días', 'Mínimo 9 días'];
-    labels.forEach(label => {
-      expect(screen.getByText(label)).toBeTruthy();
-      expect(label.split(' ').length).toBeLessThanOrEqual(3);
-    });
+  it('calls the cards "Vencimientos" and "Stock bajo", with "Alertas de productos" and "Alertas de stock" as comments', async () => {
+    await load();
+    expect(screen.getByText('Vencimientos')).toBeTruthy();
+    expect(screen.queryByText('Por vencer')).toBeNull();
+    expect(screen.getByText('Alertas de productos')).toBeTruthy();
+    expect(screen.getByText('Alertas de stock')).toBeTruthy();
+    expect(screen.queryByText(/Próximos|Mínimo/)).toBeNull();
+  });
+
+  it('gives the four comments the same length', async () => {
+    await load();
+    const widths = ['stat-products', 'stat-stock', 'stat-expiring', 'stat-low']
+      .map(id => StyleSheet.flatten(screen.getByTestId(`${id}-label`).props.style).width);
+    expect(new Set(widths).size).toBe(1);
+    expect(widths[0]).toBeGreaterThan(0);
+  });
+
+  it('paints "Total inventario" with the color of the icon of "Productos", in white letters', async () => {
+    await load();
+    const label = StyleSheet.flatten(screen.getByTestId('stat-products-label').props.style);
+    const icon = StyleSheet.flatten(screen.getByTestId('stat-products-icon').props.style);
+    expect(label.color).toBe('#fff');
+    expect(`${label.backgroundColor}22`).toBe(icon.backgroundColor);
   });
 
   it('calls the description of "Productos" "Total inventario"', async () => {
