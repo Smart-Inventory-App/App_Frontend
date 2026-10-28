@@ -91,7 +91,7 @@ describe('ExistingProductModal - menu', () => {
   it('offers the three ways to find the product', () => {
     setup();
     expect(screen.getByText('Ingresar producto existente')).toBeTruthy();
-    expect(screen.getByText('Ingresar nombre')).toBeTruthy();
+    expect(screen.getByText('Ingresar datos de producto')).toBeTruthy();
     expect(screen.getByText('Escanear etiqueta de producto')).toBeTruthy();
     expect(screen.getByText('Escanear código de barras')).toBeTruthy();
   });
@@ -165,12 +165,12 @@ describe('ExistingProductModal - menu', () => {
 
   it('renders nothing while hidden and starts again from the menu when reopened', () => {
     const { rerender } = render(<ExistingProductModal visible={false} onClose={jest.fn()} onSuccess={jest.fn()} />);
-    expect(screen.queryByText('Ingresar nombre')).toBeNull();
+    expect(screen.queryByText('Ingresar datos de producto')).toBeNull();
     rerender(<ExistingProductModal visible onClose={jest.fn()} onSuccess={jest.fn()} />);
     fireEvent.press(screen.getByTestId('existing-method-name'));
     rerender(<ExistingProductModal visible={false} onClose={jest.fn()} onSuccess={jest.fn()} />);
     rerender(<ExistingProductModal visible onClose={jest.fn()} onSuccess={jest.fn()} />);
-    expect(screen.getByText('Ingresar nombre')).toBeTruthy();
+    expect(screen.getByText('Ingresar datos de producto')).toBeTruthy();
   });
 });
 
@@ -203,6 +203,66 @@ describe('ExistingProductModal - by name', () => {
     expect(screen.getByText(/Vence 01\/03\/2027/)).toBeTruthy();
     expect(screen.getByText(/Sin vencimiento/)).toBeTruthy();
     expect(screen.queryByTestId('existing-stock-input')).toBeNull();
+  });
+
+  it('uses one field for the data of the product: "Datos del producto", for a name or a barcode', () => {
+    openByName();
+    expect(screen.getByText('Datos del producto *')).toBeTruthy();
+    expect(screen.queryByText('Nombre del producto *')).toBeNull();
+    expect(screen.getByTestId('existing-name-input').props.placeholder).toBe('Nombre o código de barras');
+  });
+
+  it('suggests the product that has the barcode typed in the same field', async () => {
+    jest.useFakeTimers();
+    mockedProducts.getProductsByBarcode.mockResolvedValue([LECHE]);
+    openByName();
+    fireEvent.changeText(screen.getByTestId('existing-name-input'), '7791234567890');
+    await act(async () => { jest.advanceTimersByTime(350); });
+    expect(mockedProducts.getProductsByBarcode).toHaveBeenCalledWith('7791234567890');
+    expect(screen.getByTestId('existing-option-product-1')).toBeTruthy();
+  });
+
+  it('a barcode typed with spaces or dashes is also found, and the name suggestions are merged without repeating a product', async () => {
+    jest.useFakeTimers();
+    mockedProducts.getProductsByBarcode.mockResolvedValue([LECHE]);
+    mockedProducts.suggestProducts.mockResolvedValue([LECHE, LECHE_2]);
+    openByName();
+    fireEvent.changeText(screen.getByTestId('existing-name-input'), '7791 2345-67890');
+    await act(async () => { jest.advanceTimersByTime(350); });
+    expect(mockedProducts.getProductsByBarcode).toHaveBeenCalledWith('7791234567890');
+    expect(screen.getAllByTestId(/^existing-option-product-/)).toHaveLength(2);
+  });
+
+  it('when no product has that barcode, nothing is suggested', async () => {
+    jest.useFakeTimers();
+    mockedProducts.getProductsByBarcode.mockResolvedValue([]);
+    mockedProducts.suggestProducts.mockResolvedValue([]);
+    openByName();
+    fireEvent.changeText(screen.getByTestId('existing-name-input'), '7791234567890');
+    await act(async () => { jest.advanceTimersByTime(350); });
+    expect(screen.queryByTestId('existing-options-title')).toBeNull();
+    expect(screen.queryByTestId(/^existing-option-product-/)).toBeNull();
+  });
+
+  it('numbers that are not a barcode length, or text with a number inside, are only searched as a name', async () => {
+    jest.useFakeTimers();
+    openByName();
+    fireEvent.changeText(screen.getByTestId('existing-name-input'), '12345');
+    await act(async () => { jest.advanceTimersByTime(350); });
+    fireEvent.changeText(screen.getByTestId('existing-name-input'), 'Leche 7791234567890');
+    await act(async () => { jest.advanceTimersByTime(350); });
+    expect(mockedProducts.getProductsByBarcode).not.toHaveBeenCalled();
+    expect(mockedProducts.suggestProducts).toHaveBeenCalledWith('12345');
+  });
+
+  it('if the barcode search fails, the name suggestions still appear', async () => {
+    jest.useFakeTimers();
+    mockedProducts.getProductsByBarcode.mockRejectedValue(new Error('boom'));
+    mockedProducts.suggestProducts.mockResolvedValue([LECHE_2]);
+    openByName();
+    fireEvent.changeText(screen.getByTestId('existing-name-input'), '7791234567890');
+    await act(async () => { jest.advanceTimersByTime(350); });
+    expect(screen.getByTestId('existing-option-product-2')).toBeTruthy();
   });
 
   it('does not search with less than two letters and ignores a failed search', async () => {
@@ -328,7 +388,7 @@ describe('ExistingProductModal - by barcode', () => {
     expect(screen.getByText('Elegí cómo cargar la foto')).toBeTruthy();
     expect(screen.getByTestId('existing-source-gallery')).toBeTruthy();
     fireEvent.press(screen.getByTestId('existing-back'));
-    expect(screen.getByText('Ingresar nombre')).toBeTruthy();
+    expect(screen.getByText('Ingresar datos de producto')).toBeTruthy();
   });
 
   it('shows the scanned barcode so it can be edited, then lists the products that have it', async () => {
@@ -810,7 +870,7 @@ describe('ExistingProductModal - opened with a label already scanned (from "Esca
     const { rerender } = render(<ExistingProductModal visible onClose={jest.fn()} onSuccess={jest.fn()} initialLabel={LABEL} />);
     rerender(<ExistingProductModal visible={false} onClose={jest.fn()} onSuccess={jest.fn()} initialLabel={null} />);
     rerender(<ExistingProductModal visible onClose={jest.fn()} onSuccess={jest.fn()} initialLabel={null} />);
-    expect(screen.getByText('Ingresar nombre')).toBeTruthy();
+    expect(screen.getByText('Ingresar datos de producto')).toBeTruthy();
   });
 });
 

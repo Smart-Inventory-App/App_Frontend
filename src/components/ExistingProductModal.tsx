@@ -12,7 +12,7 @@ import { getScanErrorMessage, ocrService } from '@/services/ocrService';
 import { productService } from '@/services/productService';
 import { LabelScan, ProductDraft, ProductMatch, ScanDocType, ScanState } from '@/types/ocr';
 import { ProductSuggestion } from '@/types/product';
-import { BARCODE_MAX_DIGITS, isValidBarcode, onlyDigits } from '@/utils/barcode';
+import { BARCODE_MAX_DIGITS, BARCODE_VALID_LENGTHS, isValidBarcode, onlyDigits } from '@/utils/barcode';
 import { isoToDisplay } from '@/utils/dateInput';
 import { formatWaitSeconds } from '@/utils/ocrDraft';
 
@@ -160,10 +160,18 @@ export default function ExistingProductModal({
       return;
     }
     let cancelled = false;
+    // El mismo campo sirve para el nombre y para el código de barras: con un código completo se buscan además los
+    // productos que lo tienen (si ninguno lo tiene, no se sugiere nada por código)
+    const digits = onlyDigits(q);
+    const isCode = /^[\d\s-]+$/.test(q) && BARCODE_VALID_LENGTHS.includes(digits.length);
     const handle = setTimeout(() => {
-      productService.suggestProducts(q)
-        .then(found => { if (!cancelled) setOptions(found); })
-        .catch(() => { if (!cancelled) setOptions([]); });
+      Promise.allSettled([
+        isCode ? productService.getProductsByBarcode(digits) : Promise.resolve([] as ProductSuggestion[]),
+        productService.suggestProducts(q),
+      ]).then(([byCode, byName]) => {
+        if (cancelled) return;
+        setOptions(mergeSuggestions(...[byCode, byName].map(r => (r.status === 'fulfilled' ? r.value : []))));
+      });
     }, 300);
     return () => { cancelled = true; clearTimeout(handle); };
   }, [query, selected, step]);
@@ -487,11 +495,11 @@ export default function ExistingProductModal({
 
   const renderNameStep = () => (
     <View>
-      <Text style={styles.label}>{t('existing.nameLabel')} *</Text>
+      <Text style={styles.label}>{t('existing.dataLabel')} *</Text>
       <AppTextInput
         testID="existing-name-input"
         style={styles.input}
-        placeholder={t('existing.namePlaceholder')}
+        placeholder={t('existing.dataPlaceholder')}
         placeholderTextColor={Colors.placeholder}
         value={query}
         onChangeText={handleQueryChange}
