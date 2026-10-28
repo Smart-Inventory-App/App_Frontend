@@ -279,7 +279,7 @@ export default {
     validationSalidaProducto: 'Pick a product from the suggestions list',
     validationSalidaCantidad: 'Quantity must be greater than 0',
     validationSalidaMotivo: 'Choose the reason for the exit',
-    historial: 'Consumption history',
+    historial: 'Product History',
     historialEmpty: 'No movements yet for this product',
     historialLoadError: 'Could not load the history',
     historialEntrada: 'Stock in',

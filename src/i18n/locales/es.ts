@@ -289,7 +289,7 @@ export default {
     validationSalidaProducto: 'Elegí un producto de la lista de sugerencias',
     validationSalidaCantidad: 'La cantidad debe ser mayor a 0',
     validationSalidaMotivo: 'Elegí el motivo de la salida',
-    historial: 'Historial de consumo',
+    historial: 'Historial del Producto',
     historialEmpty: 'Todavía no hay movimientos para este producto',
     historialLoadError: 'No se pudo cargar el historial',
     historialEntrada: 'Entrada',
