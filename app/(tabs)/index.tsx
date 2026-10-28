@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import StatCard from '@/components/StatCard';
 import HomeHeader from '@/components/HomeHeader';
 import ChangesHistoryModal from '@/components/ChangesHistoryModal';
+import TrendsModal from '@/components/TrendsModal';
 import ProductDetailModal, { GeneralAlertRules } from '@/components/ProductDetailModal';
 import ProductLotRow from '@/components/ProductLotRow';
 import RecentChangeRow, { CHANGE_ROW_HEIGHT } from '@/components/RecentChangeRow';
@@ -37,6 +38,7 @@ export default function HomeScreen() {
   const [welcome, setWelcome] = useState(shouldWelcome());
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [historyVisible, setHistoryVisible] = useState(false);
+  const [trendsVisible, setTrendsVisible] = useState(false);
   // Los productos vencidos o por vencer y los que están bajo su stock mínimo salen de las alertas: son los mismos números
   // que el Centro de Alertas
   const [alertSummary, setAlertSummary] = useState<AlertSummary | null>(null);
@@ -134,8 +136,8 @@ export default function HomeScreen() {
               />
             </View>
 
-            {/* Tendencias de consumo: un botón ancho debajo de los cuatro principales */}
-            <TouchableOpacity testID="home-trends" style={styles.trendsCard} activeOpacity={0.85} onPress={() => router.push('/(app)/tendencias')}>
+            {/* Tendencias de consumo: un botón ancho debajo de los cuatro principales, con el mismo formato que ellos */}
+            <TouchableOpacity testID="home-trends" style={styles.trendsCard} activeOpacity={0.8} onPress={() => setTrendsVisible(true)}>
               <View style={styles.trendsIcon}>
                 <Ionicons name="stats-chart" size={22} color={Colors.primary} />
               </View>
@@ -143,7 +145,7 @@ export default function HomeScreen() {
                 <Text style={styles.trendsTitle}>{t('home.actionTendencias')}</Text>
                 <Text style={styles.trendsSubtitle}>{t('home.trendsSubtitle')}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={22} color={Colors.textSecondary} />
+              <Ionicons name="chevron-forward" size={18} color={Colors.placeholder} />
             </TouchableOpacity>
 
             <View style={styles.sectionRow}>
@@ -179,6 +181,7 @@ export default function HomeScreen() {
 
       {/* Información del producto, sin el botón "Stock total": eso es solo de Inventario */}
       <ProductDetailModal product={detailProduct} generalRules={generalRules} onClose={() => setDetailProduct(null)} />
+      <TrendsModal visible={trendsVisible} onClose={() => setTrendsVisible(false)} />
       <ChangesHistoryModal visible={historyVisible} generalRules={generalRules} onClose={() => setHistoryVisible(false)} />
     </>
   );
@@ -193,13 +196,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
     backgroundColor: '#fff',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginTop: 12,
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginVertical: 6,
     marginHorizontal: 6,
+    elevation: 3,
+    shadowColor: '#1B3A8F',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
   },
-  trendsIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#e6f7f5', alignItems: 'center', justifyContent: 'center' },
+  trendsIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#2CC4B422', alignItems: 'center', justifyContent: 'center' },
   trendsText: { flex: 1 },
   trendsTitle: { fontSize: 16, color: Colors.textPrimary, fontFamily: 'Roboto_500Medium' },
   trendsSubtitle: { fontSize: 12, color: Colors.textSecondary, fontFamily: 'Figtree_400Regular', marginTop: 2 },

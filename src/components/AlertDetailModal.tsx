@@ -1,11 +1,11 @@
 import React from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import ProductImage from '@/components/ProductImage';
 import { Alert } from '@/services/alertService';
 import { isoToDisplay } from '@/utils/dateInput';
-import { alertTone, getAlertLines, getAlertType } from '@/utils/alertInfo';
+import { alertTone, getAlertDetails, getAlertType } from '@/utils/alertInfo';
 
 interface Props {
   alert: Alert | null;
@@ -13,6 +13,11 @@ interface Props {
 }
 
 const NO_VALUE = '—';
+
+// Alto máximo de la ventana y lo que ocupan el título y los márgenes: con eso se define el alto máximo del cuerpo, que
+// se desplaza cuando la información no entra (confiar en que se achique solo no alcanzaba en Android)
+const CARD_MAX_HEIGHT_RATIO = 0.85;
+const CARD_CHROME_HEIGHT = 90;
 
 interface RowProps {
   testID: string;
@@ -36,6 +41,8 @@ function Row({ testID, label, value, highlight }: RowProps) {
 // Ventana centrada con lo que le sirve a la alerta: imagen, nombre, categoría, el motivo de la alerta, marca y stock.
 export default function AlertDetailModal({ alert, onClose }: Props) {
   const tone = alert ? alertTone(alert) : null;
+  const { height: windowHeight } = useWindowDimensions();
+  const bodyMaxHeight = Math.max(120, Math.round(windowHeight * CARD_MAX_HEIGHT_RATIO) - CARD_CHROME_HEIGHT);
 
   return (
     <Modal
@@ -57,7 +64,14 @@ export default function AlertDetailModal({ alert, onClose }: Props) {
                   <Ionicons name="close" size={24} color={Colors.textPrimary} />
                 </TouchableOpacity>
               </View>
-              <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                testID="alert-detail-scroll"
+                style={{ maxHeight: bodyMaxHeight }}
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled
+                bounces
+              >
                 <View style={styles.imageBox}>
                   <ProductImage uri={alert.image_url} style={styles.image} resizeMode="cover" />
                 </View>
@@ -69,7 +83,7 @@ export default function AlertDetailModal({ alert, onClose }: Props) {
                   <Text testID="alert-detail-reason-title" style={[styles.reasonTitle, { color: tone.text }]}>
                     {getAlertType(alert)}
                   </Text>
-                  {getAlertLines(alert).map(line => (
+                  {getAlertDetails(alert).map(line => (
                     <Text key={line} style={[styles.reasonLine, { color: tone.text }]}>{line}</Text>
                   ))}
                 </View>
@@ -114,7 +128,7 @@ const styles = StyleSheet.create({
   name: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center', marginBottom: 8 },
   reason: { borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, marginVertical: 8 },
   reasonTitle: { fontSize: 16, fontWeight: 'bold' },
-  reasonLine: { fontSize: 14, marginTop: 3 },
+  reasonLine: { fontSize: 14, lineHeight: 20, marginTop: 5 },
   row: {
     paddingVertical: 8,
     borderBottomWidth: 1,

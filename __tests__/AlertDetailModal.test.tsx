@@ -1,9 +1,9 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Dimensions, StyleSheet } from 'react-native';
+import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import AlertDetailModal from '../src/components/AlertDetailModal';
 import { Alert } from '../src/services/alertService';
-import { ALERT_TONES, getAlertLines, getAlertType } from '../src/utils/alertInfo';
+import { ALERT_TONES, getAlertDetails, getAlertType } from '../src/utils/alertInfo';
 
 const inDays = (n: number) => {
   const d = new Date();
@@ -58,7 +58,8 @@ describe('AlertDetailModal', () => {
   it('describes a low stock alert in the color of its level', () => {
     render(<AlertDetailModal alert={alert()} onClose={jest.fn()} />);
     expect(screen.getByTestId('alert-detail-reason-title').props.children).toBe('Se agota en 3 días');
-    expect(screen.getByText('Stock restante: 2 ud.')).toBeTruthy();
+    expect(screen.getByText('Con tu consumo, las 2 unidades que quedan alcanzan para 3 días.')).toBeTruthy();
+    expect(screen.getByText('Calculado por el modelo predictivo con tu historial de consumo.')).toBeTruthy();
     const box = StyleSheet.flatten(screen.getByTestId('alert-detail-reason').props.style);
     expect(box.backgroundColor).toBe(ALERT_TONES.critical.background);
     expect(StyleSheet.flatten(screen.getByTestId('alert-detail-reason-title').props.style).color).toBe(ALERT_TONES.critical.text);
@@ -67,14 +68,16 @@ describe('AlertDetailModal', () => {
   it('describes an expiry alert with how many days are left', () => {
     render(<AlertDetailModal alert={alert({ type: 'expiry', level: 'warning', product_expiry: inDays(5) })} onClose={jest.fn()} />);
     expect(screen.getByTestId('alert-detail-reason-title').props.children).toBe('Vence en 5 días');
-    expect(screen.getByText('Stock restante: 2 ud.')).toBeTruthy();
+    expect(screen.getByText('Quedan 2 unidades en stock.')).toBeTruthy();
+    expect(screen.getByText('Todavía no llegó a ese período, pero se acerca.')).toBeTruthy();
     expect(StyleSheet.flatten(screen.getByTestId('alert-detail-reason').props.style).backgroundColor).toBe(ALERT_TONES.warning.background);
   });
 
   it('describes a slow pace alert with the units in conflict', () => {
     render(<AlertDetailModal alert={alert({ type: 'slow_pace', level: 'info', units_wasted: 4, product_expiry: inDays(10) })} onClose={jest.fn()} />);
     expect(screen.queryByText(/Stock en conflicto/)).toBeNull();
-    expect(screen.getByText('Al ritmo actual, 4 unidades se vencerán en 10 días')).toBeTruthy();
+    expect(screen.getByText('Al ritmo actual, 4 unidades se vencerán en 10 días.')).toBeTruthy();
+    expect(screen.getByText(/más lento de lo que tarda en vencer/)).toBeTruthy();
     expect(StyleSheet.flatten(screen.getByTestId('alert-detail-reason').props.style).backgroundColor).toBe(ALERT_TONES.info.background);
   });
 
@@ -122,7 +125,43 @@ describe('alertInfo', () => {
     expect(getAlertType(alert({ type: 'info' }))).toBe('Información');
   });
 
-  it('has no extra lines for an alert of type info', () => {
-    expect(getAlertLines(alert({ type: 'info' }))).toEqual([]);
+  it('has no details for an alert of type info', () => {
+    expect(getAlertDetails(alert({ type: 'info' }))).toEqual([]);
+  });
+});
+
+describe('AlertDetailModal - long entries', () => {
+  const longAlert = () => alert({
+    type: 'stock_low_coverage', product_name: 'Un producto con un nombre bastante largo para que ocupe más lugar', product_stock: 2,
+    days_until_stockout: 3, suggested_qty: 12, limit_days: 7, rule_scope: 'product',
+  });
+
+  it('lets the user scroll the information when it does not fit', () => {
+    render(<AlertDetailModal alert={longAlert()} onClose={jest.fn()} />);
+    const scroll = screen.getByTestId('alert-detail-scroll');
+    expect(scroll.props.showsVerticalScrollIndicator).toBe(false);
+    expect(scroll.props.nestedScrollEnabled).toBe(true);
+    // con un alto máximo definido en números, el cuerpo se desplaza en vez de cortarse
+    const { maxHeight } = StyleSheet.flatten(scroll.props.style);
+    expect(maxHeight).toBeGreaterThanOrEqual(120);
+    expect(maxHeight).toBeLessThan(Dimensions.get('window').height);
+  });
+
+  it('keeps the title and the close button out of the scroll, always in view', () => {
+    render(<AlertDetailModal alert={longAlert()} onClose={jest.fn()} />);
+    const scroll = within(screen.getByTestId('alert-detail-scroll'));
+    expect(scroll.queryByText('Detalle de Alerta')).toBeNull();
+    expect(scroll.queryByTestId('alert-detail-close')).toBeNull();
+    expect(scroll.getByTestId('alert-detail-nombre')).toBeTruthy();
+    expect(scroll.getByTestId('alert-detail-reason')).toBeTruthy();
+    expect(scroll.getByTestId('alert-detail-stock')).toBeTruthy();
+  });
+
+  it('shows every paragraph of the explanation, one per idea', () => {
+    render(<AlertDetailModal alert={longAlert()} onClose={jest.fn()} />);
+    const reason = within(screen.getByTestId('alert-detail-reason'));
+    expect(reason.getByText('Con tu consumo, las 2 unidades que quedan alcanzan para 3 días.')).toBeTruthy();
+    expect(reason.getByText('Tu mínimo es de 7 días (la regla de este producto): estás por debajo de él.')).toBeTruthy();
+    expect(reason.getByText('Para volver a esa cobertura se sugiere reponer 12 unidades.')).toBeTruthy();
   });
 });

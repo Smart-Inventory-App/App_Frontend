@@ -180,6 +180,16 @@ describe('PerfilScreen', () => {
     expect(screen.getByDisplayValue('Ana')).toBeTruthy();
   });
 
+  it('words the two alert rules the same way: both end with "en menos de"', async () => {
+    render(<PerfilScreen />);
+    await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());
+    expect(screen.getByText('Alertar si el producto vence en menos de')).toBeTruthy();
+    expect(screen.getByText('Alertar si el stock se agota en menos de')).toBeTruthy();
+    expect(screen.queryByText('Por vencer en los próximos')).toBeNull();
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('Alertar si el stock se agota en menos de')).toBeLessThan(tree.indexOf('Alertar si el producto vence en menos de'));
+  });
+
   it('shows the settings already filled in, not as inputs or buttons', async () => {
     render(<PerfilScreen />);
     await waitFor(() => expect(screen.getByText('Ana')).toBeTruthy());

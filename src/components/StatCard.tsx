@@ -22,10 +22,10 @@ const LABEL_ACCENT = { green: '#2db7a3', yellow: '#f59e0b', red: '#e5484d' } as 
 
 // Cuantos más caracteres tiene el número (con sus puntos), más chico se escribe para que entre en la tarjeta
 export function valueFontSize(value: string): number {
-  if (value.length <= 5) return 34;
-  if (value.length <= 7) return 28;
-  if (value.length <= 9) return 23;
-  return 19;
+  if (value.length <= 5) return 30;
+  if (value.length <= 7) return 25;
+  if (value.length <= 9) return 21;
+  return 17;
 }
 
 export default function StatCard({ title, value, label, labelColor, icon, accent, onPress, testID }: Props) {
@@ -49,7 +49,7 @@ export default function StatCard({ title, value, label, labelColor, icon, accent
       <View style={styles.top}>
         {icon ? (
           <View testID={testID ? `${testID}-icon` : undefined} style={[styles.iconCircle, { backgroundColor: `${color}22` }]}>
-            <Ionicons name={icon} size={20} color={color} />
+            <Ionicons name={icon} size={18} color={color} />
           </View>
         ) : <View />}
         {onPress ? <Ionicons name="chevron-forward" size={18} color={Colors.placeholder} /> : null}
@@ -83,7 +83,8 @@ const styles = StyleSheet.create({
     flex: 1,
     marginHorizontal: 6,
     marginVertical: 6,
-    padding: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderRadius: 18,
     backgroundColor: '#fff',
     elevation: 3,
@@ -92,10 +93,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
   },
-  top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 38 },
-  iconCircle: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  value: { fontFamily: 'RobotoFlex_400Regular', fontWeight: '700', marginTop: 8 },
-  title: { fontSize: 14, fontFamily: 'Figtree_400Regular', fontWeight: '600', color: Colors.textPrimary, marginTop: 2, marginBottom: 8 },
+  top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 34 },
+  iconCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  value: { fontFamily: 'RobotoFlex_400Regular', fontWeight: '700', marginTop: 4 },
+  title: { fontSize: 14, fontFamily: 'Figtree_400Regular', fontWeight: '600', color: Colors.textPrimary, marginTop: 1, marginBottom: 6 },
   label: {
     fontFamily: 'Figtree_400Regular',
     fontSize: 10,

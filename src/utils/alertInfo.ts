@@ -70,32 +70,91 @@ export function getAlertType(alert: Alert): string {
   }
 }
 
-// De qué regla sale la alerta: el límite que configuró el usuario y si es el de ese producto o el general
-function ruleNote(alert: Alert, label: string): string[] {
-  if (alert.limit_days == null) return [];
-  const scope = alert.rule_scope === 'product' ? 'regla de este producto' : 'regla general';
-  return [`${label}: ${alert.limit_days} ${alert.limit_days === 1 ? 'día' : 'días'} · ${scope}`];
-}
-
 // Fecha de vencimiento como "5 de marzo"
 export function getExpiryDate(expiryDate?: string): string {
   const [year, month, day] = (expiryDate ?? '').slice(0, 10).split('-').map(Number);
   return new Date(year, month - 1, day).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
 }
 
-// Renglones con la información que acompaña a la alerta: el stock, la regla que se aplicó y, si corresponde, qué hacer
-export function getAlertLines(alert: Alert): string[] {
+const daysText = (n: number) => `${n} ${n === 1 ? 'día' : 'días'}`;
+const unitsText = (n: number) => `${n} ${n === 1 ? 'unidad' : 'unidades'}`;
+// Cuánto alcanza el stock, dicho como una persona: nunca «0 días»
+const coverageText = (days: number) => (days <= 0 ? 'menos de 1 día' : daysText(days));
+// «Queda 1 ud.» / «Quedan 3 ud.»
+const left = (n: number) => `${n === 1 ? 'Queda' : 'Quedan'} ${n} ud.`;
+const scopeText = (alert: Alert) => (alert.rule_scope === 'product' ? 'la regla de este producto' : 'tu regla general');
+
+// Descripción que acompaña a la alerta en la lista: entra en dos renglones y dice qué pasa con números concretos
+export function getAlertDescription(alert: Alert): string {
   switch (alert.type) {
-    case 'expiry':
-      return [`Stock restante: ${alert.product_stock} ud.`, ...ruleNote(alert, 'Tu límite')];
+    case 'expiry': {
+      const days = daysUntil(alert.product_expiry);
+      const when = getExpiryDate(alert.product_expiry);
+      const stock = left(alert.product_stock ?? 0);
+      if (days < 0) return `Venció el ${when}. ${stock} que ya no conviene consumir.`;
+      const limit = alert.limit_days != null ? ` y tu aviso es con menos de ${daysText(alert.limit_days)}` : ' en stock';
+      return `Vence el ${when}. ${stock}${limit}.`;
+    }
     case 'stock_low_coverage': {
-      const restock = alert.suggested_qty ? ` · Reponer ${alert.suggested_qty} ud.` : '';
-      return [`Stock restante: ${alert.product_stock} ud.${restock}`, ...ruleNote(alert, 'Tu mínimo')];
+      const days = coverageText(alert.days_until_stockout ?? 0);
+      const minimum = alert.limit_days != null ? ` y tu mínimo es de ${daysText(alert.limit_days)}` : '';
+      const restock = alert.suggested_qty ? ` Reponer ${alert.suggested_qty} ud.` : '';
+      const lasts = alert.product_stock === 1 ? 'alcanza' : 'alcanzan';
+      return `${left(alert.product_stock ?? 0)}, ${lasts} para ${days}${minimum}.${restock}`;
     }
     case 'slow_pace': {
       const units = alert.units_wasted ?? 0;
-      const verb = units === 1 ? 'unidad se vencerá' : 'unidades se vencerán';
-      return [`Al ritmo actual, ${units} ${verb} ${whenText(daysUntil(alert.product_expiry))}`];
+      const verb = units === 1 ? 'se vencerá' : 'se vencerán';
+      return `Al ritmo actual, ${unitsText(units)} ${verb} ${whenText(daysUntil(alert.product_expiry))}.`;
+    }
+    default:
+      return '';
+  }
+}
+
+const PREDICTION_NOTE = 'Calculado por el modelo predictivo con tu historial de consumo.';
+
+// Explicación completa para el detalle de la alerta: un párrafo por idea
+export function getAlertDetails(alert: Alert): string[] {
+  const critical = alert.level === 'critical';
+  switch (alert.type) {
+    case 'expiry': {
+      const days = daysUntil(alert.product_expiry);
+      const when = getExpiryDate(alert.product_expiry);
+      const paragraphs: string[] = [];
+      if (days < 0) paragraphs.push(`Venció el ${when} (${days === -1 ? 'ayer' : `hace ${daysText(-days)}`}).`);
+      else if (days === 0) paragraphs.push(`Vence hoy, ${when}.`);
+      else if (days === 1) paragraphs.push(`Vence mañana, ${when}.`);
+      else paragraphs.push(`Vence el ${when}, en ${daysText(days)}.`);
+      paragraphs.push(`${(alert.product_stock ?? 0) === 1 ? 'Queda' : 'Quedan'} ${unitsText(alert.product_stock ?? 0)} en stock.`);
+      if (alert.limit_days != null) {
+        paragraphs.push(`Te avisamos cuando faltan menos de ${daysText(alert.limit_days)} para el vencimiento (${scopeText(alert)}).`);
+      }
+      paragraphs.push(critical
+        ? (days < 0 ? 'Ya no conviene consumirlo.' : 'Ya está dentro de ese período: conviene usarlo primero.')
+        : 'Todavía no llegó a ese período, pero se acerca.');
+      return paragraphs;
+    }
+    case 'stock_low_coverage': {
+      const stock = alert.product_stock ?? 0;
+      const subject = stock === 1 ? 'la unidad que queda alcanza' : `las ${unitsText(stock)} que quedan alcanzan`;
+      const paragraphs = [`Con tu consumo, ${subject} para ${coverageText(alert.days_until_stockout ?? 0)}.`];
+      if (alert.limit_days != null) {
+        paragraphs.push(`Tu mínimo es de ${daysText(alert.limit_days)} (${scopeText(alert)}): ${critical ? 'estás por debajo de él.' : 'te estás acercando.'}`);
+      }
+      if (alert.suggested_qty) paragraphs.push(`Para volver a esa cobertura se sugiere reponer ${unitsText(alert.suggested_qty)}.`);
+      paragraphs.push(PREDICTION_NOTE);
+      return paragraphs;
+    }
+    case 'slow_pace': {
+      const units = alert.units_wasted ?? 0;
+      const paragraphs = [
+        getAlertDescription(alert),
+        `Estás consumiendo este producto más lento de lo que tarda en vencer, y ${units === 1 ? 'esa unidad quedaría' : 'esas unidades quedarían'} sin usar.`,
+      ];
+      if (critical) paragraphs.push('Su vencimiento ya está dentro de tu período de aviso.');
+      paragraphs.push(PREDICTION_NOTE);
+      return paragraphs;
     }
     default:
       return [];

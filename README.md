@@ -76,7 +76,7 @@ App_Frontend/
 │       ├── index.tsx           # Home — estado del inventario, últimos cambios y productos recientes
 │       ├── inventario.tsx      # Lista paginada de productos con filtros y orden
 │       ├── cargar.tsx          # Entrada y salida de productos
-│       ├── alertas.tsx         # Centro de Alertas: «Según tus reglas» (vencimiento y stock mínimo) primero y «Generadas por el sistema» (ritmo lento); las del modelo predictivo llevan la marca «Predicción»
+│       ├── alertas.tsx         # Centro de Alertas: tocar «Críticas» o «Advertencias» filtra por nivel y las opciones Todas / Stock / Vencimiento por tipo (se combinan y los números siguen a lo que se ve); «Según tus reglas» primero y «Generado por el sistema» después, con la marca «Predicción» arriba a la derecha de las alertas del modelo predictivo; cada descripción ocupa dos renglones y el detalle se desplaza si es largo
 │       └── perfil.tsx          # Perfil y configuración
 ├── src/
 │   ├── components/

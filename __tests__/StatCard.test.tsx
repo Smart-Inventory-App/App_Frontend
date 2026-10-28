@@ -58,12 +58,12 @@ describe('StatCard', () => {
   });
 
   it('writes the number smaller the longer it is, so it fits in its square', () => {
-    expect(valueFontSize('7')).toBe(34);
-    expect(valueFontSize('1.255')).toBe(34);
-    expect(valueFontSize('12.345')).toBe(28);
-    expect(valueFontSize('123.456')).toBe(28);
-    expect(valueFontSize('3.141.912')).toBe(23);
-    expect(valueFontSize('1.234.567.890')).toBe(19);
+    expect(valueFontSize('7')).toBe(30);
+    expect(valueFontSize('1.255')).toBe(30);
+    expect(valueFontSize('12.345')).toBe(25);
+    expect(valueFontSize('123.456')).toBe(25);
+    expect(valueFontSize('3.141.912')).toBe(21);
+    expect(valueFontSize('1.234.567.890')).toBe(17);
     const sizes = ['1', '12.345', '3.141.912', '1.234.567.890'].map(valueFontSize);
     expect([...sizes].sort((a, b) => b - a)).toEqual(sizes);
   });
@@ -71,7 +71,7 @@ describe('StatCard', () => {
   it('applies that size and keeps the number in one line that can still shrink', () => {
     render(<StatCard testID="card" title="Productos" value="3.141.912" label="x" labelColor="green" />);
     const value = screen.getByTestId('card-value');
-    expect(StyleSheet.flatten(value.props.style).fontSize).toBe(23);
+    expect(StyleSheet.flatten(value.props.style).fontSize).toBe(21);
     expect(value.props.numberOfLines).toBe(1);
     expect(value.props.adjustsFontSizeToFit).toBe(true);
   });

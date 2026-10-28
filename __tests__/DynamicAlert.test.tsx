@@ -21,7 +21,7 @@ const inDays = (n: number) => {
 };
 
 describe('DynamicAlert', () => {
-  it('shows the product, what happens to it, the stock, the rule that applied and how much to restock', () => {
+  it('shows the product, what happens to it and a description with the numbers', () => {
     render(<DynamicAlert alertsData={[baseAlert({
       type: 'stock_low_coverage',
       level: 'critical',
@@ -33,16 +33,15 @@ describe('DynamicAlert', () => {
     })]} />);
     expect(screen.getByText('Leche')).toBeTruthy();
     expect(screen.getByTestId('alert-kind-1').props.children).toBe('Se agota en 3 días');
-    expect(screen.getByText('Stock restante: 2 ud. · Reponer 12 ud.')).toBeTruthy();
-    expect(screen.getByText('Tu mínimo: 7 días · regla general')).toBeTruthy();
+    expect(screen.getByTestId('alert-description-1').props.children).toBe('Quedan 2 ud., alcanzan para 3 días y tu mínimo es de 7 días. Reponer 12 ud.');
   });
 
-  it('shows an expiry alert with how many days are left and the limit of the user', () => {
+  it('shows an expiry alert with the date, the stock and the limit of the user', () => {
     render(<DynamicAlert alertsData={[baseAlert({
       type: 'expiry', level: 'warning', product_expiry: inDays(5), product_stock: 1, limit_days: 3, rule_scope: 'product',
     })]} />);
     expect(screen.getByTestId('alert-kind-1').props.children).toBe('Vence en 5 días');
-    expect(screen.getByText('Tu límite: 3 días · regla de este producto')).toBeTruthy();
+    expect(screen.getByTestId('alert-description-1').props.children).toMatch(/^Vence el .+\. Queda 1 ud\. y tu aviso es con menos de 3 días\.$/);
   });
 
   it.each([
@@ -61,14 +60,14 @@ describe('DynamicAlert', () => {
     expect(screen.queryByText(/0 días/)).toBeNull();
   });
 
-  it('renders the slow pace as a single line about the pace, with no redundant "stock en conflicto"', () => {
-    render(<DynamicAlert alertsData={[baseAlert({ type: 'slow_pace', units_wasted: 4, product_expiry: inDays(3) })]} />);
+  it('describes the slow pace with the sentence about the pace', () => {
+    render(<DynamicAlert alertsData={[baseAlert({ type: 'slow_pace', units_wasted: 4, product_expiry: inDays(45) })]} />);
     expect(screen.getByTestId('alert-kind-1').props.children).toBe('Riesgo de vencimiento');
-    expect(screen.getByText('Al ritmo actual, 4 unidades se vencerán en 3 días')).toBeTruthy();
+    expect(screen.getByTestId('alert-description-1').props.children).toBe('Al ritmo actual, 4 unidades se vencerán en 45 días.');
     expect(screen.queryByText(/Stock en conflicto/)).toBeNull();
   });
 
-  it('renders a default/info alert without extra lines', () => {
+  it('renders a default/info alert without a description', () => {
     render(<DynamicAlert alertsData={[baseAlert({ type: 'info', level: 'info' })]} />);
     expect(screen.getByTestId('alert-kind-1').props.children).toBe('Información');
   });
@@ -117,16 +116,20 @@ describe('DynamicAlert', () => {
     expect(color(3)).toBe('#4285f4');
   });
 
-  it('keeps every row the same height so the list looks tidy', () => {
+  it('keeps every row the same height, a bit taller than before, so the list looks tidy', () => {
     render(<DynamicAlert alertsData={[baseAlert({ id: 1 }), baseAlert({ id: 2, type: 'stock_low_coverage', days_until_stockout: 2 })]} />);
     const height = (id: number) => StyleSheet.flatten(screen.getByTestId(`alert-row-${id}`).props.style).height;
     expect(height(1)).toBe(height(2));
+    expect(height(1)).toBeGreaterThan(104);
   });
 
-  it('keeps the name and the lines on one line each', () => {
-    render(<DynamicAlert alertsData={[baseAlert({ type: 'stock_low_coverage', product_stock: 2, days_until_stockout: 3, limit_days: 7 })]} />);
+  it('always uses two lines for the description, even when it is short', () => {
+    render(<DynamicAlert alertsData={[baseAlert({ type: 'slow_pace', units_wasted: 2, product_expiry: inDays(45) })]} />);
+    const description = screen.getByTestId('alert-description-1');
+    expect(description.props.numberOfLines).toBe(2);
+    const style = StyleSheet.flatten(description.props.style);
+    expect(style.minHeight).toBe(style.lineHeight * 2);
     expect(screen.getByText('Leche').props.numberOfLines).toBe(1);
-    expect(screen.getByText('Tu mínimo: 7 días · regla general').props.numberOfLines).toBe(1);
   });
 });
 
@@ -153,38 +156,48 @@ describe('DynamicAlert - inside a screen that already scrolls', () => {
 });
 
 describe('DynamicAlert - alerts of the predictive model', () => {
-  it.each(['stock_low_coverage', 'slow_pace'] as const)('highlights the %s alerts with a "Predicción" badge and their own color', type => {
-    render(<DynamicAlert alertsData={[baseAlert({ id: 1, type, level: 'warning', product_expiry: inDays(3), units_wasted: 2 })]} origin="rule" />);
+  it.each(['stock_low_coverage', 'slow_pace'] as const)('marks the %s alerts with a "Predicción" badge', type => {
+    render(<DynamicAlert alertsData={[baseAlert({ id: 1, type, level: 'warning', product_expiry: inDays(3), units_wasted: 2 })]} />);
     expect(screen.getByTestId('alert-predictive-1')).toBeTruthy();
     expect(screen.getByText('Predicción')).toBeTruthy();
-    const row = StyleSheet.flatten(screen.getByTestId('alert-row-1').props.style);
-    expect(row.borderColor).toBe(PREDICTIVE_COLOR);
-    expect(row.borderWidth).toBeGreaterThan(0);
+  });
+
+  it('always puts the badge in the top right corner of the alert, whatever the text', () => {
+    render(<DynamicAlert alertsData={[
+      baseAlert({ id: 1, type: 'slow_pace', units_wasted: 2, product_expiry: inDays(3), product_name: 'Muy corto' }),
+      baseAlert({ id: 2, type: 'stock_low_coverage', days_until_stockout: 2, product_name: 'Un nombre de producto bastante más largo que el otro' }),
+    ]} />);
+    const badge = (id: number) => StyleSheet.flatten(screen.getByTestId(`alert-predictive-${id}`).props.style);
+    expect(badge(1)).toMatchObject({ position: 'absolute', top: 8, right: 10 });
+    expect(badge(2)).toMatchObject({ position: 'absolute', top: 8, right: 10 });
+    // es hermano del texto, no está dentro de él
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('alert-text-1')).toBeLessThan(tree.indexOf('alert-predictive-1'));
+  });
+
+  it('leaves room for the badge so the name never goes under it', () => {
+    render(<DynamicAlert alertsData={[
+      baseAlert({ id: 1, type: 'slow_pace', units_wasted: 2, product_expiry: inDays(3) }),
+      baseAlert({ id: 2, type: 'expiry', product_expiry: inDays(3) }),
+    ]} />);
+    const names = screen.getAllByText('Leche');
+    expect(StyleSheet.flatten(names[0].props.style).paddingRight).toBeGreaterThan(60);
+    expect(StyleSheet.flatten(names[1].props.style).paddingRight).toBeUndefined();
   });
 
   it('does not mark as predictive the alerts that are only a date', () => {
-    render(<DynamicAlert alertsData={[baseAlert({ id: 1, type: 'expiry', product_expiry: inDays(3) })]} origin="rule" />);
+    render(<DynamicAlert alertsData={[baseAlert({ id: 1, type: 'expiry', product_expiry: inDays(3) })]} />);
     expect(screen.queryByTestId('alert-predictive-1')).toBeNull();
     expect(screen.queryByText('Predicción')).toBeNull();
   });
 });
 
-describe('DynamicAlert - alerts of the rules of the user', () => {
-  it('outlines them in the color of the app, on a tinted background, unlike the ones of the system', () => {
-    const { rerender } = render(<DynamicAlert alertsData={[baseAlert({ id: 1, type: 'expiry', product_expiry: inDays(2) })]} origin="rule" />);
-    const rule = StyleSheet.flatten(screen.getByTestId('alert-row-1').props.style);
-    expect(rule.borderColor).toBe('#2CC4B4');
-    expect(rule.borderWidth).toBeGreaterThan(0);
-    expect(rule.backgroundColor).not.toBe('#fff');
-
-    rerender(<DynamicAlert alertsData={[baseAlert({ id: 1, type: 'expiry', product_expiry: inDays(2) })]} origin="system" />);
-    const system = StyleSheet.flatten(screen.getByTestId('alert-row-1').props.style);
-    expect(system.borderWidth).toBeUndefined();
-    expect(system.backgroundColor).toBe('#fff');
-  });
-
-  it('are shown like the ones of the system by default', () => {
-    render(<DynamicAlert alertsData={[baseAlert({ id: 1 })]} />);
-    expect(StyleSheet.flatten(screen.getByTestId('alert-row-1').props.style).borderWidth).toBeUndefined();
+describe('DynamicAlert - plain white entries', () => {
+  it.each(['expiry', 'stock_low_coverage', 'slow_pace'] as const)('shows the %s alert on a plain white background with no colored outline', type => {
+    render(<DynamicAlert alertsData={[baseAlert({ id: 1, type, product_expiry: inDays(3), units_wasted: 2, days_until_stockout: 2 })]} />);
+    const row = StyleSheet.flatten(screen.getByTestId('alert-row-1').props.style);
+    expect(row.backgroundColor).toBe('#fff');
+    expect(row.borderWidth).toBeUndefined();
+    expect(row.borderColor).toBeUndefined();
   });
 });

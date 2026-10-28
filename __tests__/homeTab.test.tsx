@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import HomeScreen from '../app/(tabs)/index';
 import { useAuth } from '@/context/AuthContext';
@@ -24,7 +24,7 @@ jest.mock('@/context/AuthContext', () => ({
 }));
 
 jest.mock('@/services/productService', () => ({
-  productService: { getProducts: jest.fn(), getRecentChanges: jest.fn() },
+  productService: { getProducts: jest.fn(), getRecentChanges: jest.fn(), getTrends: jest.fn() },
 }));
 
 jest.mock('@/services/profileService', () => ({
@@ -38,6 +38,11 @@ jest.mock('@/services/alertService', () => ({
 const mockedProducts = productService as jest.Mocked<typeof productService>;
 const mockedProfile = profileService as jest.Mocked<typeof profileService>;
 const mockedAlerts = alertService as jest.Mocked<typeof alertService>;
+
+const trends = () => ({
+  period_days: 14, total_consumido: 0, total_entradas: 0, consumo_por_dia: [{ day: '2026-10-10', quantity: 0 }],
+  top_productos: [], productos_menos_usados: [],
+});
 
 const summary = (overrides: Record<string, number> = {}) => ({
   critical: 0, warning: 0, info: 0, total: 0, expiring: 0, low_stock: 0, ...overrides,
@@ -287,8 +292,8 @@ describe('HomeScreen - cards', () => {
 
   it('shows the thresholds of the profile in the labels', async () => {
     await load({ profile: { coverageDaysThreshold: 9, expiryDaysThreshold: 12 } });
-    expect(screen.getByText('Vencidos o en 12 días o menos')).toBeTruthy();
-    expect(screen.getByText('Alcanza para menos de 9 días')).toBeTruthy();
+    expect(screen.getByText('Próximos 12 días')).toBeTruthy();
+    expect(screen.getByText('Mínimo 9 días')).toBeTruthy();
   });
 });
 
@@ -518,6 +523,30 @@ describe('HomeScreen - titles and the stock part of the entries', () => {
   });
 });
 
+describe('HomeScreen - short labels and compact cards', () => {
+  it('describes "Por vencer" and "Stock bajo" in at most three words', async () => {
+    await load({ profile: { coverageDaysThreshold: 9, expiryDaysThreshold: 12 } });
+    const labels = ['Próximos 12 días', 'Mínimo 9 días'];
+    labels.forEach(label => {
+      expect(screen.getByText(label)).toBeTruthy();
+      expect(label.split(' ').length).toBeLessThanOrEqual(3);
+    });
+  });
+
+  it('calls the description of "Productos" "Total inventario"', async () => {
+    await load();
+    expect(screen.getByText('Total inventario')).toBeTruthy();
+    expect(screen.queryByText('En inventario')).toBeNull();
+  });
+
+  it('keeps the four cards less tall, with a smaller main number', async () => {
+    await load({ products: [product()] });
+    const card = StyleSheet.flatten(screen.getByTestId('stat-products').props.style);
+    expect(card.paddingVertical).toBeLessThan(14);
+    expect(StyleSheet.flatten(screen.getByTestId('stat-products-value').props.style).fontSize).toBeLessThan(34);
+  });
+});
+
 describe('HomeScreen - trends button', () => {
   it('no longer has the "Faltantes" and "Reponer" buttons: they live in the alert center now', async () => {
     await load();
@@ -533,17 +562,30 @@ describe('HomeScreen - trends button', () => {
     expect(at('home-trends')).toBeLessThan(at('home-section-changes'));
   });
 
-  it('is a horizontal card: icon and text side by side, with an arrow, taking the whole width', async () => {
+  it('is a horizontal card with the same shadow, corners and arrow as the cards above it', async () => {
+    const { Ionicons } = require('@expo/vector-icons');
     await load();
     const card = StyleSheet.flatten(screen.getByTestId('home-trends').props.style);
+    const stat = StyleSheet.flatten(screen.getByTestId('stat-products').props.style);
     expect(card.flexDirection).toBe('row');
-    expect(card.backgroundColor).toBe('#fff');
     expect(card.flex).toBeUndefined();
+    ['backgroundColor', 'borderRadius', 'elevation', 'shadowColor', 'shadowOpacity', 'shadowRadius', 'marginHorizontal', 'marginVertical'].forEach(key =>
+      expect(card[key]).toEqual(stat[key]));
+    const arrows = within(screen.getByTestId('home-trends')).UNSAFE_getAllByType(Ionicons).filter((icon: any) => icon.props.name === 'chevron-forward');
+    expect(arrows).toHaveLength(1);
+    expect(arrows[0].props.size).toBe(18);
+    expect(arrows[0].props.color).toBe(Colors.placeholder);
   });
 
-  it('opens the trends screen', async () => {
+  it('opens the trends window from the bottom, as a window and not as another screen', async () => {
+    mockedProducts.getTrends.mockResolvedValue(trends());
     await load();
+    expect(screen.queryByTestId('trends-scroll')).toBeNull();
     fireEvent.press(screen.getByTestId('home-trends'));
-    expect(router.push).toHaveBeenCalledWith('/(app)/tendencias');
+    await waitFor(() => expect(screen.getByTestId('trends-scroll')).toBeTruthy());
+    expect(router.push).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.press(screen.getByTestId('trends-back')); });
+    expect(screen.queryByTestId('trends-scroll')).toBeNull();
   });
 });
