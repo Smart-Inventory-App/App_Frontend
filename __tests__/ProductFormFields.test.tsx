@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { Image, Alert, StyleSheet } from 'react-native';
 import ProductFormFields from '../src/components/ProductFormFields';
 import { FieldFocusContext } from '../src/components/KeyboardAwareScrollView';
@@ -224,7 +224,7 @@ describe('ProductFormFields - nombre suggestions', () => {
 describe('ProductFormFields - image picker', () => {
   const PICKED = { uri: 'file://a.jpg', fileName: 'a.jpg', mimeType: 'image/jpeg' };
 
-  it('asks for confirmation after taking a photo, and uploads it only when confirmed', async () => {
+  it('uploads the photo right after it is taken and cropped, with no other confirmation window', async () => {
     (pickFromCamera as jest.Mock).mockResolvedValue(PICKED);
     (uploadImage as jest.Mock).mockResolvedValue('https://cdn/a.jpg');
     render(<Wrapper />);
@@ -232,19 +232,13 @@ describe('ProductFormFields - image picker', () => {
     await act(async () => {
       fireEvent.press(screen.getByText('Tomar foto'));
     });
-    expect(screen.getByText('¿Querés cargar esta imagen?')).toBeTruthy();
-    expect(screen.getByTestId('image-confirm-preview').props.source).toEqual({ uri: 'file://a.jpg' });
-    expect(uploadImage).not.toHaveBeenCalled();
-
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('image-confirm-accept'));
-    });
     expect(uploadImage).toHaveBeenCalledWith(PICKED);
     expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/a.jpg' });
     expect(screen.queryByText('¿Querés cargar esta imagen?')).toBeNull();
+    expect(screen.queryByTestId('image-confirm-card')).toBeNull();
   });
 
-  it('asks for confirmation after choosing from the gallery, and uploads it only when confirmed', async () => {
+  it('uploads the image chosen from the gallery right away', async () => {
     (pickFromGallery as jest.Mock).mockResolvedValue(PICKED);
     (uploadImage as jest.Mock).mockResolvedValue('https://cdn/b.jpg');
     render(<Wrapper />);
@@ -252,44 +246,12 @@ describe('ProductFormFields - image picker', () => {
     await act(async () => {
       fireEvent.press(screen.getByText('Elegir de la galería'));
     });
-    expect(screen.getByText('¿Querés cargar esta imagen?')).toBeTruthy();
-    expect(uploadImage).not.toHaveBeenCalled();
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('image-confirm-accept'));
-    });
+    expect(uploadImage).toHaveBeenCalledWith(PICKED);
     expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/b.jpg' });
-  });
-
-  it('does not upload nor set the image when the user cancels the confirmation', async () => {
-    (pickFromGallery as jest.Mock).mockResolvedValue(PICKED);
-    render(<Wrapper />);
-    fireEvent.press(screen.getByText('Seleccionar imagen'));
-    await act(async () => {
-      fireEvent.press(screen.getByText('Elegir de la galería'));
-    });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('image-confirm-cancel'));
-    });
-    expect(uploadImage).not.toHaveBeenCalled();
-    expect(screen.UNSAFE_queryAllByType(Image)).toHaveLength(0);
     expect(screen.queryByText('¿Querés cargar esta imagen?')).toBeNull();
   });
 
-  it('keeps the current image when the user cancels the confirmation of a new one', async () => {
-    (pickFromGallery as jest.Mock).mockResolvedValue(PICKED);
-    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
-    fireEvent.press(screen.getByText('Cambiar imagen'));
-    await act(async () => {
-      fireEvent.press(screen.getByText('Elegir de la galería'));
-    });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('image-confirm-cancel'));
-    });
-    expect(uploadImage).not.toHaveBeenCalled();
-    expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/existing.jpg' });
-  });
-
-  it('shows an alert when the upload fails after confirming', async () => {
+  it('shows an alert when the upload fails', async () => {
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     (pickFromCamera as jest.Mock).mockResolvedValue(PICKED);
     (uploadImage as jest.Mock).mockRejectedValue(new Error('sin conexión'));
@@ -298,11 +260,10 @@ describe('ProductFormFields - image picker', () => {
     await act(async () => {
       fireEvent.press(screen.getByText('Tomar foto'));
     });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('image-confirm-accept'));
-    });
     expect(Alert.alert).toHaveBeenCalledWith('Error', 'sin conexión');
     expect(screen.UNSAFE_queryAllByType(Image)).toHaveLength(0);
+    // el botón de seleccionar vuelve a estar disponible
+    expect(screen.getByTestId('select-image-button')).toBeTruthy();
     (Alert.alert as jest.Mock).mockRestore();
   });
 
@@ -315,10 +276,7 @@ describe('ProductFormFields - image picker', () => {
     await act(async () => {
       fireEvent.press(screen.getByText('Tomar foto'));
     });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('image-confirm-accept'));
-    });
-    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Error al subir la imagen.');
+    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Error al cargar la imagen.');
     (Alert.alert as jest.Mock).mockRestore();
   });
 
@@ -353,21 +311,96 @@ describe('ProductFormFields - image picker', () => {
     await act(async () => {
       fireEvent.press(screen.getByText('Tomar foto'));
     });
-    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Error al elegir la imagen.');
+    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Error al cargar la imagen.');
     (Alert.alert as jest.Mock).mockRestore();
-  });
-
-  it('closes the picker sheet via cancel and can change an existing image', async () => {
-    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
-    expect(screen.getByText('Cambiar imagen')).toBeTruthy();
-    fireEvent.press(screen.getByText('Cambiar imagen'));
-    fireEvent.press(screen.getByText('Cancelar'));
   });
 
   it('closes the picker sheet by pressing the overlay', () => {
     render(<Wrapper />);
     fireEvent.press(screen.getByText('Seleccionar imagen'));
     // Overlay press dismisses the modal (top-level Pressable's onPress).
+  });
+});
+
+describe('ProductFormFields - remove the image and square preview', () => {
+  const TEXT = '¿Estás de acuerdo con eliminar la imagen del producto a cargar?';
+
+  it('has no "Cambiar imagen" button anymore: only "Eliminar imagen"', () => {
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    expect(screen.queryByText('Cambiar imagen')).toBeNull();
+    expect(screen.queryByTestId('change-image-button')).toBeNull();
+    expect(screen.getByTestId('remove-image-button')).toBeTruthy();
+    expect(screen.getByText('Eliminar imagen')).toBeTruthy();
+  });
+
+  it('asks for confirmation before removing the image, and does not remove it yet', () => {
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    expect(screen.queryByText(TEXT)).toBeNull();
+    fireEvent.press(screen.getByTestId('remove-image-button'));
+    expect(screen.getByText(TEXT)).toBeTruthy();
+    expect(screen.getByText('Confirmar')).toBeTruthy();
+    expect(screen.getByText('Cancelar')).toBeTruthy();
+    expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/existing.jpg' });
+  });
+
+  it('removes the image when confirmed: the preview disappears and the select button comes back', () => {
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    fireEvent.press(screen.getByTestId('remove-image-button'));
+    fireEvent.press(screen.getByTestId('confirm-accept'));
+    expect(screen.queryByText(TEXT)).toBeNull();
+    expect(screen.UNSAFE_queryAllByType(Image)).toHaveLength(0);
+    expect(screen.queryByTestId('image-preview-container')).toBeNull();
+    expect(screen.getByTestId('select-image-button')).toBeTruthy();
+  });
+
+  it('keeps the image when the user cancels', () => {
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    fireEvent.press(screen.getByTestId('remove-image-button'));
+    fireEvent.press(screen.getByTestId('confirm-cancel'));
+    expect(screen.queryByText(TEXT)).toBeNull();
+    expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/existing.jpg' });
+    expect(screen.getByTestId('remove-image-button')).toBeTruthy();
+  });
+
+  it('keeps the image when the question is dismissed by tapping outside of it', () => {
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    fireEvent.press(screen.getByTestId('remove-image-button'));
+    fireEvent.press(screen.getByTestId('confirm-backdrop'));
+    expect(screen.queryByText(TEXT)).toBeNull();
+    expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/existing.jpg' });
+  });
+
+  it('can load another image after removing one', async () => {
+    (pickFromGallery as jest.Mock).mockResolvedValue({ uri: 'file://c.jpg' });
+    (uploadImage as jest.Mock).mockResolvedValue('https://cdn/c.jpg');
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    fireEvent.press(screen.getByTestId('remove-image-button'));
+    fireEvent.press(screen.getByTestId('confirm-accept'));
+    fireEvent.press(screen.getByTestId('select-image-button'));
+    await act(async () => {
+      fireEvent.press(screen.getByText('Elegir de la galería'));
+    });
+    expect(screen.UNSAFE_getByType(Image).props.source).toEqual({ uri: 'https://cdn/c.jpg' });
+  });
+
+  it('has no remove button when there is no image', () => {
+    render(<Wrapper />);
+    expect(screen.queryByTestId('remove-image-button')).toBeNull();
+  });
+
+  it('shows the preview as a square (1x1)', () => {
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    const image = StyleSheet.flatten(screen.UNSAFE_getByType(Image).props.style);
+    expect(image.aspectRatio).toBe(1);
+    expect(image.height).toBeUndefined();
+    expect(image.width).toBe('100%');
+  });
+
+  it('keeps the square preview centered and not bigger than a reasonable size', () => {
+    render(<Wrapper form={{ imagen_url: 'https://cdn/existing.jpg' }} />);
+    const container = StyleSheet.flatten(screen.getByTestId('image-preview-container').props.style);
+    expect(container.alignSelf).toBe('center');
+    expect(container.maxWidth).toBe(280);
   });
 });
 
@@ -533,9 +566,9 @@ describe('ProductFormFields - add buttons and similar options', () => {
 });
 
 describe('ProductFormFields - labels and placeholders', () => {
-  it('labels the date field just "Vencimiento", with the format as its placeholder, and "Opcional" in the description', () => {
+  it('labels the date field "Fecha de vencimiento", with the format as its placeholder, and "Opcional" in the description', () => {
     render(<Wrapper />);
-    expect(screen.getByText('Vencimiento')).toBeTruthy();
+    expect(screen.getByText('Fecha de vencimiento')).toBeTruthy();
     expect(screen.queryByText(/DD\/MM\/AAAA/)).toBeNull();
     expect(screen.getByTestId('input-vencimiento').props.placeholder).toBe('DD/MM/AAAA');
     expect(screen.getByTestId('input-descripcion').props.placeholder).toBe('Opcional');
@@ -551,15 +584,6 @@ describe('ProductFormFields - labels and placeholders', () => {
     fireEvent.press(screen.getByTestId('confirm-marca'));
     fireEvent.press(screen.getByTestId('add-ubicacion'));
     expect(screen.getByTestId('input-ubicacion').props.placeholder).toBe('Ej. Heladera, Alacena A, Freezer');
-  });
-
-  it('reserves the same label height in both alert rule fields so the inputs line up, with the title against its input', () => {
-    render(<Wrapper />);
-    const flat = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
-    expect(flat('alert-label-box-stock-minimo').minHeight).toBe(32);
-    expect(flat('alert-label-box-dias').minHeight).toBe(flat('alert-label-box-stock-minimo').minHeight);
-    expect(flat('alert-label-box-stock-minimo').justifyContent).toBe('flex-end');
-    expect(flat('alert-label-box-dias').justifyContent).toBe('flex-end');
   });
 
   it('puts the selected option first and sends it back to its place when deselected', () => {
@@ -586,7 +610,8 @@ describe('ProductFormFields - labels and placeholders', () => {
     ids.forEach(id => fireEvent(screen.getByTestId(id), 'focus'));
     fireEvent(screen.getByPlaceholderText('ej. Leche entera 1L'), 'focus');
     fireEvent(screen.getByPlaceholderText('0'), 'focus');
-    screen.getAllByPlaceholderText('Default').forEach(input => fireEvent(input, 'focus'));
+    fireEvent.press(screen.getByTestId('alerts-toggle'));
+    ['input-stock-minimo', 'input-dias-alerta'].forEach(id => fireEvent(screen.getByTestId(id), 'focus'));
     fireEvent.press(screen.getByTestId('add-categoria'));
     fireEvent(screen.getByTestId('input-categoria'), 'focus');
     expect(onFieldFocus).toHaveBeenCalledTimes(ids.length + 2 + 2 + 1);
@@ -619,9 +644,12 @@ describe('ProductFormFields - labels and placeholders', () => {
     expect(onScanField).toHaveBeenLastCalledWith('barcode');
   });
 
-  it('shows "Default" in the alert rule fields', () => {
+  it('shows "Opcional" in the alert rule fields', () => {
     render(<Wrapper />);
-    expect(screen.getAllByPlaceholderText('Default')).toHaveLength(2);
+    fireEvent.press(screen.getByTestId('alerts-toggle'));
+    expect(screen.getByTestId('input-stock-minimo').props.placeholder).toBe('Opcional');
+    expect(screen.getByTestId('input-dias-alerta').props.placeholder).toBe('Opcional');
+    expect(screen.queryByPlaceholderText('Default')).toBeNull();
   });
 });
 
@@ -673,6 +701,147 @@ describe('ProductFormFields - character limits and counters', () => {
   });
 });
 
+describe('ProductFormFields - alertas personalizadas', () => {
+  it('sits below Ubicación de guardado and above Imagen del producto', () => {
+    render(<Wrapper />);
+    const tree = JSON.stringify(screen.toJSON());
+    const descripcion = tree.indexOf('input-descripcion');
+    const ubicacion = tree.indexOf('Ubicación de guardado');
+    const alertas = tree.indexOf('Reglas de alerta de producto');
+    const imagen = tree.indexOf('Imagen del producto');
+    expect(descripcion).toBeGreaterThan(-1);
+    expect(descripcion).toBeLessThan(ubicacion);
+    expect(ubicacion).toBeLessThan(alertas);
+    expect(alertas).toBeLessThan(imagen);
+  });
+
+  it('is called "Reglas de alerta de producto", written like that and not in capital letters', () => {
+    render(<Wrapper />);
+    expect(screen.getByText('Reglas de alerta de producto')).toBeTruthy();
+    expect(screen.queryByText(/Alertas para este producto/)).toBeNull();
+    expect(StyleSheet.flatten(screen.getByText('Reglas de alerta de producto').props.style).textTransform).toBeUndefined();
+  });
+
+  it('starts closed: the two fields are not shown until it is opened', () => {
+    render(<Wrapper />);
+    expect(screen.queryByTestId('alerts-section')).toBeNull();
+    expect(screen.queryByTestId('input-stock-minimo')).toBeNull();
+    expect(screen.queryByTestId('input-dias-alerta')).toBeNull();
+    expect(screen.getByTestId('alerts-toggle').props.accessibilityState.expanded).toBe(false);
+  });
+
+  it('has a button at the right of the title that opens and closes it', () => {
+    render(<Wrapper />);
+    let header: any = screen.getByTestId('alerts-toggle').parent;
+    while (header && !StyleSheet.flatten(header.props.style)?.flexDirection) header = header.parent;
+    const row = StyleSheet.flatten(header.props.style);
+    expect(row.flexDirection).toBe('row');
+    expect(row.justifyContent).toBe('space-between');
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('Reglas de alerta de producto')).toBeLessThan(tree.indexOf('alerts-toggle'));
+
+    fireEvent.press(screen.getByTestId('alerts-toggle'));
+    expect(screen.getByTestId('alerts-section')).toBeTruthy();
+    expect(screen.getByTestId('alerts-toggle').props.accessibilityState.expanded).toBe(true);
+    fireEvent.press(screen.getByTestId('alerts-toggle'));
+    expect(screen.queryByTestId('alerts-section')).toBeNull();
+  });
+
+  it('shows Stock mínimo and Días de anticipación one above the other', () => {
+    render(<Wrapper />);
+    fireEvent.press(screen.getByTestId('alerts-toggle'));
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('Stock mínimo')).toBeGreaterThan(-1);
+    expect(tree.indexOf('Stock mínimo')).toBeLessThan(tree.indexOf('input-stock-minimo'));
+    expect(tree.indexOf('input-stock-minimo')).toBeLessThan(tree.indexOf('Días de anticipación'));
+    expect(tree.indexOf('Días de anticipación')).toBeLessThan(tree.indexOf('input-dias-alerta'));
+    // en una columna, no en una fila
+    const section = StyleSheet.flatten(screen.getByTestId('alerts-section').props.style) ?? {};
+    expect(section.flexDirection).not.toBe('row');
+  });
+
+  it('keeps what was typed when it is closed and opened again', () => {
+    render(<Wrapper />);
+    fireEvent.press(screen.getByTestId('alerts-toggle'));
+    fireEvent.changeText(screen.getByTestId('input-stock-minimo'), '25');
+    fireEvent.changeText(screen.getByTestId('input-dias-alerta'), '12');
+    fireEvent.press(screen.getByTestId('alerts-toggle'));
+    expect(screen.queryByTestId('input-stock-minimo')).toBeNull();
+    fireEvent.press(screen.getByTestId('alerts-toggle'));
+    expect(screen.getByTestId('input-stock-minimo').props.value).toBe('25');
+    expect(screen.getByTestId('input-dias-alerta').props.value).toBe('12');
+  });
+
+  it('shows the values the product already has once it is opened, even if it starts closed', () => {
+    render(<Wrapper form={{ stock_minimo: 25, dias_alerta_vencimiento: 12 }} />);
+    expect(screen.queryByTestId('alerts-section')).toBeNull();
+    fireEvent.press(screen.getByTestId('alerts-toggle'));
+    expect(screen.getByTestId('input-stock-minimo').props.value).toBe('25');
+    expect(screen.getByTestId('input-dias-alerta').props.value).toBe('12');
+  });
+
+  it('tells if the product uses its own rule or the general one', () => {
+    render(<Wrapper />);
+    fireEvent.press(screen.getByTestId('alerts-toggle'));
+    expect(screen.getAllByText('Usando tu regla general')).toHaveLength(2);
+    fireEvent.changeText(screen.getByTestId('input-stock-minimo'), '5');
+    expect(screen.getAllByText('Usando tu regla general')).toHaveLength(1);
+  });
+});
+
+describe('ProductFormFields - Imagen del producto', () => {
+  it('is called "Imagen del producto"', () => {
+    render(<Wrapper />);
+    expect(screen.getByText('Imagen del producto')).toBeTruthy();
+  });
+
+  it('has the select button with the same format as the "Ingresar producto existente" buttons', () => {
+    render(<Wrapper />);
+    const { Colors } = require('../src/constants/colors');
+    const btn = StyleSheet.flatten(screen.getByTestId('select-image-button').props.style);
+    expect(btn).toMatchObject({
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      borderWidth: 1,
+      borderRadius: 10,
+      padding: 12,
+      backgroundColor: '#fff',
+    });
+    expect(btn.borderColor).toBe(Colors.primary);
+  });
+});
+
+describe('ProductFormFields - alert rule limits', () => {
+  it('does not accept a stock mínimo of more than seven digits (9999999 at most)', () => {
+    render(<Wrapper />);
+    fireEvent.press(screen.getByTestId('alerts-toggle'));
+    expect(screen.getByTestId('input-stock-minimo').props.maxLength).toBe(7);
+    fireEvent.changeText(screen.getByTestId('input-stock-minimo'), '9999999');
+    expect(screen.getByDisplayValue('9999999')).toBeTruthy();
+  });
+
+  it('does not accept días de anticipación of more than three digits (999 at most)', () => {
+    render(<Wrapper />);
+    fireEvent.press(screen.getByTestId('alerts-toggle'));
+    expect(screen.getByTestId('input-dias-alerta').props.maxLength).toBe(3);
+    fireEvent.changeText(screen.getByTestId('input-dias-alerta'), '999');
+    expect(screen.getByDisplayValue('999')).toBeTruthy();
+  });
+
+  it('keeps working with the values below the limit and with the field empty', () => {
+    render(<Wrapper />);
+    fireEvent.press(screen.getByTestId('alerts-toggle'));
+    fireEvent.changeText(screen.getByTestId('input-stock-minimo'), '25');
+    fireEvent.changeText(screen.getByTestId('input-dias-alerta'), '7');
+    expect(screen.getByDisplayValue('25')).toBeTruthy();
+    expect(screen.getByDisplayValue('7')).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId('input-stock-minimo'), '');
+    expect(screen.getByTestId('input-stock-minimo').props.value).toBe('');
+  });
+});
+
 describe('ProductFormFields - stock limit', () => {
   it('does not accept more than six digits (999999 at most)', () => {
     render(<Wrapper />);
@@ -685,10 +854,10 @@ describe('ProductFormFields - stock limit', () => {
 describe('ProductFormFields - código de barras', () => {
   const input = () => screen.getByTestId('input-codigo-barras');
 
-  it('sits right below Vencimiento, titled "Código de barras", listing the accepted lengths inside', () => {
+  it('sits right below Vencimiento, titled "Código de barras", with "Opcional" inside', () => {
     render(<Wrapper />);
     expect(screen.getByText('Código de barras')).toBeTruthy();
-    expect(input().props.placeholder).toBe('Código numérico de 8, 12, 13 o 14 dígitos de largo');
+    expect(input().props.placeholder).toBe('Opcional');
     const tree = JSON.stringify(screen.toJSON());
     expect(tree.indexOf('Vencimiento')).toBeLessThan(tree.indexOf('Código de barras'));
     expect(tree.indexOf('Código de barras')).toBeLessThan(tree.indexOf('input-descripcion'));
@@ -757,6 +926,25 @@ describe('ProductFormFields - image picker sheet', () => {
     const title = StyleSheet.flatten(screen.getAllByText('Seleccionar imagen').pop()!.props.style);
     expect(title.fontFamily).toBe('Roboto_500Medium');
     expect(title.fontSize).toBe(20);
+  });
+
+  it('has the same format as the scan sheets: header with a close button, then two big buttons', async () => {
+    render(<Wrapper />);
+    fireEvent.press(screen.getByText('Seleccionar imagen'));
+    const sheet = within(screen.getByTestId('image-picker-sheet'));
+    expect(StyleSheet.flatten(screen.getByTestId('image-picker-sheet').props.style).maxHeight).toBe('85%');
+    expect(sheet.getByText('Tomar foto')).toBeTruthy();
+    expect(sheet.getByText('Elegir de la galería')).toBeTruthy();
+    expect(sheet.queryByText('Cancelar')).toBeNull();
+    expect(StyleSheet.flatten(sheet.getByTestId('image-picker-camera').props.style).backgroundColor).toBeDefined();
+    fireEvent.press(sheet.getByTestId('image-picker-close'));
+    await waitFor(() => expect(screen.queryByTestId('image-picker-sheet')).toBeNull(), { timeout: 10000 });
+  });
+
+  it('labels the expiry field "Fecha de vencimiento"', () => {
+    render(<Wrapper />);
+    expect(screen.getByText('Fecha de vencimiento')).toBeTruthy();
+    expect(screen.queryByText('Vencimiento')).toBeNull();
   });
 
   it('closes when tapping outside the sheet but not when tapping the sheet', async () => {

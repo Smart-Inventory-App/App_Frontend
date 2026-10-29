@@ -1,6 +1,6 @@
 import * as axiosModule from 'axios';
 import { authService } from '../src/services/authService';
-import { getFirebaseToken } from '../src/services/firebaseService';
+import { getFirebaseToken } from '../src/services/notificationService';
 
 jest.mock('axios', () => {
   const mockPost = jest.fn();
@@ -11,8 +11,14 @@ jest.mock('axios', () => {
   };
 });
 
-jest.mock('../src/services/firebaseService', () => ({
+jest.mock('../src/services/notificationService', () => ({
   getFirebaseToken: jest.fn().mockResolvedValue('fcm-token'),
+}));
+
+// El de firebaseService es solo para la web: en el celular siempre devuelve null
+const mockWebToken = jest.fn().mockResolvedValue(null);
+jest.mock('../src/services/firebaseService', () => ({
+  getFirebaseToken: (...args: unknown[]) => mockWebToken(...args),
 }));
 
 const mockPost = (axiosModule as unknown as { __mockPost: jest.Mock }).__mockPost;
@@ -32,6 +38,13 @@ describe('authService', () => {
       password: 'pw',
       firebase_token: 'fcm-token',
     });
+  });
+
+  it('login sends the token of the phone, not the web-only one that is always null on the phone', async () => {
+    mockPost.mockResolvedValue({ data: { access_token: 'a', token_type: 'bearer' } });
+    await authService.login('a@b.com', 'pw');
+    expect(mockWebToken).not.toHaveBeenCalled();
+    expect(mockPost.mock.calls[0][1].firebase_token).toBe('fcm-token');
   });
 
   it('register posts email and password', async () => {
@@ -68,9 +81,20 @@ describe('authService', () => {
     expect(mockPost).toHaveBeenCalledWith('/auth/check-new-password', { reset_token: 'rt', new_password: 'pw' });
   });
 
-  it('googleLogin exchanges the access token', async () => {
+  it('getEmailStatus says if the email has an account and if that account already has a password', async () => {
+    mockPost.mockResolvedValue({ data: { exists: true, password_set: false } });
+    await expect(authService.getEmailStatus('a@b.com')).resolves.toEqual({ exists: true, password_set: false });
+    expect(mockPost).toHaveBeenCalledWith('/auth/check-email', { email: 'a@b.com' });
+  });
+
+  it('getEmailStatus has no password data for an email without account', async () => {
+    mockPost.mockResolvedValue({ data: { exists: false } });
+    await expect(authService.getEmailStatus('a@b.com')).resolves.toEqual({ exists: false });
+  });
+
+  it('googleLogin exchanges the id token of Google', async () => {
     mockPost.mockResolvedValue({ data: { access_token: 'g', token_type: 'bearer' } });
     await expect(authService.googleLogin('g-token')).resolves.toEqual({ access_token: 'g', token_type: 'bearer' });
-    expect(mockPost).toHaveBeenCalledWith('/auth/google', { access_token: 'g-token' });
+    expect(mockPost).toHaveBeenCalledWith('/auth/google', { id_token: 'g-token' });
   });
 });

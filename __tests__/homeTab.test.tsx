@@ -1,11 +1,13 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { router } from 'expo-router';
+import { takeRequestedAlertFilter } from '@/utils/alertFilterRequest';
 import HomeScreen from '../app/(tabs)/index';
 import { useAuth } from '@/context/AuthContext';
 import { productService } from '@/services/productService';
 import { profileService } from '@/services/profileService';
+import { alertService } from '@/services/alertService';
 import { Product, StockChange } from '@/types/product';
 import { resetWelcome } from '../src/utils/welcomeState';
 import { Colors } from '../src/constants/colors';
@@ -14,7 +16,7 @@ jest.mock('expo-router', () => {
   const ReactActual = require('react');
   return {
     useFocusEffect: (cb: () => void) => ReactActual.useEffect(cb, [cb]),
-    router: { navigate: jest.fn() },
+    router: { navigate: jest.fn(), push: jest.fn() },
   };
 });
 
@@ -23,15 +25,29 @@ jest.mock('@/context/AuthContext', () => ({
 }));
 
 jest.mock('@/services/productService', () => ({
-  productService: { getProducts: jest.fn(), getRecentChanges: jest.fn() },
+  productService: { getProducts: jest.fn(), getRecentChanges: jest.fn(), getTrends: jest.fn() },
 }));
 
 jest.mock('@/services/profileService', () => ({
   profileService: { getProfile: jest.fn() },
 }));
 
+jest.mock('@/services/alertService', () => ({
+  alertService: { getSummaryAlerts: jest.fn() },
+}));
+
 const mockedProducts = productService as jest.Mocked<typeof productService>;
 const mockedProfile = profileService as jest.Mocked<typeof profileService>;
+const mockedAlerts = alertService as jest.Mocked<typeof alertService>;
+
+const trends = () => ({
+  period_days: 14, total_consumido: 0, total_entradas: 0, consumo_por_dia: [{ day: '2026-10-10', quantity: 0 }],
+  top_productos: [],
+});
+
+const summary = (overrides: Record<string, number> = {}) => ({
+  critical: 0, warning: 0, info: 0, total: 0, expiring: 0, low_stock: 0, ...overrides,
+});
 
 const product = (overrides: Partial<Product> = {}): Product => ({
   id: 1,
@@ -57,10 +73,12 @@ const profile = (overrides: Record<string, unknown> = {}) => ({
   sub: 'u1', coverageDaysThreshold: 5, expiryDaysThreshold: 7, alertCheckHour: 8, userType: 'individuo' as const, ...overrides,
 });
 
-const load = async (options: { products?: Product[]; changes?: StockChange[]; profile?: Record<string, unknown> } = {}) => {
+const load = async (options: { products?: Product[]; changes?: StockChange[]; profile?: Record<string, unknown>; summary?: Record<string, number> | null } = {}) => {
   mockedProducts.getProducts.mockResolvedValue(options.products ?? []);
   mockedProducts.getRecentChanges.mockResolvedValue(options.changes ?? []);
   mockedProfile.getProfile.mockResolvedValue(profile(options.profile) as any);
+  if (options.summary === null) mockedAlerts.getSummaryAlerts.mockRejectedValue(new Error('boom'));
+  else mockedAlerts.getSummaryAlerts.mockResolvedValue(summary(options.summary) as any);
   const utils = render(<HomeScreen />);
   await waitFor(() => expect(screen.getByTestId('home-section-recent')).toBeTruthy());
   return utils;
@@ -210,23 +228,51 @@ describe('HomeScreen - cards', () => {
     await load();
     expect(cards.map(at).every(i => i > 0)).toBe(true);
     expect([...cards.map(at)].sort((a, b) => a - b)).toEqual(cards.map(at));
-    ['Productos', 'Productos en stock', 'Por vencer', 'Stock bajo'].forEach(title => expect(screen.getByText(title)).toBeTruthy());
+    ['Productos', 'Productos en stock', 'Vencimientos', 'Stock bajo'].forEach(title => expect(screen.getByText(title)).toBeTruthy());
   });
 
-  it('counts the products, the units in stock, the low stock and the ones about to expire', async () => {
-    const soon = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
-    const past = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
+  it('counts the products and the units in stock, and takes the expiring and low stock ones from the alerts', async () => {
     await load({
       products: [
-        product({ id: 1, nombre: 'Leche', stock: 2, stock_minimo: 5, vencimiento: soon }),
+        product({ id: 1, nombre: 'Leche', stock: 2 }),
         product({ id: 2, nombre: 'Yogur', stock: 10 }),
-        product({ id: 3, nombre: 'Viejo', stock: 8, vencimiento: past }),
+        product({ id: 3, nombre: 'Viejo', stock: 8 }),
       ],
+      summary: { expiring: 2, low_stock: 1 },
     });
     expect(screen.getByTestId('stat-products-value').props.children).toBe('3');
     expect(screen.getByTestId('stat-stock-value').props.children).toBe('20');
-    expect(screen.getByTestId('stat-expiring-value').props.children).toBe('1');
+    expect(screen.getByTestId('stat-expiring-value').props.children).toBe('2');
     expect(screen.getByTestId('stat-low-value').props.children).toBe('1');
+  });
+
+  it('shows the same numbers as the alert center, whatever the products look like', async () => {
+    // productos que "parecen" por vencer o con poco stock, pero que las alertas no marcan: no se cuentan
+    await load({
+      products: [product({ id: 1, stock: 1, stock_minimo: 50, vencimiento: new Date(Date.now() + 86400000).toISOString().slice(0, 10) })],
+      summary: { expiring: 0, low_stock: 0 },
+    });
+    expect(screen.getByTestId('stat-expiring-value').props.children).toBe('0');
+    expect(screen.getByTestId('stat-low-value').props.children).toBe('0');
+  });
+
+  it('asks the alerts for the numbers every time the home is shown', async () => {
+    await load();
+    expect(mockedAlerts.getSummaryAlerts).toHaveBeenCalled();
+  });
+
+  it('writes the numbers with a dot every three digits', async () => {
+    await load({ summary: { expiring: 1234, low_stock: 56789 } });
+    expect(screen.getByTestId('stat-expiring-value').props.children).toBe('1.234');
+    expect(screen.getByTestId('stat-low-value').props.children).toBe('56.789');
+  });
+
+  it('shows a dash instead of a number that could be wrong when the alerts cannot be loaded', async () => {
+    await load({ summary: null });
+    expect(screen.getByTestId('stat-expiring-value').props.children).toBe('–');
+    expect(screen.getByTestId('stat-low-value').props.children).toBe('–');
+    // el resto del inicio sigue funcionando
+    expect(screen.getByTestId('stat-products-value')).toBeTruthy();
   });
 
   it('takes the user to the inventory from "Productos" and from "Productos en stock"', async () => {
@@ -237,18 +283,18 @@ describe('HomeScreen - cards', () => {
     expect(router.navigate).toHaveBeenNthCalledWith(2, '/(tabs)/inventario');
   });
 
-  it('takes the user to the alerts from "Por vencer" and from "Stock bajo"', async () => {
+  it('takes the user to the alerts from "Vencimientos" with that option selected', async () => {
     await load();
     fireEvent.press(screen.getByTestId('stat-expiring'));
-    fireEvent.press(screen.getByTestId('stat-low'));
-    expect(router.navigate).toHaveBeenNthCalledWith(1, '/(tabs)/alertas');
-    expect(router.navigate).toHaveBeenNthCalledWith(2, '/(tabs)/alertas');
+    expect(router.navigate).toHaveBeenCalledWith('/(tabs)/alertas');
+    expect(takeRequestedAlertFilter()).toBe('Vencimiento');
   });
 
-  it('shows the thresholds of the profile in the labels', async () => {
-    await load({ profile: { coverageDaysThreshold: 9, expiryDaysThreshold: 12 } });
-    expect(screen.getByText('Próximos 12 días')).toBeTruthy();
-    expect(screen.getByText('Próximos 9 días')).toBeTruthy();
+  it('takes the user to the alerts from "Stock bajo" with the stock option selected', async () => {
+    await load();
+    fireEvent.press(screen.getByTestId('stat-low'));
+    expect(router.navigate).toHaveBeenCalledWith('/(tabs)/alertas');
+    expect(takeRequestedAlertFilter()).toBe('Stock');
   });
 });
 
@@ -316,7 +362,7 @@ describe('HomeScreen - latest changes and recent products', () => {
   it('shows the general alert rules of the profile in the information window', async () => {
     await load({ products: [product({ id: 2, nombre: 'Yogur' })], profile: { coverageDaysThreshold: 6, expiryDaysThreshold: 11 } });
     fireEvent.press(screen.getByTestId('lot-info-2'));
-    expect(screen.getByTestId('detail-stock-minimo').props.children).toEqual('6 unidades');
+    expect(screen.getByTestId('detail-stock-minimo').props.children).toEqual('6 días');
     expect(screen.getByTestId('detail-dias-alerta').props.children).toEqual('11 días');
   });
 
@@ -475,5 +521,95 @@ describe('HomeScreen - titles and the stock part of the entries', () => {
     await waitFor(() => expect(screen.getByText('Historial de Cambios')).toBeTruthy());
     fireEvent.press(screen.getAllByTestId('change-stock-event-1')[1]);
     expect(screen.getByText('Información del Producto')).toBeTruthy();
+  });
+});
+
+describe('HomeScreen - short labels and compact cards', () => {
+  it('calls the cards "Vencimientos" and "Stock bajo", with "Productos con alertas" and "Stock con alertas" as comments', async () => {
+    await load();
+    expect(screen.getByText('Vencimientos')).toBeTruthy();
+    expect(screen.queryByText('Por vencer')).toBeNull();
+    expect(screen.getByText('Productos con alertas')).toBeTruthy();
+    expect(screen.getByText('Stock con alertas')).toBeTruthy();
+    expect(screen.queryByText(/Próximos|Mínimo/)).toBeNull();
+  });
+
+  it('gives the four comments the same length', async () => {
+    await load();
+    const widths = ['stat-products', 'stat-stock', 'stat-expiring', 'stat-low']
+      .map(id => StyleSheet.flatten(screen.getByTestId(`${id}-label`).props.style).width);
+    expect(new Set(widths).size).toBe(1);
+    expect(widths[0]).toBeGreaterThan(0);
+  });
+
+  it('writes "Stock con alertas" in white letters, on the red of its card', async () => {
+    await load();
+    const label = StyleSheet.flatten(screen.getByTestId('stat-low-label').props.style);
+    expect(label.color).toBe('#fff');
+    expect(label.backgroundColor).toBe('#e5484d');
+  });
+
+  it('paints "Total inventario" with the color of the icon of "Productos", in white letters', async () => {
+    await load();
+    const label = StyleSheet.flatten(screen.getByTestId('stat-products-label').props.style);
+    const icon = StyleSheet.flatten(screen.getByTestId('stat-products-icon').props.style);
+    expect(label.color).toBe('#fff');
+    expect(`${label.backgroundColor}22`).toBe(icon.backgroundColor);
+  });
+
+  it('calls the description of "Productos" "Total inventario"', async () => {
+    await load();
+    expect(screen.getByText('Total inventario')).toBeTruthy();
+    expect(screen.queryByText('En inventario')).toBeNull();
+  });
+
+  it('keeps the four cards less tall, with a smaller main number', async () => {
+    await load({ products: [product()] });
+    const card = StyleSheet.flatten(screen.getByTestId('stat-products').props.style);
+    expect(card.paddingVertical).toBeLessThan(14);
+    expect(StyleSheet.flatten(screen.getByTestId('stat-products-value').props.style).fontSize).toBeLessThan(34);
+  });
+});
+
+describe('HomeScreen - trends button', () => {
+  it('no longer has the "Faltantes" and "Reponer" buttons: they live in the alert center now', async () => {
+    await load();
+    expect(screen.queryByText('Faltantes')).toBeNull();
+    expect(screen.queryByText('Reponer')).toBeNull();
+  });
+
+  it('has a wide "Tendencias" button below the four cards and above the latest changes', async () => {
+    await load();
+    expect(screen.getByText('Tendencias')).toBeTruthy();
+    expect(screen.getByText('Mirá cuánto consumís y reponés')).toBeTruthy();
+    expect(at('stat-low')).toBeLessThan(at('home-trends'));
+    expect(at('home-trends')).toBeLessThan(at('home-section-changes'));
+  });
+
+  it('is a horizontal card with the same shadow, corners and arrow as the cards above it', async () => {
+    const { Ionicons } = require('@expo/vector-icons');
+    await load();
+    const card = StyleSheet.flatten(screen.getByTestId('home-trends').props.style);
+    const stat = StyleSheet.flatten(screen.getByTestId('stat-products').props.style);
+    expect(card.flexDirection).toBe('row');
+    expect(card.flex).toBeUndefined();
+    ['backgroundColor', 'borderRadius', 'elevation', 'shadowColor', 'shadowOpacity', 'shadowRadius', 'marginHorizontal', 'marginVertical'].forEach(key =>
+      expect(card[key]).toEqual(stat[key]));
+    const arrows = within(screen.getByTestId('home-trends')).UNSAFE_getAllByType(Ionicons).filter((icon: any) => icon.props.name === 'chevron-forward');
+    expect(arrows).toHaveLength(1);
+    expect(arrows[0].props.size).toBe(18);
+    expect(arrows[0].props.color).toBe(Colors.placeholder);
+  });
+
+  it('opens the trends window from the bottom, as a window and not as another screen', async () => {
+    mockedProducts.getTrends.mockResolvedValue(trends());
+    await load();
+    expect(screen.queryByTestId('trends-scroll')).toBeNull();
+    fireEvent.press(screen.getByTestId('home-trends'));
+    await waitFor(() => expect(screen.getByTestId('trends-scroll')).toBeTruthy());
+    expect(router.push).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.press(screen.getByTestId('trends-back')); });
+    expect(screen.queryByTestId('trends-scroll')).toBeNull();
   });
 });

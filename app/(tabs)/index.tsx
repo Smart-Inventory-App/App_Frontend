@@ -4,8 +4,10 @@ import { router, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import StatCard from '@/components/StatCard';
+import { AlertTypeFilter, requestAlertFilter } from '@/utils/alertFilterRequest';
 import HomeHeader from '@/components/HomeHeader';
 import ChangesHistoryModal from '@/components/ChangesHistoryModal';
+import TrendsModal from '@/components/TrendsModal';
 import ProductDetailModal, { GeneralAlertRules } from '@/components/ProductDetailModal';
 import ProductLotRow from '@/components/ProductLotRow';
 import RecentChangeRow, { CHANGE_ROW_HEIGHT } from '@/components/RecentChangeRow';
@@ -14,6 +16,7 @@ import { Roboto_500Medium } from '@expo-google-fonts/roboto';
 import { useAuth } from '@/context/AuthContext';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
+import { alertService, AlertSummary } from '@/services/alertService';
 import { profileService } from '@/services/profileService';
 import { Product, StockChange } from '@/types/product';
 import { formatThousands } from '@/utils/numbers';
@@ -36,6 +39,10 @@ export default function HomeScreen() {
   const [welcome, setWelcome] = useState(shouldWelcome());
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [historyVisible, setHistoryVisible] = useState(false);
+  const [trendsVisible, setTrendsVisible] = useState(false);
+  // Los productos vencidos o por vencer y los que están bajo su stock mínimo salen de las alertas: son los mismos números
+  // que el Centro de Alertas
+  const [alertSummary, setAlertSummary] = useState<AlertSummary | null>(null);
 
   // "Bienvenido" al entrar a la app; si el usuario cambia de pantalla y vuelve, "Tu estado"
   useFocusEffect(useCallback(() => {
@@ -50,9 +57,11 @@ export default function HomeScreen() {
       productService.getProducts(),
       profileService.getProfile(),
       productService.getRecentChanges(LAST_CHANGES).catch(() => [] as StockChange[]),
+      alertService.getSummaryAlerts().catch(() => null),
     ])
-      .then(([prods, profile, recentChanges]) => {
+      .then(([prods, profile, recentChanges, summary]) => {
         setProducts(prods);
+        setAlertSummary(summary);
         setChanges(recentChanges);
         setLowStockThreshold(profile.coverageDaysThreshold);
         setExpiryDaysThreshold(profile.expiryDaysThreshold);
@@ -68,20 +77,17 @@ export default function HomeScreen() {
   const today = new Date();
 
   const totalStock = products.reduce((acc, p) => acc + p.stock, 0);
-  const lowStock = products.filter(p => p.stock < (p.stock_minimo ?? coverageDaysThreshold)).length;
-  const expiringSoon = products.filter(p => {
-    if (!p.vencimiento) return false;
-    const d = new Date(p.vencimiento);
-    const days = p.dias_alerta_vencimiento ?? expiryDaysThreshold;
-    const limit = new Date(today.getTime() + days * 24 * 60 * 60 * 1000);
-    return d >= today && d <= limit;
-  }).length;
+  // Sin el resumen de alertas (si no se pudo cargar) se muestra un guion antes que un número que no coincida
+  const alertCount = (count?: number) => (count == null ? '–' : formatThousands(count));
   // El listado llega del más nuevo al más viejo
   const recentProducts = products.slice(0, RECENT_PRODUCTS);
   const generalRules: GeneralAlertRules = { coverageDays: coverageDaysThreshold, expiryDays: expiryDaysThreshold };
 
   const goToInventory = () => router.navigate('/(tabs)/inventario');
-  const goToAlerts = () => router.navigate('/(tabs)/alertas');
+  const goToAlerts = (filter: AlertTypeFilter) => {
+    requestAlertFilter(filter);
+    router.navigate('/(tabs)/alertas');
+  };
 
   return (
     <>
@@ -100,6 +106,7 @@ export default function HomeScreen() {
                 value={formatThousands(products.length)}
                 label={t('home.productsLabel')}
                 labelColor="green"
+                labelSolid
                 onPress={goToInventory}
               />
               <StatCard
@@ -118,36 +125,34 @@ export default function HomeScreen() {
                 testID="stat-expiring"
                 icon="time"
                 title={t('home.expiringSoon')}
-                value={formatThousands(expiringSoon)}
-                label={t('home.expiringSoonLabel', { days: expiryDaysThreshold })}
+                value={alertCount(alertSummary?.expiring)}
+                label={t('home.expiringSoonLabel')}
                 labelColor="yellow"
-                onPress={goToAlerts}
+                onPress={() => goToAlerts('Vencimiento')}
               />
               <StatCard
                 testID="stat-low"
                 icon="trending-down"
                 title={t('home.lowStock')}
-                value={formatThousands(lowStock)}
-                label={t('home.lowStockLabel', { days: coverageDaysThreshold })}
+                value={alertCount(alertSummary?.low_stock)}
+                label={t('home.lowStockLabel')}
                 labelColor="red"
-                onPress={goToAlerts}
+                labelSolid
+                onPress={() => goToAlerts('Stock')}
               />
             </View>
 
-            <View style={styles.actionsRow}>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/faltantes')}>
-                <Ionicons name="cart-outline" size={20} color={Colors.primary} />
-                <Text style={styles.actionText}>{t('home.actionFaltantes')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/reposicion')}>
-                <Ionicons name="trending-up-outline" size={20} color={Colors.primary} />
-                <Text style={styles.actionText}>{t('home.actionReposicion')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/tendencias')}>
-                <Ionicons name="stats-chart-outline" size={20} color={Colors.primary} />
-                <Text style={styles.actionText}>{t('home.actionTendencias')}</Text>
-              </TouchableOpacity>
-            </View>
+            {/* Tendencias de consumo: un botón ancho debajo de los cuatro principales, con el mismo formato que ellos */}
+            <TouchableOpacity testID="home-trends" style={styles.trendsCard} activeOpacity={0.8} onPress={() => setTrendsVisible(true)}>
+              <View style={styles.trendsIcon}>
+                <Ionicons name="stats-chart" size={22} color={Colors.primary} />
+              </View>
+              <View style={styles.trendsText}>
+                <Text style={styles.trendsTitle}>{t('home.actionTendencias')}</Text>
+                <Text style={styles.trendsSubtitle}>{t('home.trendsSubtitle')}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.placeholder} />
+            </TouchableOpacity>
 
             <View style={styles.sectionRow}>
               <Text testID="home-section-changes" style={styles.section}>{t('home.lastChanges')}</Text>
@@ -182,6 +187,7 @@ export default function HomeScreen() {
 
       {/* Información del producto, sin el botón "Stock total": eso es solo de Inventario */}
       <ProductDetailModal product={detailProduct} generalRules={generalRules} onClose={() => setDetailProduct(null)} />
+      <TrendsModal visible={trendsVisible} onClose={() => setTrendsVisible(false)} />
       <ChangesHistoryModal visible={historyVisible} generalRules={generalRules} onClose={() => setHistoryVisible(false)} />
     </>
   );
@@ -191,16 +197,26 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f2f3f6' },
   content: { padding: 12, paddingTop: 16, paddingBottom: 32 },
   statsRow: { flexDirection: 'row' },
-  actionsRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  actionBtn: {
-    flex: 1,
+  trendsCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 14,
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 18,
     paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginVertical: 6,
+    marginHorizontal: 6,
+    elevation: 3,
+    shadowColor: '#1B3A8F',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
   },
-  actionText: { fontSize: 11, color: Colors.textPrimary, fontFamily: 'Figtree_400Regular', textAlign: 'center' },
+  trendsIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#2CC4B422', alignItems: 'center', justifyContent: 'center' },
+  trendsText: { flex: 1 },
+  trendsTitle: { fontSize: 16, color: Colors.textPrimary, fontFamily: 'Roboto_500Medium' },
+  trendsSubtitle: { fontSize: 12, color: Colors.textSecondary, fontFamily: 'Figtree_400Regular', marginTop: 2 },
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',

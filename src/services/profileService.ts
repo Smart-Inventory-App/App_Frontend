@@ -1,6 +1,6 @@
 import api from './api';
 import authApi from './authApi';
-import { getFirebaseToken } from './firebaseService';
+import { getFirebaseToken } from './notificationService';
 
 export type UserType = 'individuo' | 'comercio';
 
@@ -39,6 +39,12 @@ export const profileService = {
       api.get<ProfileFields>('/profile/'),
     ]);
     return { sub: me.id, email: me.email, ...profile };
+  },
+
+  // Si el nombre de usuario se puede usar (un nombre que ya es el de esta cuenta cuenta como disponible)
+  async isUsernameAvailable(username: string): Promise<boolean> {
+    const { data } = await api.get<{ available: boolean }>('/profile/username-available', { params: { username } });
+    return data.available;
   },
 
   async updateProfile(

@@ -1,11 +1,19 @@
 import { Alert } from '@/services/alertService';
 import React from 'react';
-import { FlatList, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import ProductImage from '@/components/ProductImage';
-import { getAlertType, getExpiryDate as getExpiracyDate } from '@/utils/alertInfo';
+import { alertTone, getAlertDescription, getAlertType, isPredictive } from '@/utils/alertInfo';
 
-// Alto de cada entrada: entran el título en dos renglones y el detalle, también de hasta dos
-export const ALERT_ROW_HEIGHT = 104;
+// Alto de cada entrada: el producto, qué le pasa y la descripción, que siempre ocupa dos renglones
+export const ALERT_ROW_HEIGHT = 116;
+
+// El color de la marca «Predicción» de las alertas que calcula el modelo predictivo
+export const PREDICTIVE_COLOR = '#7c5cff';
+
+// Lo que se reserva a la derecha del nombre en las alertas con marca, para que el nombre nunca quede debajo de ella
+const BADGE_SPACE = 88;
+const DESCRIPTION_LINE_HEIGHT = 17;
 
 interface Props {
     alertsData: Alert[];
@@ -13,53 +21,49 @@ interface Props {
     onPressAlert?: (alert: Alert) => void;
 }
 
+// La lista va dentro de la pantalla, que ya se desliza: no es una FlatList (una lista virtualizada dentro de un
+// ScrollView del mismo sentido rompe su carga por partes y React Native avisa con un error)
 export default function DynamicAlert({ alertsData, onPressAlert }: Props) {
-    console.log('DynamicAlert received alertsData:', alertsData);
     return (
-        <FlatList
-            data={alertsData}
-            keyExtractor={(alert) => alert.id.toString()}
-            renderItem={({ item: alert }) => {
-                const alertDescription = getAlertType(alert);
+        <View>
+            {alertsData.map((alert) => {
+                const predictive = isPredictive(alert);
+                const tone = alertTone(alert);
                 return (
                 <TouchableOpacity
+                    key={alert.id}
                     testID={`alert-item-${alert.id}`}
                     activeOpacity={0.8}
                     onPress={() => onPressAlert?.(alert)}
                     style={
                     alert.level == 'critical' ? styles.criticalContainer :
                     alert.level == 'warning' ? styles.warningContainer :
-                    styles.infoContainer 
+                    styles.infoContainer
                 }>
                     <View testID={`alert-row-${alert.id}`} style={styles.container}>
                         <View>
                             <ProductImage uri={alert.image_url} style={styles.alertImage} />
                         </View>
                         <View testID={`alert-text-${alert.id}`} style={styles.textColumn}>
-                            <View>
-                                <Text style={styles.title} numberOfLines={2}>{alert.product_name} - {alertDescription}</Text>
-                            </View>
-                            {alert.type == 'expiry' && (
-                                <View>
-                                    <Text style={styles.description} numberOfLines={2}>Stock Restante: {alert.product_stock} ud.</Text>
-                                    <Text style={styles.description} numberOfLines={2}>Fecha Límite: {getExpiracyDate(alert.product_expiry)}</Text>
-                                </View>
-                            ) || alert.type == 'stock_low_coverage' && (
-                                <View>
-                                    <Text style={styles.description} numberOfLines={2}>Stock Restante: {alert.product_stock} ud.</Text>
-                                    <Text style={styles.description} numberOfLines={2}>El stock actual alcanza para {alert.days_until_stockout} días</Text>
-                                </View>
-                            ) || alert.type == 'slow_pace' && (
-                                <View>
-                                    <Text style={styles.description} numberOfLines={2}>Stock en conflicto: {alert.units_wasted} ud.</Text>
-                                    <Text style={styles.description} numberOfLines={2}>Al ritmo actual, {alert.units_wasted} unidades se vencerán en {Math.ceil(((new Date(alert.product_expiry!).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))} días</Text>
-                                </View>
-                            )}
+                            <Text style={[styles.title, predictive && { paddingRight: BADGE_SPACE }]} numberOfLines={1}>{alert.product_name}</Text>
+                            <Text testID={`alert-kind-${alert.id}`} style={[styles.kind, { color: tone.text }]} numberOfLines={1}>
+                                {getAlertType(alert)}
+                            </Text>
+                            <Text testID={`alert-description-${alert.id}`} style={styles.description} numberOfLines={2}>
+                                {getAlertDescription(alert)}
+                            </Text>
                         </View>
+                        {/* Siempre en la esquina de arriba a la derecha, no depende del texto de la alerta */}
+                        {predictive && (
+                            <View testID={`alert-predictive-${alert.id}`} style={styles.badge}>
+                                <Ionicons name="sparkles" size={11} color="#fff" />
+                                <Text style={styles.badgeText}>Predicción</Text>
+                            </View>
+                        )}
                     </View>
-                </TouchableOpacity>)
-            }}
-        />
+                </TouchableOpacity>);
+            })}
+        </View>
     );
 }
 
@@ -95,8 +99,27 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
+    kind: { fontSize: 15, fontWeight: '700', marginTop: 1 },
+    // Dos renglones siempre: aunque el texto sea corto, el lugar de los dos queda reservado
     description: {
         color: '#828282',
+        fontSize: 13,
+        lineHeight: DESCRIPTION_LINE_HEIGHT,
+        minHeight: DESCRIPTION_LINE_HEIGHT * 2,
+        marginTop: 2,
     },
+    badge: {
+        position: 'absolute',
+        top: 8,
+        right: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: PREDICTIVE_COLOR,
+        borderRadius: 10,
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+    },
+    badgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
     alertImage: { width: 44, height: 44, borderRadius: 8, marginRight: 12 },
 })

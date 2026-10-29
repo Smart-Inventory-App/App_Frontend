@@ -64,7 +64,7 @@ describe('HistorialModal', () => {
     mockedProducts.getConsumptionHistory.mockResolvedValue([]);
     const onClose = jest.fn();
     render(<HistorialModal product={product} visible onClose={onClose} onChanged={jest.fn()} />);
-    await waitFor(() => expect(screen.getByText('Historial de consumo')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Historial del Producto')).toBeTruthy());
     fireEvent.press(screen.UNSAFE_getAllByType(Ionicons).find((n: any) => n.props.name === 'close'));
     expect(onClose).toHaveBeenCalled();
   });
@@ -337,7 +337,7 @@ describe('HistorialModal - dates, notes and limits', () => {
       event({ id: 44, consumed_at: '2026-10-10T21:00:00+00:00', event_type: 'restocked', reverses_event_id: 43, note: 'Deshecho: revierte el registro #43' }),
     ]);
     render(<HistorialModal product={product} visible onClose={jest.fn()} onChanged={jest.fn()} />);
-    await waitFor(() => expect(screen.getByText('Deshecho: revierte el registro 17:43:23 10/10/2026')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Deshace el registro del 10/10/2026 17:43')).toBeTruthy());
     expect(screen.queryByText(/#43/)).toBeNull();
   });
 

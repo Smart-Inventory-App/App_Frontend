@@ -1,13 +1,15 @@
 import {
   applyMatchToForm,
-  buildSalidaItems,
   draftToProductForm,
   formatWaitSeconds,
-  initReceiptLines,
   isLowConfidence,
   isValidIsoDate,
   validateProductForm,
   applySuggestionToForm,
+  draftToLabelFields,
+  EMPTY_LABEL_FIELDS,
+  labelFieldsToForm,
+  validateLabelFields,
 } from '../src/utils/ocrDraft';
 import { ProductDraft, ProductMatch } from '../src/types/ocr';
 
@@ -164,38 +166,6 @@ describe('formatWaitSeconds', () => {
   });
 });
 
-describe('initReceiptLines', () => {
-  it('preselects the confident match and defaults quantity to the read stock', () => {
-    const items = [baseDraft({ nombre: 'Yogur', stock: 3, coincidencia_id: 5 })];
-    expect(initReceiptLines(items)).toEqual([{ draft: items[0], productId: 5, quantity: 3 }]);
-  });
-
-  it('falls back to quantity 1 and no product when nothing matched', () => {
-    const items = [baseDraft({ nombre: 'Yogur', stock: null })];
-    expect(initReceiptLines(items)).toEqual([{ draft: items[0], productId: null, quantity: 1 }]);
-  });
-
-  it('does not use a non-positive stock as the quantity', () => {
-    const items = [baseDraft({ stock: 0 })];
-    expect(initReceiptLines(items)[0].quantity).toBe(1);
-  });
-});
-
-describe('buildSalidaItems', () => {
-  it('only includes lines with a selected product and a positive quantity', () => {
-    const lines = [
-      { draft: baseDraft(), productId: 1, quantity: 2 },
-      { draft: baseDraft(), productId: null, quantity: 1 },
-      { draft: baseDraft(), productId: 3, quantity: 0 },
-    ];
-    expect(buildSalidaItems(lines)).toEqual([{ product_id: 1, quantity: 2 }]);
-  });
-
-  it('returns an empty array when nothing qualifies', () => {
-    expect(buildSalidaItems([])).toEqual([]);
-  });
-});
-
 describe('validateProductForm - código de barras', () => {
   const base = { nombre: 'Leche', categoria: 'Lacteos', stock: 1 };
 
@@ -206,7 +176,12 @@ describe('validateProductForm - código de barras', () => {
 
   it('rejects an invalid barcode', () => {
     expect(validateProductForm({ ...base, codigo_barras: '123' })).toBe('codigoBarras');
-    expect(validateProductForm({ ...base, codigo_barras: '7791234567899' })).toBe('codigoBarras');
+    expect(validateProductForm({ ...base, codigo_barras: '779123456789012' })).toBe('codigoBarras');
+  });
+
+  it('accepts a barcode of a valid length even if its check digit does not close', () => {
+    expect(validateProductForm({ ...base, codigo_barras: '7791234567899' })).toBeNull();
+    expect(validateProductForm({ ...base, codigo_barras: '2800283327677' })).toBeNull();
   });
 });
 
@@ -255,5 +230,59 @@ describe('applySuggestionToForm', () => {
     expect(result.descripcion).toBeUndefined();
     expect(result.marca).toBeUndefined();
     expect(result.codigo_barras).toBeUndefined();
+  });
+});
+
+describe('draftToLabelFields', () => {
+  it('has every field, empty, when nothing was read', () => {
+    expect(draftToLabelFields(null)).toEqual(EMPTY_LABEL_FIELDS);
+    expect(draftToLabelFields(undefined)).toEqual(EMPTY_LABEL_FIELDS);
+    expect(draftToLabelFields({ confianzas: {}, coincidencias: [] })).toEqual(EMPTY_LABEL_FIELDS);
+  });
+
+  it('turns what was read into text, with the date as DD/MM/AAAA, and leaves the location to be filled in', () => {
+    expect(draftToLabelFields({
+      nombre: 'Leche', marca: 'Ser', categoria: 'Lacteos', vencimiento: '2027-03-01', codigo_barras: '7791234567898',
+      descripcion: 'Entera', stock: 3, confianzas: {}, coincidencias: [],
+    })).toEqual({
+      nombre: 'Leche', marca: 'Ser', categoria: 'Lacteos', ubicacion: '', vencimiento: '01/03/2027',
+      codigo_barras: '7791234567898', descripcion: 'Entera', stock: '3',
+    });
+  });
+});
+
+describe('validateLabelFields', () => {
+  const ok = { ...EMPTY_LABEL_FIELDS, nombre: 'Leche' };
+
+  it('only requires the name', () => {
+    expect(validateLabelFields(EMPTY_LABEL_FIELDS)).toBe('nombre');
+    expect(validateLabelFields({ ...EMPTY_LABEL_FIELDS, nombre: '   ' })).toBe('nombre');
+    expect(validateLabelFields(ok)).toBeNull();
+  });
+
+  it('rejects a date that does not exist and a wrong barcode, when they were filled in', () => {
+    expect(validateLabelFields({ ...ok, vencimiento: '31/02/2027' })).toBe('vencimiento');
+    expect(validateLabelFields({ ...ok, vencimiento: '01/03/2027' })).toBeNull();
+    expect(validateLabelFields({ ...ok, codigo_barras: '123' })).toBe('codigoBarras');
+    expect(validateLabelFields({ ...ok, codigo_barras: '7791234567898' })).toBeNull();
+  });
+});
+
+describe('labelFieldsToForm', () => {
+  it('only carries the name, brand and description (trimmed, when they have a value) and the image', () => {
+    expect(labelFieldsToForm({
+      nombre: ' Leche ', marca: ' La Serenísima ', categoria: 'Lacteos', ubicacion: 'Heladera', vencimiento: '01/03/2027',
+      codigo_barras: '7791234567898', descripcion: 'Entera', stock: '4',
+    }, 'https://img/x.jpg')).toEqual({
+      nombre: 'Leche', marca: 'La Serenísima', descripcion: 'Entera', imagen_url: 'https://img/x.jpg',
+    });
+  });
+
+  it('does not carry the category, expiry date, barcode or stock that were scanned, and leaves out empty values', () => {
+    const form = labelFieldsToForm({
+      ...EMPTY_LABEL_FIELDS, nombre: 'Leche', categoria: 'Lacteos', vencimiento: '01/03/2027', codigo_barras: '7791234567898', stock: '4',
+    });
+    expect(form).toEqual({ nombre: 'Leche' });
+    expect(labelFieldsToForm({ ...EMPTY_LABEL_FIELDS, nombre: 'Leche' })).toEqual({ nombre: 'Leche' });
   });
 });

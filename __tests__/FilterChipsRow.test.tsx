@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import FilterChipsRow from '../src/components/FilterChipsRow';
 
 const OPTIONS = ['Lácteos', 'Limpieza', 'Almacén', 'Bebidas'];
@@ -31,13 +31,36 @@ describe('FilterChipsRow', () => {
     expect(tree.indexOf('filter-search-categoria')).toBeLessThan(tree.indexOf('Todas'));
   });
 
-  it('shows the options in a single line that hides what does not fit, with no scrolling', () => {
+  it('shows the options in a single row that scrolls horizontally, after "Todas"', () => {
     setup();
-    const style = StyleSheet.flatten(screen.getByTestId('filter-chips-categoria').props.style);
-    expect(style.flexWrap).toBe('wrap');
-    expect(style.overflow).toBe('hidden');
-    expect(style.height).toBe(34);
-    expect(screen.UNSAFE_queryAllByType(require('react-native').ScrollView)).toHaveLength(0);
+    const scroll = screen.getByTestId('filter-chips-categoria');
+    expect(scroll.props.horizontal).toBe(true);
+    expect(scroll.props.showsHorizontalScrollIndicator).toBe(false);
+    const content = StyleSheet.flatten(scroll.props.contentContainerStyle);
+    expect(content.flexDirection).toBe('row');
+    expect(content.flexWrap).toBeUndefined();
+    // «Todas» queda fuera de la fila que se desliza, antes de las opciones
+    expect(within(scroll).queryByText('Todas')).toBeNull();
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('Todas')).toBeLessThan(tree.indexOf('Almacén'));
+  });
+
+  it('keeps the options tappable with the keyboard open', () => {
+    setup();
+    expect(screen.getByTestId('filter-chips-categoria').props.keyboardShouldPersistTaps).toBe('handled');
+  });
+
+  it('shows every option, however many there are, since the row scrolls instead of hiding them', () => {
+    const many = Array.from({ length: 30 }, (_, i) => `Opcion ${String(i).padStart(2, '0')}`);
+    setup({ options: many });
+    many.forEach(option => expect(screen.getByText(option)).toBeTruthy());
+  });
+
+  it('orders the options alphabetically, ignoring accents and case', () => {
+    setup();
+    const tree = JSON.stringify(screen.toJSON());
+    const order = OPTIONS.slice().sort((a, b) => tree.indexOf(a) - tree.indexOf(b));
+    expect(order).toEqual(['Almacén', 'Bebidas', 'Lácteos', 'Limpieza']);
   });
 
   it('selects and deselects an option, and "Todas" clears the filter', () => {
@@ -50,13 +73,29 @@ describe('FilterChipsRow', () => {
     expect(onSelect).toHaveBeenLastCalledWith(null);
   });
 
-  it('always shows the selected option first so it is never hidden', () => {
-    setup({ selected: 'Bebidas' });
+  it('moves the selected option to the start, right after "Todas"', () => {
+    setup({ selected: 'Limpieza' });
     const tree = JSON.stringify(screen.toJSON());
-    expect(tree.indexOf('Bebidas')).toBeLessThan(tree.indexOf('Lácteos'));
+    expect(tree.indexOf('Todas')).toBeLessThan(tree.indexOf('Limpieza'));
+    expect(tree.indexOf('Limpieza')).toBeLessThan(tree.indexOf('Almacén'));
+    expect(tree.indexOf('Limpieza')).toBeLessThan(tree.indexOf('Bebidas'));
+    expect(tree.indexOf('Limpieza')).toBeLessThan(tree.indexOf('Lácteos'));
   });
 
-  it('sends the option back to its original place when it is deselected', () => {
+  it('goes back to the start of the row when an option is selected', () => {
+    const { rerender } = render(
+      <FilterChipsRow testKey="categoria" label="Categoría" allLabel="Todas" searchPlaceholder="Buscar categoría" options={OPTIONS} selected={null} onSelect={jest.fn()} />,
+    );
+    const scrollTo = jest.fn();
+    jest.spyOn(require('react-native').ScrollView.prototype, 'scrollTo' as any).mockImplementation(scrollTo);
+    rerender(
+      <FilterChipsRow testKey="categoria" label="Categoría" allLabel="Todas" searchPlaceholder="Buscar categoría" options={OPTIONS} selected="Limpieza" onSelect={jest.fn()} />,
+    );
+    expect(scrollTo).toHaveBeenCalledWith({ x: 0, animated: true });
+    jest.restoreAllMocks();
+  });
+
+  it('sends the option back to its alphabetical place when it is deselected', () => {
     const order = () => {
       const tree = JSON.stringify(screen.toJSON());
       return OPTIONS.slice().sort((a, b) => tree.indexOf(a) - tree.indexOf(b));
@@ -64,11 +103,11 @@ describe('FilterChipsRow', () => {
     const { rerender } = render(
       <FilterChipsRow testKey="categoria" label="Categoría" allLabel="Todas" searchPlaceholder="Buscar categoría" options={OPTIONS} selected="Bebidas" onSelect={jest.fn()} />,
     );
-    expect(order()).toEqual(['Bebidas', 'Lácteos', 'Limpieza', 'Almacén']);
+    expect(order()).toEqual(['Bebidas', 'Almacén', 'Lácteos', 'Limpieza']);
     rerender(
       <FilterChipsRow testKey="categoria" label="Categoría" allLabel="Todas" searchPlaceholder="Buscar categoría" options={OPTIONS} selected={null} onSelect={jest.fn()} />,
     );
-    expect(order()).toEqual(OPTIONS);
+    expect(order()).toEqual(['Almacén', 'Bebidas', 'Lácteos', 'Limpieza']);
   });
 
   it('opens a text field in the same row when the magnifier is pressed, and closes it again', () => {

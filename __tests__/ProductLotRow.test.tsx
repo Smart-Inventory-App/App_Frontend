@@ -73,33 +73,9 @@ describe('ProductLotRow', () => {
     expect(dot()).toBe('#2db7a3');
   });
 
-  it('has no checkbox unless the screen asks for one', () => {
+  it('has no checkbox', () => {
     render(<ProductLotRow product={lot()} onPress={jest.fn()} />);
     expect(screen.queryByTestId('lot-check-4')).toBeNull();
-  });
-
-  it('shows a checked or unchecked checkbox on the right, and reports the toggle', () => {
-    const onToggle = jest.fn();
-    const product = lot();
-    const { rerender } = render(<ProductLotRow product={product} onPress={jest.fn()} selected onToggle={onToggle} />);
-    const iconNames = () => screen.UNSAFE_getAllByType(Ionicons).map((n: any) => n.props.name);
-    expect(iconNames()).toContain('checkbox');
-    expect(iconNames()).not.toContain('square-outline');
-    expect(screen.getByTestId('lot-check-4').props.accessibilityState).toEqual({ checked: true });
-    expect(screen.getByTestId('lot-check-4').props.accessibilityRole).toBe('checkbox');
-    fireEvent.press(screen.getByTestId('lot-check-4'));
-    expect(onToggle).toHaveBeenCalledWith(product);
-    rerender(<ProductLotRow product={product} onPress={jest.fn()} selected={false} onToggle={onToggle} />);
-    expect(iconNames()).toContain('square-outline');
-    expect(iconNames()).not.toContain('checkbox');
-    expect(screen.getByTestId('lot-check-4').props.accessibilityState).toEqual({ checked: false });
-  });
-
-  it('does not open the information when the checkbox is pressed', () => {
-    const onPress = jest.fn();
-    render(<ProductLotRow product={lot()} onPress={onPress} selected onToggle={jest.fn()} />);
-    fireEvent.press(screen.getByTestId('lot-check-4'));
-    expect(onPress).not.toHaveBeenCalled();
   });
 
   it('does not show the load date unless asked to', () => {
@@ -133,20 +109,9 @@ describe('ProductLotRow', () => {
     expect(screen.queryByTestId('lot-loaded-4')).toBeNull();
   });
 
-  it('has the height it is given, so every row of a list is the same size', () => {
-    render(<ProductLotRow product={lot()} onPress={jest.fn()} height={150} />);
-    expect(StyleSheet.flatten(screen.getByTestId('lot-row-4').props.style).height).toBe(150);
-  });
-
-  it('adapts to its content when no height is given', () => {
-    render(<ProductLotRow product={lot()} onPress={jest.fn()} />);
+  it('adapts to its content: it has no fixed height and does not cut the texts', () => {
+    render(<ProductLotRow product={lot({ nombre: 'Nombre muy largo' })} onPress={jest.fn()} />);
     expect(StyleSheet.flatten(screen.getByTestId('lot-row-4').props.style).height).toBeUndefined();
-  });
-
-  it('cuts long texts in one line only when it has a fixed height', () => {
-    const { rerender } = render(<ProductLotRow product={lot({ nombre: 'Nombre muy largo' })} onPress={jest.fn()} height={150} />);
-    expect(screen.getByText('Nombre muy largo').props.numberOfLines).toBe(1);
-    rerender(<ProductLotRow product={lot({ nombre: 'Nombre muy largo' })} onPress={jest.fn()} />);
     expect(screen.getByText('Nombre muy largo').props.numberOfLines).toBeUndefined();
   });
 });

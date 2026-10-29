@@ -88,7 +88,8 @@ export const slideTransition: Transition = {
       get duration() {
         return skipNext ? 0 : TAB_SLIDE_DURATION_MS;
       },
-      easing: Easing.inOut(Easing.ease),
+      // Curva de Material: arranca y frena más suave que la «ease» simple, así el deslizamiento no se siente a tirones
+      easing: Easing.bezier(0.4, 0, 0.2, 1),
     },
   },
   sceneStyleInterpolator: ({ current }) => {

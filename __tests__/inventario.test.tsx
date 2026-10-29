@@ -21,6 +21,7 @@ jest.mock('@/services/productService', () => ({
   productService: {
     getProducts: jest.fn(),
     getFilterOptions: jest.fn(),
+    getStockTotal: jest.fn(),
     deleteProduct: jest.fn(),
     updateProduct: jest.fn(),
     getConsumptionHistory: jest.fn(),
@@ -42,19 +43,6 @@ jest.mock('@/components/ProductFormFields', () => {
         value={form.nombre ?? ''}
         onChangeText={(v: string) => onChange({ ...form, nombre: v })}
       />
-    );
-  };
-});
-
-jest.mock('@/components/StockTotalModal', () => {
-  const { View, Text, TouchableOpacity } = require('react-native');
-  return function MockStockTotalModal({ visible, initial, onClose }: any) {
-    if (!visible) return null;
-    return (
-      <View testID="mock-stock-total">
-        <Text testID="mock-stock-total-initial">{initial ? `${initial.nombre}|${initial.categoria}` : 'none'}</Text>
-        <TouchableOpacity testID="mock-stock-total-close" onPress={onClose}><Text>close</Text></TouchableOpacity>
-      </View>
     );
   };
 });
@@ -93,6 +81,7 @@ const product = (overrides: Partial<Product> = {}): Product => ({
 beforeEach(() => {
   jest.clearAllMocks();
   mockedProducts.getFilterOptions.mockResolvedValue({ categorias: ['Lacteos'], ubicaciones: ['Heladera'], marcas: ['LSA'] });
+  mockedProducts.getStockTotal.mockResolvedValue({ stock_total: 10, products: 1 });
   mockedProfile.getProfile.mockResolvedValue({ coverageDaysThreshold: 7, expiryDaysThreshold: 10 } as any);
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 });
@@ -440,14 +429,15 @@ describe('InventarioScreen - header, sort row and filters', () => {
     render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByText('Leche')).toBeTruthy());
     const list = within(screen.UNSAFE_getByType(FlatList));
-    // dentro de la lista que se desliza: el botón de stock total, la búsqueda, el orden y los filtros
-    expect(list.getByTestId('open-stock-total')).toBeTruthy();
+    // dentro de la lista que se desliza: la búsqueda, el orden y los filtros
+    expect(list.queryByTestId('stock-total-summary')).toBeNull();
     expect(list.getByPlaceholderText('Buscar por nombre o marca...')).toBeTruthy();
     expect(list.getByTestId('sort-row')).toBeTruthy();
     expect(list.getByTestId('filter-search-categoria')).toBeTruthy();
-    // el banner, en cambio, queda afuera
+    // el banner y el resumen de stock total, en cambio, quedan afuera y fijos
     expect(list.queryByTestId('screen-header')).toBeNull();
     expect(screen.getByTestId('screen-header')).toBeTruthy();
+    expect(screen.getByTestId('stock-total-summary')).toBeTruthy();
   });
 
   it('leaves a margin below the location filter so the entries do not look stuck to it', async () => {
@@ -477,24 +467,37 @@ describe('InventarioScreen - header, sort row and filters', () => {
     expect(screen.getByTestId('sort-row')).toBeTruthy();
     await waitFor(() => expect(screen.getByText('No tenés productos cargados')).toBeTruthy());
     expect(screen.getByTestId('sort-row')).toBeTruthy();
-    expect(screen.getByTestId('open-stock-total')).toBeTruthy();
+    expect(screen.getByTestId('stock-total-summary')).toBeTruthy();
   });
 
-  it('has no horizontal swipe in the category and location filters: a search button comes first instead', async () => {
+  it('has the category and location options in a row that scrolls horizontally, after "Todas" and sorted alphabetically', async () => {
     mockedProducts.getFilterOptions.mockResolvedValue({
-      categorias: Array.from({ length: 20 }, (_, i) => `Categoria ${i}`),
-      ubicaciones: Array.from({ length: 20 }, (_, i) => `Ubicacion ${i}`),
+      categorias: ['Limpieza', 'Almacén', 'Bebidas'],
+      ubicaciones: ['Heladera', 'Alacena'],
       marcas: [],
     });
     mockedProducts.getProducts.mockResolvedValue([product()]);
     render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByTestId('filter-search-categoria')).toBeTruthy());
-    expect(screen.getByTestId('filter-search-ubicacion')).toBeTruthy();
-    expect(screen.queryByTestId('filter-categorias')).toBeNull();
-    expect(screen.queryByTestId('filter-ubicaciones')).toBeNull();
-    // la lupa va antes de "Todas"
+    expect(screen.getByTestId('filter-chips-categoria').props.horizontal).toBe(true);
+    expect(screen.getByTestId('filter-chips-ubicacion').props.horizontal).toBe(true);
     const tree = treeJson();
+    // la lupa va antes de "Todas", y las opciones salen en orden alfabético
     expect(tree.indexOf('filter-search-categoria')).toBeLessThan(tree.indexOf('Todas'));
+    expect(tree.indexOf('Almacén')).toBeLessThan(tree.indexOf('Bebidas'));
+    expect(tree.indexOf('Bebidas')).toBeLessThan(tree.indexOf('Limpieza'));
+    expect(tree.indexOf('Alacena')).toBeLessThan(tree.indexOf('Heladera'));
+  });
+
+  it('puts the chosen category first, right after "Todas"', async () => {
+    mockedProducts.getFilterOptions.mockResolvedValue({ categorias: ['Limpieza', 'Almacén', 'Bebidas'], ubicaciones: [], marcas: [] });
+    mockedProducts.getProducts.mockResolvedValue([product()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByTestId('filter-chip-categoria-Limpieza')).toBeTruthy());
+    await act(async () => { fireEvent.press(screen.getByTestId('filter-chip-categoria-Limpieza')); });
+    const tree = treeJson();
+    expect(tree.indexOf('filter-all-categoria')).toBeLessThan(tree.indexOf('filter-chip-categoria-Limpieza'));
+    expect(tree.indexOf('filter-chip-categoria-Limpieza')).toBeLessThan(tree.indexOf('filter-chip-categoria-Almac'));
   });
 
   it('filters by a category found with the search button', async () => {
@@ -559,7 +562,7 @@ describe('InventarioScreen - product details', () => {
     await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
     await waitFor(() => expect(mockedProfile.getProfile).toHaveBeenCalled());
     fireEvent.press(screen.getByTestId('product-info-5'));
-    await waitFor(() => expect(screen.getByTestId('detail-stock-minimo').props.children).toEqual('7 unidades'));
+    await waitFor(() => expect(screen.getByTestId('detail-stock-minimo').props.children).toEqual('7 días'));
     expect(screen.getByTestId('detail-dias-alerta').props.children).toEqual('10 días');
     expect(screen.getByTestId('detail-dias-alerta-note').props.children).toEqual('Usando tu regla general');
   });
@@ -604,54 +607,151 @@ describe('InventarioScreen - product details', () => {
 
 describe('InventarioScreen - stock total', () => {
   const full = () => product({ id: 5, nombre: 'Yogur', marca: 'Ser', categoria: 'Lacteos', stock: 8 });
+  const value = () => screen.getByTestId('stock-total-value').props.children;
+  const among = () => screen.getByTestId('stock-total-products').props.children;
 
-  it('shows the "Stock total de producto" button above the search field', async () => {
+  it('shows STOCK TOTAL, with the units and how many products in the inventory they are among', async () => {
     mockedProducts.getProducts.mockResolvedValue([full()]);
+    mockedProducts.getStockTotal.mockResolvedValue({ stock_total: 120, products: 7 });
     render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
-    expect(screen.getByText('Stock total de producto')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('stock-total-summary')).toBeTruthy());
+    expect(screen.getByText('Stock total')).toBeTruthy();
+    expect(value()).toBe('120 unidades');
+    expect(among()).toBe('entre 7 productos en el inventario');
+    expect(StyleSheet.flatten(screen.getByText('Stock total').props.style).textTransform).toBe('uppercase');
+  });
+
+  it('writes both numbers with a dot every three digits', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    mockedProducts.getStockTotal.mockResolvedValue({ stock_total: 4564322, products: 35267 });
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByTestId('stock-total-summary')).toBeTruthy());
+    expect(value()).toBe('4.564.322 unidades');
+    expect(among()).toBe('entre 35.267 productos en el inventario');
+  });
+
+  it('keeps a number of four digits with its dot, and a number under a thousand without it', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    mockedProducts.getStockTotal.mockResolvedValue({ stock_total: 1345, products: 999 });
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByTestId('stock-total-summary')).toBeTruthy());
+    expect(value()).toBe('1.345 unidades');
+    expect(among()).toBe('entre 999 productos en el inventario');
+  });
+
+  it('uses the singular for one unit and one product', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    mockedProducts.getStockTotal.mockResolvedValue({ stock_total: 1, products: 1 });
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByTestId('stock-total-summary')).toBeTruthy());
+    expect(value()).toBe('1 unidad');
+    expect(among()).toBe('entre 1 producto en el inventario');
+  });
+
+  it('keeps the summary fixed below the banner, outside of the list that scrolls', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByTestId('stock-total-summary')).toBeTruthy());
+    const list = within(screen.UNSAFE_getByType(FlatList));
+    expect(list.queryByTestId('stock-total-summary')).toBeNull();
     const tree = treeJson();
-    expect(tree.indexOf('open-stock-total')).toBeLessThan(tree.indexOf('Buscar por nombre o marca...'));
+    expect(tree.indexOf('screen-header')).toBeLessThan(tree.indexOf('stock-total-summary'));
+    expect(tree.indexOf('stock-total-summary')).toBeLessThan(tree.indexOf('Buscar por nombre o marca...'));
   });
 
-  it('opens the total stock window from the button, with no product chosen, and closes it', async () => {
+  it('keeps showing the summary while the list is scrolled', async () => {
+    mockedProducts.getProducts.mockResolvedValue(manyProducts(1, 20));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Producto 1')).toBeTruthy());
+    const flat = screen.UNSAFE_getByType(FlatList);
+    fireEvent.scroll(flat, { nativeEvent: { contentOffset: { y: 1500 }, contentSize: { height: 5000, width: 300 }, layoutMeasurement: { height: 600, width: 300 } } });
+    expect(screen.getByTestId('stock-total-summary')).toBeTruthy();
+  });
+
+  it('has no button to open a separate "Stock total de producto" window anymore', async () => {
     mockedProducts.getProducts.mockResolvedValue([full()]);
     render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
-    expect(screen.queryByTestId('mock-stock-total')).toBeNull();
-    fireEvent.press(screen.getByTestId('open-stock-total'));
-    expect(screen.getByTestId('mock-stock-total-initial').props.children).toBe('none');
-    fireEvent.press(screen.getByTestId('mock-stock-total-close'));
-    expect(screen.queryByTestId('mock-stock-total')).toBeNull();
+    expect(screen.queryByTestId('open-stock-total')).toBeNull();
+    expect(screen.queryByText('Stock total de producto')).toBeNull();
   });
 
-  it('offers the "Stock total" button in the product information window', async () => {
-    mockedProducts.getProducts.mockResolvedValue([full()]);
-    render(<InventarioScreen />);
-    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('product-info-5'));
-    expect(screen.getByTestId('detail-total-button')).toBeTruthy();
-  });
-
-  it('goes from the information window to the total stock of that product, closing the information', async () => {
-    mockedProducts.getProducts.mockResolvedValue([full()]);
-    render(<InventarioScreen />);
-    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('product-info-5'));
-    fireEvent.press(screen.getByTestId('detail-total-button'));
-    expect(screen.queryByTestId('product-detail-card')).toBeNull();
-    expect(screen.getByTestId('mock-stock-total-initial').props.children).toBe('Yogur|Lacteos');
-  });
-
-  it('starts from scratch when opened again from the button after coming from a product', async () => {
+  it('has no "Stock total" button in the product information window', async () => {
     mockedProducts.getProducts.mockResolvedValue([full()]);
     render(<InventarioScreen />);
     await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
     fireEvent.press(screen.getByTestId('product-info-5'));
-    fireEvent.press(screen.getByTestId('detail-total-button'));
-    fireEvent.press(screen.getByTestId('mock-stock-total-close'));
-    fireEvent.press(screen.getByTestId('open-stock-total'));
-    expect(screen.getByTestId('mock-stock-total-initial').props.children).toBe('none');
+    expect(screen.getByTestId('product-detail-card')).toBeTruthy();
+    expect(screen.queryByTestId('detail-total-button')).toBeNull();
+  });
+
+  it('asks for the total with the same search and filters as the list', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    mockedProducts.getFilterOptions.mockResolvedValue({ categorias: ['Lacteos', 'Limpieza'], ubicaciones: [], marcas: [] });
+    render(<InventarioScreen />);
+    await waitFor(() => expect(mockedProducts.getStockTotal).toHaveBeenCalledWith({ search: undefined, categoria: undefined, ubicacion: undefined }));
+    await waitFor(() => expect(screen.getByText('Limpieza')).toBeTruthy());
+    mockedProducts.getStockTotal.mockClear();
+    fireEvent.press(screen.getByText('Limpieza'));
+    await waitFor(() => expect(mockedProducts.getStockTotal).toHaveBeenCalledWith({ search: undefined, categoria: 'Limpieza', ubicacion: undefined }));
+  });
+
+  it('updates the count when the list is searched again', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    mockedProducts.getStockTotal.mockResolvedValue({ stock_total: 50, products: 5 });
+    render(<InventarioScreen />);
+    await waitFor(() => expect(among()).toBe('entre 5 productos en el inventario'));
+    mockedProducts.getStockTotal.mockResolvedValue({ stock_total: 8, products: 1 });
+    fireEvent.changeText(screen.getByPlaceholderText('Buscar por nombre o marca...'), 'yog');
+    await waitFor(() => expect(among()).toBe('entre 1 producto en el inventario'));
+    expect(value()).toBe('8 unidades');
+    expect(mockedProducts.getStockTotal).toHaveBeenLastCalledWith({ search: 'yog', categoria: undefined, ubicacion: undefined });
+  });
+
+  it('updates the count when a product is deleted', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    mockedProducts.getStockTotal.mockResolvedValue({ stock_total: 50, products: 5 });
+    mockedProducts.deleteProduct.mockResolvedValue(undefined as any);
+    render(<InventarioScreen />);
+    await waitFor(() => expect(among()).toBe('entre 5 productos en el inventario'));
+    mockedProducts.getStockTotal.mockResolvedValue({ stock_total: 42, products: 4 });
+    fireEvent.press(screen.UNSAFE_getAllByType(Ionicons).find((n: any) => n.props.name === 'trash'));
+    await act(async () => { fireEvent.press(screen.getByText('Eliminar')); });
+    await waitFor(() => expect(among()).toBe('entre 4 productos en el inventario'));
+    expect(value()).toBe('42 unidades');
+  });
+
+  it('keeps the last count when the total cannot be loaded', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    mockedProducts.getStockTotal.mockResolvedValueOnce({ stock_total: 50, products: 5 });
+    render(<InventarioScreen />);
+    await waitFor(() => expect(among()).toBe('entre 5 productos en el inventario'));
+    mockedProducts.getStockTotal.mockRejectedValue(new Error('boom'));
+    fireEvent.changeText(screen.getByPlaceholderText('Buscar por nombre o marca...'), 'yog');
+    await waitFor(() => expect(mockedProducts.getStockTotal).toHaveBeenCalledTimes(2));
+    expect(among()).toBe('entre 5 productos en el inventario');
+  });
+
+  it('shows nothing until the first total arrives', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    mockedProducts.getStockTotal.mockReturnValue(new Promise(() => {}));
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    expect(screen.queryByTestId('stock-total-summary')).toBeNull();
+  });
+
+  it('ignores the answer of an old request if the filters changed meanwhile', async () => {
+    mockedProducts.getProducts.mockResolvedValue([full()]);
+    let resolveOld: (total: { stock_total: number; products: number }) => void = () => {};
+    mockedProducts.getStockTotal.mockReturnValueOnce(new Promise(resolve => { resolveOld = resolve; }));
+    mockedProducts.getStockTotal.mockResolvedValue({ stock_total: 8, products: 1 });
+    render(<InventarioScreen />);
+    await waitFor(() => expect(screen.getByText('Yogur')).toBeTruthy());
+    fireEvent.changeText(screen.getByPlaceholderText('Buscar por nombre o marca...'), 'yog');
+    await waitFor(() => expect(among()).toBe('entre 1 producto en el inventario'));
+    await act(async () => { resolveOld({ stock_total: 999, products: 99 }); });
+    expect(among()).toBe('entre 1 producto en el inventario');
   });
 });
 

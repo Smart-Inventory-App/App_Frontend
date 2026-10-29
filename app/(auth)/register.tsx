@@ -1,9 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  Image,
-  KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,7 +8,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppTextInput from '@/components/AppTextInput';
+import PasswordInput from '../../src/components/PasswordInput';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
+import KeyboardAvoidingView from '@/components/KeyboardAvoidingView';
+import AuthLogo from '../../src/components/AuthLogo';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
@@ -20,7 +20,8 @@ import { getAuthError } from '../../src/utils/authError';
 import { setFlashMessage } from '../../src/utils/flashMessage';
 
 type RuleState = 'valid' | 'invalid' | 'pending';
-type EmailStatus = 'idle' | 'checking' | 'available' | 'taken';
+// «google»: el mail ya tiene una cuenta creada con Google, que todavía no definió una contraseña
+type EmailStatus = 'idle' | 'checking' | 'available' | 'taken' | 'google';
 
 const EMAIL_FORMAT = /^\S+@\S+\.\S+$/;
 
@@ -53,10 +54,11 @@ export default function RegisterScreen() {
     { key: 'lowercase', test: (pw: string) => /[a-z]/.test(pw) },
     { key: 'numberOrSpecial', test: (pw: string) => /[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pw) },
   ];
-  const emailTaken = emailStatus === 'taken';
+  const googleAccount = emailStatus === 'google';
+  const emailTaken = emailStatus === 'taken' || googleAccount;
   const passwordsMatch = password.length > 0 && password === repeat;
   const emailRuleState: RuleState =
-    emailStatus === 'available' ? 'valid' : emailStatus === 'taken' ? 'invalid' : 'pending';
+    emailStatus === 'available' ? 'valid' : emailTaken ? 'invalid' : 'pending';
   const passwordRuleState = (ok: boolean): RuleState =>
     password.length === 0 ? 'pending' : ok ? 'valid' : 'invalid';
   const matchRuleState: RuleState =
@@ -68,8 +70,10 @@ export default function RegisterScreen() {
     setEmailStatus('checking');
     const timer = setTimeout(async () => {
       try {
-        const exists = await authService.checkEmail(email.trim());
-        if (!cancelled) setEmailStatus(exists ? 'taken' : 'available');
+        const status = await authService.getEmailStatus(email.trim());
+        if (cancelled) return;
+        if (!status.exists) setEmailStatus('available');
+        else setEmailStatus(status.password_set === false ? 'google' : 'taken');
       } catch {
         if (!cancelled) setEmailStatus('idle');
       }
@@ -110,16 +114,15 @@ export default function RegisterScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.flex, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <KeyboardAwareScrollView contentContainerStyle={styles.container}>
-        <Image source={require('../../assets/icon.png')} style={styles.logo} />
-        <Text style={styles.titleSmart}>Smart</Text>
-        <Text style={styles.titleInventory}>Inventory</Text>
+        <AuthLogo />
 
         <View style={styles.fieldWrapper}>
           <Text style={styles.label}>{t('register.emailLabel')}</Text>
-          {emailTaken && <Text style={styles.takenBadge}>{t('register.emailTaken')}</Text>}
+          {emailStatus === 'taken' && (
+            <Text style={styles.takenBadge}>{t('register.emailTaken')}</Text>
+          )}
         </View>
         <AppTextInput
           style={[styles.input, emailTaken && styles.inputError]}
@@ -132,27 +135,31 @@ export default function RegisterScreen() {
           autoCorrect={false}
         />
         <View style={styles.emailRule}>
-          <RuleRow state={emailRuleState} label={t('register.rules.emailAvailable')} />
+          <RuleRow
+            state={emailRuleState}
+            label={googleAccount ? t('register.emailGoogle') : t('register.rules.emailAvailable')}
+          />
         </View>
+        {googleAccount && (
+          <Text testID="register-google-hint" style={styles.googleHint}>{t('register.googleAccountHint')}</Text>
+        )}
 
         <Text style={styles.label}>{t('register.passwordLabel')}</Text>
-        <AppTextInput
+        <PasswordInput
           style={styles.input}
           placeholder="••••••••"
           placeholderTextColor={Colors.placeholder}
           value={password}
           onChangeText={setPassword}
-          secureTextEntry
         />
 
         <Text style={styles.label}>{t('register.repeatPasswordLabel')}</Text>
-        <AppTextInput
+        <PasswordInput
           style={styles.input}
           placeholder="••••••••"
           placeholderTextColor={Colors.placeholder}
           value={repeat}
           onChangeText={setRepeat}
-          secureTextEntry
         />
 
         <View style={styles.rulesContainer}>
@@ -186,12 +193,10 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.background },
-  container: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 32, paddingTop: 60, paddingBottom: 40 },
-  logo: { width: 100, height: 100, borderRadius: 20, marginBottom: 12 },
-  titleSmart: { fontSize: 32, fontWeight: '800', color: Colors.primary, lineHeight: 36 },
-  titleInventory: { fontSize: 32, fontWeight: '800', color: Colors.primaryDark, marginBottom: 28 },
+  container: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 32, paddingTop: 0, paddingBottom: 24 },
   fieldWrapper: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 4 },
   label: { fontSize: 13, color: Colors.textPrimary, fontWeight: '500', marginBottom: 4, alignSelf: 'flex-start' },
+  googleHint: { width: '100%', fontSize: 12, color: Colors.textSecondary, lineHeight: 17, marginBottom: 12 },
   takenBadge: { fontSize: 12, color: Colors.error, fontWeight: '600' },
   input: {
     width: '100%',

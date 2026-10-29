@@ -17,6 +17,10 @@ describe('getAuthError', () => {
     expect(getAuthError('auth.invalid_credentials', t)).toBe('Email o contraseña incorrectos');
   });
 
+  it('translates the too many attempts error of the recovery code', () => {
+    expect(getAuthError('auth.too_many_attempts', t)).toBe('Demasiados intentos. Pedí un código nuevo');
+  });
+
   it('falls back to generic when the code has no translation', () => {
     expect(getAuthError('this_code_does_not_exist', t)).toBe('Ocurrió un error inesperado');
   });

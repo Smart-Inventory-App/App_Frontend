@@ -13,10 +13,10 @@ interface Props {
 const NAME_MAX = 20;
 
 const LOGO_SIZE = 80;
-// El archivo del logo trae un margen blanco alrededor del cuadrado azul. Se agranda la imagen y se recorta con
-// las mismas esquinas redondeadas del logo, así queda solo el logo, sin recuadro blanco.
-const LOGO_IMAGE_SIZE = Math.round(LOGO_SIZE * 1.15);
-const LOGO_IMAGE_OFFSET = -Math.round((LOGO_IMAGE_SIZE - LOGO_SIZE) / 2);
+// Logo de la app en blanco (símbolo sin fondo ni borde, recortado al borde del dibujo) sobre el banner de color.
+// Se corre a la izquierda; el margen derecho compensa el tamaño del logo para que el saludo quede en su lugar (ahora 2 px más a la izquierda).
+const LOGO_SHIFT_LEFT = 8;
+const LOGO_RIGHT_MARGIN = -1;
 
 // Banner del inicio: el logo de la app a la izquierda y el saludo en dos renglones (el nombre, debajo).
 export default function HomeHeader({ greeting, name }: Props) {
@@ -24,9 +24,7 @@ export default function HomeHeader({ greeting, name }: Props) {
 
   return (
     <View testID="home-header" style={[styles.banner, { paddingTop: insets.top + 8 }]}>
-      <View testID="home-logo-frame" style={styles.logoFrame}>
-        <Image testID="home-logo" source={require('../../assets/icon.png')} style={styles.logo} />
-      </View>
+      <Image testID="home-logo" source={require('../../assets/logo-home.png')} style={styles.logo} />
       <View style={styles.greetingBox}>
         <Text testID="home-greeting" style={styles.greeting} numberOfLines={1}>
           {name ? `${greeting},` : greeting}
@@ -53,14 +51,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 28,
     elevation: 4,
   },
-  logoFrame: { width: LOGO_SIZE, height: LOGO_SIZE, borderRadius: 18, overflow: 'hidden' },
-  logo: {
-    position: 'absolute',
-    width: LOGO_IMAGE_SIZE,
-    height: LOGO_IMAGE_SIZE,
-    top: LOGO_IMAGE_OFFSET,
-    left: LOGO_IMAGE_OFFSET,
-  },
+  logo: { width: LOGO_SIZE, height: LOGO_SIZE, marginLeft: -LOGO_SHIFT_LEFT, marginRight: LOGO_RIGHT_MARGIN },
   greetingBox: { flex: 1 },
   // Los dos renglones van pegados: sin espacio de más entre ellos
   greeting: { fontSize: 17, lineHeight: 20, color: '#fff', fontWeight: '600', includeFontPadding: false },

@@ -50,6 +50,12 @@ describe('productService', () => {
     expect(mockedApi.get).toHaveBeenCalledWith('/products/suggest', { params: { q: 'yog' } });
   });
 
+  it('matchProducts compares a scanned text with the name, brand and description of the products', async () => {
+    mockedApi.get.mockResolvedValue({ data: [{ id: 3, nombre: 'Yogur' }] });
+    await expect(productService.matchProducts('yogur ser entero')).resolves.toEqual([{ id: 3, nombre: 'Yogur' }]);
+    expect(mockedApi.get).toHaveBeenCalledWith('/products/match', { params: { q: 'yogur ser entero' } });
+  });
+
   it('getProductsByBarcode lists every product with the code (url-encoded)', async () => {
     mockedApi.get.mockResolvedValue({ data: [{ id: 1 }, { id: 2 }] });
     await expect(productService.getProductsByBarcode('779 123')).resolves.toEqual([{ id: 1 }, { id: 2 }]);
@@ -116,19 +122,16 @@ describe('productService', () => {
     expect(mockedApi.get).toHaveBeenCalledWith('/products/changes', { params: { limit: 10, offset: 20 } });
   });
 
-  it('suggestGroups searches the products grouped by name and category', async () => {
-    mockedApi.get.mockResolvedValue({ data: [{ nombre: 'Leche', stock_total: 12 }] });
-    await expect(productService.suggestGroups('lec')).resolves.toEqual([{ nombre: 'Leche', stock_total: 12 }]);
-    expect(mockedApi.get).toHaveBeenCalledWith('/products/groups', { params: { q: 'lec' } });
+  it('getStockTotal asks for the sum of the stock with the filters of the inventory', async () => {
+    mockedApi.get.mockResolvedValue({ data: { stock_total: 40, products: 4 } });
+    await expect(productService.getStockTotal({ search: 'lec', categoria: 'Lacteos' })).resolves.toEqual({ stock_total: 40, products: 4 });
+    expect(mockedApi.get).toHaveBeenCalledWith('/products/stock-total', { params: { search: 'lec', categoria: 'Lacteos' } });
   });
 
-  it('getProductGroup asks for every product with that name and category, whatever its brand', async () => {
-    mockedApi.get.mockResolvedValue({ data: { stock_total: 12, productos: [] } });
-    await expect(productService.getProductGroup({ nombre: 'Leche', categoria: 'Lacteos' }))
-      .resolves.toEqual({ stock_total: 12, productos: [] });
-    expect(mockedApi.get).toHaveBeenCalledWith('/products/group', {
-      params: { nombre: 'Leche', categoria: 'Lacteos' },
-    });
+  it('getStockTotal works without filters', async () => {
+    mockedApi.get.mockResolvedValue({ data: { stock_total: 0, products: 0 } });
+    await productService.getStockTotal();
+    expect(mockedApi.get).toHaveBeenCalledWith('/products/stock-total', { params: undefined });
   });
 
   it('registerEvent forwards a given note', async () => {

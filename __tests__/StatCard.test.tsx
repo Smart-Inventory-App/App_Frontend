@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import StatCard, { valueFontSize } from '../src/components/StatCard';
+import StatCard, { LABEL_WIDTH, valueFontSize } from '../src/components/StatCard';
 
 describe('StatCard', () => {
   it('renders title, value and label', () => {
@@ -47,6 +47,21 @@ describe('StatCard', () => {
     expect(StyleSheet.flatten(screen.getByTestId('card-icon').props.style).backgroundColor).toBe('#1B3A8F22');
   });
 
+  it('can paint the label with the accent color and white letters', () => {
+    render(<StatCard testID="card" title="P" value="1" label="Total" labelColor="green" accent="#1B3A8F" labelSolid />);
+    expect(StyleSheet.flatten(screen.getByTestId('card-label').props.style)).toMatchObject({ backgroundColor: '#1B3A8F', color: '#fff' });
+  });
+
+  it('gives every label the same width', () => {
+    render(<StatCard testID="card" title="P" value="1" label="Total" labelColor="green" />);
+    expect(StyleSheet.flatten(screen.getByTestId('card-label').props.style).width).toBe(LABEL_WIDTH);
+  });
+
+  it('centers the label under the card', () => {
+    render(<StatCard testID="card" title="P" value="1" label="Total" labelColor="green" />);
+    expect(StyleSheet.flatten(screen.getByTestId('card-label').props.style)).toMatchObject({ alignSelf: 'center', textAlign: 'center' });
+  });
+
   it('uses the color of its label as the accent when none is given', () => {
     render(<StatCard testID="card" title="Stock bajo" value="3" label="x" labelColor="red" icon="trending-down" />);
     expect(StyleSheet.flatten(screen.getByTestId('card-value').props.style).color).toBe('#e5484d');
@@ -58,12 +73,12 @@ describe('StatCard', () => {
   });
 
   it('writes the number smaller the longer it is, so it fits in its square', () => {
-    expect(valueFontSize('7')).toBe(34);
-    expect(valueFontSize('1.255')).toBe(34);
-    expect(valueFontSize('12.345')).toBe(28);
-    expect(valueFontSize('123.456')).toBe(28);
-    expect(valueFontSize('3.141.912')).toBe(23);
-    expect(valueFontSize('1.234.567.890')).toBe(19);
+    expect(valueFontSize('7')).toBe(30);
+    expect(valueFontSize('1.255')).toBe(30);
+    expect(valueFontSize('12.345')).toBe(25);
+    expect(valueFontSize('123.456')).toBe(25);
+    expect(valueFontSize('3.141.912')).toBe(21);
+    expect(valueFontSize('1.234.567.890')).toBe(17);
     const sizes = ['1', '12.345', '3.141.912', '1.234.567.890'].map(valueFontSize);
     expect([...sizes].sort((a, b) => b - a)).toEqual(sizes);
   });
@@ -71,7 +86,7 @@ describe('StatCard', () => {
   it('applies that size and keeps the number in one line that can still shrink', () => {
     render(<StatCard testID="card" title="Productos" value="3.141.912" label="x" labelColor="green" />);
     const value = screen.getByTestId('card-value');
-    expect(StyleSheet.flatten(value.props.style).fontSize).toBe(23);
+    expect(StyleSheet.flatten(value.props.style).fontSize).toBe(21);
     expect(value.props.numberOfLines).toBe(1);
     expect(value.props.adjustsFontSizeToFit).toBe(true);
   });

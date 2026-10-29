@@ -111,3 +111,12 @@ describe('ForgotPasswordScreen - email from the login', () => {
     expect(screen.getByText(/Ingresa la dirección de mail de tu cuenta\.\s*Si el mail indicado corresponde a una cuenta registrada, recibirás un código de recuperación de 6 dígitos\./)).toBeTruthy();
   });
 });
+
+describe('ForgotPasswordScreen - logo', () => {
+  it('shows the horizontal logo of the app instead of the vertical one with text', () => {
+    render(<ForgotPasswordScreen />);
+    expect(screen.getByTestId('auth-logo')).toBeTruthy();
+    expect(screen.queryByText('Smart')).toBeNull();
+    expect(screen.queryByText('Inventory')).toBeNull();
+  });
+});

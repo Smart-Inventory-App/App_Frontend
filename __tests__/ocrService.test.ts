@@ -1,7 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Platform } from 'react-native';
 import api from '../src/services/api';
-import { ocrService, getScanErrorMessage } from '../src/services/ocrService';
+import { ocrService, getScanErrorMessage, isTransientError } from '../src/services/ocrService';
 import { ScanState } from '../src/types/ocr';
 
 jest.mock('../src/services/api', () => ({
@@ -55,6 +55,39 @@ describe('ocrService.pickImage', () => {
     await expect(ocrService.pickImage('camera')).resolves.toBe(asset);
   });
 
+  it('opens the system crop screen by default: every photo the app asks for can be cropped', async () => {
+    (ImagePicker.requestCameraPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+    (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+    (ImagePicker.launchCameraAsync as jest.Mock).mockResolvedValue({ canceled: true });
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({ canceled: true });
+    await ocrService.pickImage('camera');
+    await ocrService.pickImage('gallery');
+    expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: true }));
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: true }));
+  });
+
+  it('does not open the system crop screen when told not to', async () => {
+    (ImagePicker.requestCameraPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+    (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+    (ImagePicker.launchCameraAsync as jest.Mock).mockResolvedValue({ canceled: true });
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({ canceled: true });
+    await ocrService.pickImage('camera', false);
+    await ocrService.pickImage('gallery', false);
+    expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: false }));
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: false }));
+  });
+
+  it('opens the system crop screen before processing when asked to, with the camera and with the gallery', async () => {
+    (ImagePicker.requestCameraPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+    (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+    (ImagePicker.launchCameraAsync as jest.Mock).mockResolvedValue({ canceled: true });
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({ canceled: true });
+    await ocrService.pickImage('camera', true);
+    await ocrService.pickImage('gallery', true);
+    expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: true }));
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: true }));
+  });
+
   it('returns the first asset from the gallery', async () => {
     (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
     const asset = { uri: 'file://b.jpg' };
@@ -85,12 +118,71 @@ describe('ocrService.scan', () => {
   });
 });
 
+describe('isTransientError', () => {
+  it('is true when there was no answer (network error or time out) or the service was briefly down', () => {
+    expect(isTransientError({ isAxiosError: true, message: 'Network Error' })).toBe(true);
+    expect(isTransientError({ code: 'ECONNABORTED' })).toBe(true);
+    expect(isTransientError({ message: 'Network Error' })).toBe(true);
+    expect(isTransientError({ response: { status: 502 } })).toBe(true);
+    expect(isTransientError({ response: { status: 503 } })).toBe(true);
+    expect(isTransientError({ response: { status: 504 } })).toBe(true);
+  });
+
+  it('is false for a rejection of the backend and for errors that are not from the network', () => {
+    expect(isTransientError({ response: { status: 400 } })).toBe(false);
+    expect(isTransientError({ response: { status: 401 } })).toBe(false);
+    expect(isTransientError({ response: { status: 404 } })).toBe(false);
+    expect(isTransientError({ response: { status: 429 } })).toBe(false);
+    expect(isTransientError(new Error('boom'))).toBe(false);
+    expect(isTransientError(null)).toBe(false);
+  });
+});
+
+describe('ocrService.scan - first attempt of a session', () => {
+  beforeEach(() => { jest.useFakeTimers(); });
+  afterEach(() => { jest.useRealTimers(); });
+
+  const asset = { uri: 'file://x.jpg', name: 'x.jpg', type: 'image/jpeg' };
+
+  it('sends the photo again, once, when the first attempt fails for a passing reason, and returns the second result', async () => {
+    const state: ScanState = { status: 'queued', doc_type: 'receipt', job_id: 'job-2' };
+    mockedApi.post.mockRejectedValueOnce({ isAxiosError: true, message: 'Network Error' }).mockResolvedValueOnce({ data: state });
+    const promise = ocrService.scan(asset, 'receipt');
+    await jest.advanceTimersByTimeAsync(1000);
+    await expect(promise).resolves.toEqual(state);
+    expect(mockedApi.post).toHaveBeenCalledTimes(2);
+  });
+
+  it('also retries when the scan service answers that it is not available yet', async () => {
+    const state: ScanState = { status: 'queued', doc_type: 'receipt', job_id: 'job-3' };
+    mockedApi.post.mockRejectedValueOnce({ response: { status: 503 } }).mockResolvedValueOnce({ data: state });
+    const promise = ocrService.scan(asset, 'receipt');
+    await jest.advanceTimersByTimeAsync(1000);
+    await expect(promise).resolves.toEqual(state);
+  });
+
+  it('reports the error when the second attempt fails too', async () => {
+    mockedApi.post.mockRejectedValue({ isAxiosError: true, message: 'Network Error' });
+    const promise = ocrService.scan(asset, 'receipt');
+    const assertion = expect(promise).rejects.toMatchObject({ message: 'Network Error' });
+    await jest.advanceTimersByTimeAsync(1000);
+    await assertion;
+    expect(mockedApi.post).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a rejection of the backend', async () => {
+    mockedApi.post.mockRejectedValue({ response: { status: 422, data: { detail: 'mal' } } });
+    await expect(ocrService.scan(asset, 'receipt')).rejects.toMatchObject({ response: { status: 422 } });
+    expect(mockedApi.post).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('ocrService.getJob', () => {
   it('fetches the job by id', async () => {
     const state: ScanState = { status: 'done', doc_type: 'barcode' };
     mockedApi.get.mockResolvedValue({ data: state });
     await expect(ocrService.getJob('job-1')).resolves.toEqual(state);
-    expect(mockedApi.get).toHaveBeenCalledWith('/products/scan/job-1');
+    expect(mockedApi.get).toHaveBeenCalledWith('/products/scan/job-1', { timeout: 30000 });
   });
 });
 
@@ -138,6 +230,40 @@ describe('ocrService.pollJob', () => {
       ocrService.pollJob('job-1', { wait: noWait, maxAttempts: 2 }),
     ).rejects.toThrow('timeout');
     expect(mockedApi.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps following the job when a check fails for a passing reason', async () => {
+    mockedApi.get
+      .mockRejectedValueOnce({ code: 'ECONNABORTED' })
+      .mockRejectedValueOnce({ response: { status: 503 } })
+      .mockResolvedValueOnce({ data: { status: 'done', doc_type: 'receipt' } });
+    const result = await ocrService.pollJob('job-1', { wait: noWait });
+    expect(result.status).toBe('done');
+    expect(mockedApi.get).toHaveBeenCalledTimes(3);
+  });
+
+  it('gives up after several passing failures in a row', async () => {
+    mockedApi.get.mockRejectedValue({ code: 'ECONNABORTED' });
+    await expect(ocrService.pollJob('job-1', { wait: noWait })).rejects.toMatchObject({ code: 'ECONNABORTED' });
+    expect(mockedApi.get).toHaveBeenCalledTimes(4);
+  });
+
+  it('counts the failures in a row: a good answer in between starts the count again', async () => {
+    mockedApi.get
+      .mockRejectedValueOnce({ code: 'ECONNABORTED' })
+      .mockRejectedValueOnce({ code: 'ECONNABORTED' })
+      .mockResolvedValueOnce({ data: { status: 'queued', doc_type: 'receipt' } })
+      .mockRejectedValueOnce({ code: 'ECONNABORTED' })
+      .mockRejectedValueOnce({ code: 'ECONNABORTED' })
+      .mockResolvedValueOnce({ data: { status: 'done', doc_type: 'receipt' } });
+    const result = await ocrService.pollJob('job-1', { wait: noWait });
+    expect(result.status).toBe('done');
+  });
+
+  it('does not hide an error that is not passing, like a job that does not exist', async () => {
+    mockedApi.get.mockRejectedValue({ response: { status: 404 } });
+    await expect(ocrService.pollJob('job-1', { wait: noWait })).rejects.toMatchObject({ response: { status: 404 } });
+    expect(mockedApi.get).toHaveBeenCalledTimes(1);
   });
 
   it('uses the default real-timer wait function when none is provided', async () => {

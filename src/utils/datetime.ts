@@ -38,10 +38,14 @@ export function formatArgentinaShort(value: string): string {
   return `${date} ${pad(local.getUTCHours())}:${pad(local.getUTCMinutes())}`;
 }
 
-// Las notas automáticas del backend mencionan "registro #43"; se muestran con la fecha y hora de ese registro.
+// Las notas viejas del backend mencionaban "registro #43" y "(antes: ...)"; se muestran como las nuevas: "Corrige el registro
+// del 10/10/2026 17:43" (o "Deshace ..."), con la fecha y hora de ese registro y sin su número.
+const LEGACY_NOTE = /^(Corrección: revierte|Deshecho: revierte|Corrige) el registro #(\d+)(?: \(antes:.*\))?$/;
+
 export function humanizeEventNote(note: string, events: { id: number; consumed_at: string }[]): string {
-  return note.replace(/registro #(\d+)/g, (whole, id) => {
-    const target = events.find(e => e.id === Number(id));
-    return target ? `registro ${formatArgentinaDateTime(target.consumed_at)}` : whole;
-  });
+  const match = LEGACY_NOTE.exec(note);
+  if (!match) return note;
+  const verb = match[1].startsWith('Deshecho') ? 'Deshace' : 'Corrige';
+  const target = events.find(e => e.id === Number(match[2]));
+  return target ? `${verb} el registro del ${formatArgentinaShort(target.consumed_at)}` : `${verb} un registro anterior`;
 }
