@@ -228,6 +228,12 @@ curl http://localhost:8000/health
 
 ---
 
+## Releases
+
+Un push a la rama `production` (por ejemplo, el merge de `main`) corre los chequeos del CI y, si pasan, genera el APK con EAS y lo publica en un Release de GitHub con la versión incrementada automáticamente. El APK se firma con las credenciales por defecto de EAS: si cambian, hay que registrar el nuevo SHA-1 en Google Cloud y en Firebase.
+
+---
+
 ## Backend
 
 Ver [App_backend/README.md](../App_backend/README.md)
