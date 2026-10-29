@@ -1,5 +1,5 @@
 import React from 'react';
-import { Animated, Keyboard, KeyboardAvoidingView, Modal, StyleSheet, Text } from 'react-native';
+import { Animated, Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import BottomSheetModal from '../src/components/BottomSheetModal';
@@ -23,9 +23,105 @@ describe('BottomSheetModal', () => {
     const { UNSAFE_getAllByType, rerender } = render(sheet(false));
     rerender(sheet(true));
     expect(UNSAFE_getAllByType(Modal)[0].props.animationType).toBe('none');
+    // la subida empieza cuando la ventana ya se ve
+    act(() => { UNSAFE_getAllByType(Modal)[0].props.onShow(); });
     // un fundido para el fondo y un deslizamiento aparte para la hoja
     expect(timing.mock.calls.filter(([, config]) => config.toValue === 1)).toHaveLength(2);
     timing.mockRestore();
+  });
+
+  describe('smooth opening', () => {
+    const entering = (timing: jest.SpyInstance) => timing.mock.calls.filter(([, config]) => config.toValue === 1);
+
+    beforeEach(() => { jest.useFakeTimers(); });
+    afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks(); });
+
+    it('does not start sliding up while the window is still opening: it waits until the system says it is shown', () => {
+      const timing = jest.spyOn(Animated, 'timing');
+      const { UNSAFE_getAllByType, rerender } = render(sheet(false));
+      rerender(sheet(true));
+      expect(entering(timing)).toHaveLength(0);
+      act(() => { UNSAFE_getAllByType(Modal)[0].props.onShow(); });
+      expect(entering(timing)).toHaveLength(2);
+    });
+
+    it('starts only once per opening, even if the system reports the window twice', () => {
+      const timing = jest.spyOn(Animated, 'timing');
+      const { UNSAFE_getAllByType, rerender } = render(sheet(false));
+      rerender(sheet(true));
+      act(() => { UNSAFE_getAllByType(Modal)[0].props.onShow(); });
+      act(() => { UNSAFE_getAllByType(Modal)[0].props.onShow(); });
+      act(() => { jest.advanceTimersByTime(1000); });
+      expect(entering(timing)).toHaveLength(2);
+    });
+
+    it('slides up anyway after a short wait if the system never reports the window', () => {
+      const timing = jest.spyOn(Animated, 'timing');
+      const { rerender } = render(sheet(false));
+      rerender(sheet(true));
+      expect(entering(timing)).toHaveLength(0);
+      act(() => { jest.advanceTimersByTime(300); });
+      expect(entering(timing)).toHaveLength(2);
+    });
+
+    it('slides up right away when it is reopened while it was still closing', () => {
+      const timing = jest.spyOn(Animated, 'timing');
+      const { UNSAFE_getAllByType, rerender } = render(sheet(false));
+      rerender(sheet(true));
+      act(() => { UNSAFE_getAllByType(Modal)[0].props.onShow(); });
+      rerender(sheet(false));
+      timing.mockClear();
+      rerender(sheet(true));
+      expect(entering(timing)).toHaveLength(2);
+    });
+
+    it('moves on the native driver with an ease-out curve', () => {
+      const timing = jest.spyOn(Animated, 'timing');
+      const { UNSAFE_getAllByType, rerender } = render(sheet(false));
+      rerender(sheet(true));
+      act(() => { UNSAFE_getAllByType(Modal)[0].props.onShow(); });
+      const configs = entering(timing).map(([, config]) => config);
+      expect(configs.every(config => config.useNativeDriver === true)).toBe(true);
+      expect(configs.every(config => typeof config.easing === 'function')).toBe(true);
+    });
+
+    it('uses hardware acceleration and leaves faster than it arrives', () => {
+      const timing = jest.spyOn(Animated, 'timing');
+      const { UNSAFE_getAllByType, rerender } = render(sheet(false));
+      rerender(sheet(true));
+      expect(UNSAFE_getAllByType(Modal)[0].props.hardwareAccelerated).toBe(true);
+      act(() => { UNSAFE_getAllByType(Modal)[0].props.onShow(); });
+      const enterMs = Math.max(...entering(timing).map(([, config]) => config.duration ?? 0));
+      timing.mockClear();
+      rerender(sheet(false));
+      const exitMs = Math.max(...timing.mock.calls.map(([, config]) => config.duration ?? 0));
+      expect(exitMs).toBeLessThan(enterMs);
+    });
+
+    it('travels only its own height, so the whole duration is spent on the visible movement', () => {
+      const { rerender } = render(sheet(false));
+      rerender(sheet(true));
+      const offset = () => {
+        const { transform } = StyleSheet.flatten(screen.getByTestId('sheet').props.style);
+        return (transform as { translateY: number }[])[0].translateY;
+      };
+      // todavía no subió: antes de medirla está un alto de pantalla más abajo, y una vez medida, exactamente su alto
+      expect(offset()).toBe(Dimensions.get('window').height);
+      act(() => { fireEvent(screen.getByTestId('sheet'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 360, height: 240 } } }); });
+      expect(offset()).toBe(240);
+    });
+
+    it('draws the sheet as a single image on Android while it moves, and goes back to normal afterwards', () => {
+      const original = Platform.OS;
+      (Platform as any).OS = 'android';
+      const { UNSAFE_getAllByType, rerender } = render(sheet(false));
+      rerender(sheet(true));
+      act(() => { UNSAFE_getAllByType(Modal)[0].props.onShow(); });
+      expect(screen.getByTestId('sheet').props.renderToHardwareTextureAndroid).toBe(true);
+      act(() => { jest.advanceTimersByTime(1000); });
+      expect(screen.getByTestId('sheet').props.renderToHardwareTextureAndroid).toBe(false);
+      (Platform as any).OS = original;
+    });
   });
 
   it('lifts the sheet above the keyboard so its fields stay visible', () => {
@@ -55,7 +151,7 @@ describe('BottomSheetModal', () => {
     const { rerender } = render(sheet(true));
     rerender(sheet(false));
     rerender(sheet(true));
-    await act(async () => { await new Promise(r => setTimeout(r, 400)); });
+    await act(async () => { await new Promise(r => setTimeout(r, 700)); });
     expect(screen.getByText('contenido')).toBeTruthy();
   });
 });

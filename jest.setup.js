@@ -5,6 +5,19 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 // Sin SafeAreaProvider en los tests: los márgenes seguros valen 0 (o lo que indique un provider propio del test)
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 
+// Las fuentes se cargan de forma asíncrona y avisan con un setState que ningún test espera: en los tests se dan por
+// cargadas desde el primer render (así no hay actualizaciones de estado fuera de act)
+jest.mock('@expo-google-fonts/figtree', () => ({
+  ...jest.requireActual('@expo-google-fonts/figtree'),
+  useFonts: () => [true, null],
+}));
+
+// Lo mismo con las fuentes de los íconos: se dan por cargadas y no hay un setState tardío en cada <Icon>
+jest.mock('expo-font', () => ({
+  ...jest.requireActual('expo-font'),
+  isLoaded: () => true,
+}));
+
 // Firebase SDK uses ESM and can't run in Jest — mock at the root so all tests are unaffected
 jest.mock('./src/services/firebaseService', () => ({
   getFirebaseToken: jest.fn().mockResolvedValue(null),

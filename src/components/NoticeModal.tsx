@@ -12,7 +12,7 @@ interface Props {
 // Aviso con un solo botón («Continuar»). Tocar afuera o el botón atrás también lo cierra.
 export default function NoticeModal({ visible, message, buttonLabel, onContinue }: Props) {
   return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={onContinue}>
+    <Modal visible={visible} transparent animationType="fade" hardwareAccelerated statusBarTranslucent navigationBarTranslucent onRequestClose={onContinue}>
       <Pressable testID="notice-backdrop" style={styles.overlay} onPress={onContinue}>
         {/* Pressable interno: tocar la tarjeta no debe cerrar el aviso */}
         <Pressable testID="notice-card" style={styles.card} onPress={() => {}}>

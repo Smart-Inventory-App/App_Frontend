@@ -74,3 +74,37 @@ describe('ConfirmModal - color of the confirm button', () => {
     expect(StyleSheet.flatten(screen.getByTestId('confirm-cancel').props.style).backgroundColor).toBe(Colors.white);
   });
 });
+
+describe('ConfirmModal - stacked buttons', () => {
+  const style = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
+  const container = () => {
+    let node: any = screen.getByTestId('confirm-accept').parent;
+    while (node && !StyleSheet.flatten(node.props.style)?.flexDirection) node = node.parent;
+    return StyleSheet.flatten(node.props.style);
+  };
+
+  it('puts the buttons side by side by default', () => {
+    render(<ConfirmModal {...baseProps} visible onConfirm={jest.fn()} onCancel={jest.fn()} />);
+    expect(container().flexDirection).toBe('row');
+    expect(style('confirm-accept').width).toBeUndefined();
+  });
+
+  it('puts one button above the other, confirm first, each with the full width', () => {
+    render(<ConfirmModal {...baseProps} visible stacked onConfirm={jest.fn()} onCancel={jest.fn()} />);
+    expect(container().flexDirection).toBe('column-reverse');
+    expect(style('confirm-accept').width).toBe('100%');
+    expect(style('confirm-cancel').width).toBe('100%');
+    expect(style('confirm-accept').height).toBe(46);
+    expect(style('confirm-accept').flex).toBe(0);
+  });
+
+  it('keeps both buttons working when stacked', () => {
+    const onConfirm = jest.fn();
+    const onCancel = jest.fn();
+    render(<ConfirmModal {...baseProps} visible stacked onConfirm={onConfirm} onCancel={onCancel} />);
+    fireEvent.press(screen.getByTestId('confirm-accept'));
+    fireEvent.press(screen.getByTestId('confirm-cancel'));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+});

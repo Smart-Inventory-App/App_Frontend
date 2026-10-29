@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
@@ -18,11 +18,12 @@ interface Props {
   product: Product | null;
   onClose: () => void;
   generalRules?: GeneralAlertRules | null;
-  /** Si se indica, aparece el botón "Stock total" debajo del nombre (solo cuando se llega desde Inventario). */
-  onShowTotal?: (product: Product) => void;
 }
 
 const NO_VALUE = '—';
+// La ventana ocupa hasta el 85 % del alto de la pantalla; al cuerpo se le descuenta lo que ocupan el título y los márgenes
+const CARD_MAX_HEIGHT_RATIO = 0.85;
+const CARD_CHROME_HEIGHT = 90;
 
 interface RowProps {
   testID: string;
@@ -32,12 +33,14 @@ interface RowProps {
   note?: string;
   /** Destaca el título y el valor con el color de la app. */
   highlight?: boolean;
+  /** Sin la línea gris de abajo: la fila forma una sola sección con la que sigue. */
+  noDivider?: boolean;
 }
 
-function Row({ testID, label, value, note, highlight }: RowProps) {
+function Row({ testID, label, value, note, highlight, noDivider }: RowProps) {
   const empty = value === undefined || value === null || value === '';
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, noDivider && styles.rowNoDivider]}>
       <Text testID={`${testID}-label`} style={[styles.rowLabel, highlight && styles.rowHighlight]}>{label}</Text>
       <Text testID={testID} style={[styles.rowValue, highlight && styles.rowHighlight, empty && styles.rowValueEmpty]}>
         {empty ? NO_VALUE : String(value)}
@@ -48,7 +51,7 @@ function Row({ testID, label, value, note, highlight }: RowProps) {
 }
 
 // Ventana centrada con todos los datos del producto tal como se cargaron. Solo muestra: no se edita nada acá.
-export default function ProductDetailModal({ product, onClose, generalRules, onShowTotal }: Props) {
+export default function ProductDetailModal({ product, onClose, generalRules }: Props) {
   const { t } = useTranslation();
 
   const units = (n: number) => t(n === 1 ? 'detail.unitOne' : 'detail.unitMany', { count: n });
@@ -61,26 +64,34 @@ export default function ProductDetailModal({ product, onClose, generalRules, onS
     own: number | undefined,
     general: number | undefined,
     format: (n: number) => string,
+    noDivider = false,
   ) => {
-    if (own != null) return <Row testID={testID} label={label} value={format(own)} />;
+    if (own != null) return <Row testID={testID} label={label} value={format(own)} noDivider={noDivider} />;
     if (general != null) {
-      return <Row testID={testID} label={label} value={format(general)} note={t('product.usandoReglaGeneral')} />;
+      return <Row testID={testID} label={label} value={format(general)} note={t('product.usandoReglaGeneral')} noDivider={noDivider} />;
     }
-    return <Row testID={testID} label={label} value={t('product.usandoReglaGeneral')} />;
+    return <Row testID={testID} label={label} value={t('product.usandoReglaGeneral')} noDivider={noDivider} />;
   };
+
+  // Alto máximo del cuerpo en números: con un máximo definido, el cuerpo se desplaza cuando la información no entra
+  // (confiar en que se achique solo dentro de una ventana con alto máximo no alcanzaba en Android)
+  const { height: windowHeight } = useWindowDimensions();
+  const bodyMaxHeight = Math.max(120, Math.round(windowHeight * CARD_MAX_HEIGHT_RATIO) - CARD_CHROME_HEIGHT);
 
   return (
     <Modal
       visible={!!product}
       transparent
-      animationType="fade"
+      animationType="fade" hardwareAccelerated
       statusBarTranslucent
       navigationBarTranslucent
       onRequestClose={onClose}
     >
-      <Pressable testID="product-detail-backdrop" style={styles.overlay} onPress={onClose}>
-        {/* Pressable interno: tocar la tarjeta no debe cerrar la ventana */}
-        <Pressable testID="product-detail-card" style={styles.card} onPress={() => {}}>
+      <View testID="product-detail-overlay" style={styles.overlay}>
+        {/* El fondo es un hermano de la ventana (no su padre): tocar la ventana no lo toca y los gestos de desplazar no
+            pasan por un botón que se quede con ellos */}
+        <Pressable testID="product-detail-backdrop" style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View testID="product-detail-card" style={styles.card}>
           {product && (
             <>
               <View style={styles.header}>
@@ -89,17 +100,18 @@ export default function ProductDetailModal({ product, onClose, generalRules, onS
                   <Ionicons name="close" size={24} color={Colors.textPrimary} />
                 </TouchableOpacity>
               </View>
-              <ScrollView testID="product-detail-scroll" contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                testID="product-detail-scroll"
+                style={{ maxHeight: bodyMaxHeight }}
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled
+                bounces
+              >
                 <View style={styles.imageBox}>
                   <ProductImage uri={product.imagen_url} style={styles.image} resizeMode="cover" />
                 </View>
                 <Text testID="detail-nombre" style={styles.name}>{product.nombre}</Text>
-                {onShowTotal && (
-                  <TouchableOpacity testID="detail-total-button" style={styles.totalBtn} onPress={() => onShowTotal(product)}>
-                    <Ionicons name="layers-outline" size={16} color={Colors.primary} />
-                    <Text style={styles.totalBtnText}>{t('detail.totalButton')}</Text>
-                  </TouchableOpacity>
-                )}
 
                 <Row testID="detail-categoria" label={t('product.categoria')} value={product.categoria} highlight />
                 <Row testID="detail-marca" label={t('product.marca')} value={product.marca} />
@@ -116,7 +128,7 @@ export default function ProductDetailModal({ product, onClose, generalRules, onS
                 <Row testID="detail-codigo-barras" label={t('product.codigoBarras')} value={product.codigo_barras} />
 
                 <Text style={styles.sectionTitle}>{t('detail.alertsTitle')}</Text>
-                {ruleRow('detail-stock-minimo', t('product.stockMinimo'), product.stock_minimo, generalRules?.coverageDays, units)}
+                {ruleRow('detail-stock-minimo', t('product.stockMinimo'), product.stock_minimo, generalRules?.coverageDays, days, true)}
                 {ruleRow('detail-dias-alerta', t('product.diasAlertaVencimiento'), product.dias_alerta_vencimiento, generalRules?.expiryDays, days)}
 
                 {product.created_at ? (
@@ -125,8 +137,8 @@ export default function ProductDetailModal({ product, onClose, generalRules, onS
               </ScrollView>
             </>
           )}
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -155,27 +167,10 @@ const styles = StyleSheet.create({
   imageBox: { alignItems: 'center', marginVertical: 8 },
   image: { width: 140, height: 140, borderRadius: 12 },
   name: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center', marginBottom: 8 },
-  totalBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    alignSelf: 'center',
-    borderWidth: 1,
-    borderColor: Colors.primary,
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 18,
-    marginBottom: 8,
-    backgroundColor: '#fff',
-  },
-  totalBtnText: { color: Colors.primary, fontWeight: '600', fontSize: 14 },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
     marginTop: 16,
     marginBottom: 2,
   },
@@ -184,6 +179,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
+  rowNoDivider: { borderBottomWidth: 0 },
   rowLabel: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
   rowValue: { fontSize: 15, color: Colors.textPrimary, marginTop: 2 },
   rowValueEmpty: { color: Colors.placeholder },

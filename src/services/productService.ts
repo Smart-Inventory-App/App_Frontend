@@ -5,11 +5,10 @@ import {
   Product,
   ProductCreate,
   ProductDefaults,
-  ProductGroupDetail,
-  ProductGroupKey,
-  ProductGroupSummary,
   ProductSuggestion,
+  StockTotal,
   StockChange,
+  TrendsResponse,
 } from '../types/product';
 
 export interface ProductFilters {
@@ -35,6 +34,12 @@ export const productService = {
     return data;
   },
 
+  /** La suma del stock y la cantidad de productos que cumplen los filtros del inventario (todos, no solo una página). */
+  async getStockTotal(params?: { search?: string; categoria?: string; ubicacion?: string }): Promise<StockTotal> {
+    const { data } = await api.get<StockTotal>('/products/stock-total', { params });
+    return data;
+  },
+
   async getFilterOptions(): Promise<ProductFilterOptions> {
     const { data } = await api.get<ProductFilterOptions>('/products/filters/options');
     return data;
@@ -45,26 +50,18 @@ export const productService = {
     return data;
   },
 
-  /** Productos agrupados por nombre y categoría cuyo nombre contiene `q`, con su stock total. */
-  async suggestGroups(q: string): Promise<ProductGroupSummary[]> {
-    const { data } = await api.get<ProductGroupSummary[]>('/products/groups', { params: { q } });
-    return data;
-  },
-
-  /** Todos los productos con ese nombre y categoría (de cualquier marca) y su stock total. */
-  async getProductGroup(key: ProductGroupKey): Promise<ProductGroupDetail> {
-    const { data } = await api.get<ProductGroupDetail>('/products/group', {
-      params: { nombre: key.nombre, categoria: key.categoria },
-    });
-    return data;
-  },
-
   /**
    * Los últimos cambios de stock del usuario (entradas, salidas y modificaciones), del más nuevo al más viejo.
    * `offset` salta esa cantidad de cambios para pedir las páginas siguientes.
    */
   async getRecentChanges(limit = 5, offset = 0): Promise<StockChange[]> {
     const { data } = await api.get<StockChange[]>('/products/changes', { params: { limit, offset } });
+    return data;
+  },
+
+  /** Los productos que se parecen a un texto leído de una etiqueta: compara con el nombre, la marca y la descripción. */
+  async matchProducts(text: string): Promise<ProductSuggestion[]> {
+    const { data } = await api.get<ProductSuggestion[]>('/products/match', { params: { q: text } });
     return data;
   },
 
@@ -139,6 +136,11 @@ export const productService = {
 
   async deleteConsumptionEvent(productId: number, eventId: number): Promise<{ remaining_stock: number }> {
     const { data } = await api.delete(`/products/${productId}/events/${eventId}`);
+    return data;
+  },
+
+  async getTrends(periodDays: number = 30): Promise<TrendsResponse> {
+    const { data } = await api.get<TrendsResponse>('/trends/', { params: { period: periodDays } });
     return data;
   },
 };

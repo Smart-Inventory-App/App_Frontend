@@ -9,13 +9,13 @@ import { Colors } from '@/constants/colors';
 import { ProductCreate, ProductSuggestion } from '@/types/product';
 import { FieldScanDocType } from '@/types/ocr';
 import { pickFromGallery, pickFromCamera, uploadImage, PickedImage } from '@/services/imageService';
-import ImageConfirmModal from '@/components/ImageConfirmModal';
 import BottomSheetModal from '@/components/BottomSheetModal';
+import ConfirmModal from '@/components/ConfirmModal';
 import { useFieldFocus } from '@/components/KeyboardAwareScrollView';
 import DatePickerModal from '@/components/DatePickerModal';
 import ProductImage from '@/components/ProductImage';
 import { applySuggestionToForm } from '@/utils/ocrDraft';
-import { BARCODE_MAX_DIGITS, describeBarcodeLengths, onlyDigits } from '@/utils/barcode';
+import { BARCODE_MAX_DIGITS, onlyDigits } from '@/utils/barcode';
 import { displayToIso, formatDateDigits, isoToDisplay } from '@/utils/dateInput';
 import { findSimilarOptions } from '@/utils/optionSearch';
 import { selectedFirst } from '@/utils/selectedFirst';
@@ -25,6 +25,9 @@ const NOMBRE_MAX = 20;
 const OPTION_MAX = 20;
 const DESCRIPCION_MAX = 400;
 const STOCK_MAX_DIGITS = 6;
+// Reglas de alerta propias del producto: hasta 9999999 de stock mínimo y hasta 999 días de anticipación
+const STOCK_MINIMO_MAX_DIGITS = 7;
+const DIAS_ALERTA_MAX_DIGITS = 3;
 
 interface Props {
   form: Partial<ProductCreate>;
@@ -190,8 +193,11 @@ export default function ProductFormFields({
   const [showCalendar, setShowCalendar] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   // Imagen elegida que espera la confirmación del usuario antes de subirse
-  const [pendingImage, setPendingImage] = useState<PickedImage | null>(null);
   const [showImagePicker, setShowImagePicker] = useState(false);
+  // Pregunta antes de quitar la imagen del producto a cargar
+  const [confirmRemoveImage, setConfirmRemoveImage] = useState(false);
+  // «Alertas personalizadas»: cerradas al entrar. Los valores viven en `form`, así que cerrarlas no los pierde
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const [nombreSuggestions, setNombreSuggestions] = useState<ProductSuggestion[]>([]);
   const [nombreFocused, setNombreFocused] = useState(false);
 
@@ -217,27 +223,17 @@ export default function ProductFormFields({
     setNombreSuggestions([]);
   };
 
-  // Elegir la imagen (galería o cámara) no la sube: primero se pide la confirmación
+  // Elegir la imagen (galería o cámara) abre la pantalla del sistema para recortarla y confirmarla; con eso ya hecho, la
+  // imagen se sube y se carga en el formulario directamente, sin otra ventana de confirmación
   const doPick = async (picker: () => Promise<PickedImage | null>) => {
     setShowImagePicker(false);
     try {
       const asset = await picker();
-      if (asset) setPendingImage(asset);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al elegir la imagen.';
-      Alert.alert('Error', message);
-    }
-  };
-
-  const confirmImage = async () => {
-    const asset = pendingImage;
-    setPendingImage(null);
-    if (!asset) return;
-    try {
+      if (!asset) return;
       setUploadingImage(true);
       set('imagen_url', await uploadImage(asset));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al subir la imagen.';
+      const message = err instanceof Error ? err.message : 'Error al cargar la imagen.';
       Alert.alert('Error', message);
     } finally {
       setUploadingImage(false);
@@ -272,7 +268,7 @@ export default function ProductFormFields({
     <TextInput
       testID="input-codigo-barras"
       style={onScanField ? [styles.input, styles.dateInput] : styles.input}
-      placeholder={t('product.codigoBarrasPlaceholder', { lengths: describeBarcodeLengths(t('product.codigoBarrasOr')) })}
+      placeholder={t('product.optional')}
       placeholderTextColor={Colors.placeholder}
       keyboardType="number-pad"
       maxLength={BARCODE_MAX_DIGITS}
@@ -358,7 +354,7 @@ export default function ProductFormFields({
         onInputFocus={onFieldFocus}
       />
 
-      <Text style={styles.label}>{t('product.vencimiento')}</Text>
+      <Text style={styles.label}>{t('product.fechaVencimiento')}</Text>
       <View style={styles.dateRow}>
         <TextInput
           testID="input-vencimiento"
@@ -407,50 +403,6 @@ export default function ProductFormFields({
         </View>
       ) : barcodeInput}
 
-      <Text style={styles.sectionLabel}>{t('product.alertasTitle')}</Text>
-      <View style={styles.alertRow}>
-        <View style={styles.alertField}>
-          <View testID="alert-label-box-stock-minimo" style={styles.alertLabelBox}>
-            <Text style={[styles.label, styles.alertLabel]}>{t('product.stockMinimo')}</Text>
-          </View>
-          <TextInput
-            style={styles.input}
-            placeholder={t('product.defaultPlaceholder')}
-            placeholderTextColor={Colors.placeholder}
-            keyboardType="numeric"
-            onFocus={onFieldFocus}
-            value={form.stock_minimo != null ? String(form.stock_minimo) : ''}
-            onChangeText={(v) => {
-              const n = parseInt(v, 10);
-              set('stock_minimo', v.trim() === '' ? undefined : (isNaN(n) ? form.stock_minimo : n));
-            }}
-          />
-          <Text style={styles.ruleHint}>
-            {form.stock_minimo != null ? t('product.reglaPropia') : t('product.usandoReglaGeneral')}
-          </Text>
-        </View>
-        <View style={styles.alertField}>
-          <View testID="alert-label-box-dias" style={styles.alertLabelBox}>
-            <Text style={[styles.label, styles.alertLabel]}>{t('product.diasAlertaVencimiento')}</Text>
-          </View>
-          <TextInput
-            style={styles.input}
-            placeholder={t('product.defaultPlaceholder')}
-            placeholderTextColor={Colors.placeholder}
-            keyboardType="numeric"
-            onFocus={onFieldFocus}
-            value={form.dias_alerta_vencimiento != null ? String(form.dias_alerta_vencimiento) : ''}
-            onChangeText={(v) => {
-              const n = parseInt(v, 10);
-              set('dias_alerta_vencimiento', v.trim() === '' ? undefined : (isNaN(n) ? form.dias_alerta_vencimiento : n));
-            }}
-          />
-          <Text style={styles.ruleHint}>
-            {form.dias_alerta_vencimiento != null ? t('product.reglaPropia') : t('product.usandoReglaGeneral')}
-          </Text>
-        </View>
-      </View>
-
       <View style={styles.labelRow}>
         <Text style={styles.labelInRow}>{t('product.descripcion')}</Text>
         <Text testID="descripcion-counter" style={styles.counter}>{(form.descripcion ?? '').length}/{DESCRIPCION_MAX}</Text>
@@ -480,22 +432,86 @@ export default function ProductFormFields({
         showLocationIcon
       />
 
+      {/* Alertas propias del producto: cerradas al entrar; lo escrito se conserva aunque se cierre y se vuelva a abrir */}
+      <View style={styles.collapsibleHeader}>
+        <Text style={styles.sectionLabelInRow}>{t('product.alertasTitle')}</Text>
+        <TouchableOpacity
+          testID="alerts-toggle"
+          accessibilityRole="button"
+          accessibilityLabel={alertsOpen ? t('product.alertasCerrar') : t('product.alertasAbrir')}
+          accessibilityState={{ expanded: alertsOpen }}
+          style={styles.collapsibleBtn}
+          onPress={() => setAlertsOpen(open => !open)}
+        >
+          <Ionicons name={alertsOpen ? 'chevron-up' : 'chevron-down'} size={22} color={Colors.primary} />
+        </TouchableOpacity>
+      </View>
+      {alertsOpen && (
+        <View testID="alerts-section">
+          <Text style={styles.label}>{t('product.stockMinimo')}</Text>
+          <TextInput
+            testID="input-stock-minimo"
+            style={styles.input}
+            placeholder={t('product.optional')}
+            placeholderTextColor={Colors.placeholder}
+            keyboardType="numeric"
+            maxLength={STOCK_MINIMO_MAX_DIGITS}
+            onFocus={onFieldFocus}
+            value={form.stock_minimo != null ? String(form.stock_minimo) : ''}
+            onChangeText={(v) => {
+              const n = parseInt(v, 10);
+              set('stock_minimo', v.trim() === '' ? undefined : (isNaN(n) ? form.stock_minimo : n));
+            }}
+          />
+          <Text style={styles.ruleHint}>
+            {form.stock_minimo != null ? t('product.reglaPropia') : t('product.usandoReglaGeneral')}
+          </Text>
+
+          <Text style={styles.label}>{t('product.diasAlertaVencimiento')}</Text>
+          <TextInput
+            testID="input-dias-alerta"
+            style={styles.input}
+            placeholder={t('product.optional')}
+            placeholderTextColor={Colors.placeholder}
+            keyboardType="numeric"
+            maxLength={DIAS_ALERTA_MAX_DIGITS}
+            onFocus={onFieldFocus}
+            value={form.dias_alerta_vencimiento != null ? String(form.dias_alerta_vencimiento) : ''}
+            onChangeText={(v) => {
+              const n = parseInt(v, 10);
+              set('dias_alerta_vencimiento', v.trim() === '' ? undefined : (isNaN(n) ? form.dias_alerta_vencimiento : n));
+            }}
+          />
+          <Text style={styles.ruleHint}>
+            {form.dias_alerta_vencimiento != null ? t('product.reglaPropia') : t('product.usandoReglaGeneral')}
+          </Text>
+        </View>
+      )}
+
       <Text style={styles.label}>{t('product.imagen')}</Text>
       {form.imagen_url ? (
-        <View style={styles.imagePreviewContainer}>
+        <View testID="image-preview-container" style={styles.imagePreviewContainer}>
           <ProductImage uri={form.imagen_url} style={styles.imagePreview} resizeMode="cover" />
-          <TouchableOpacity style={styles.imageChangeBtn} onPress={() => setShowImagePicker(true)} disabled={uploadingImage}>
-            {uploadingImage
-              ? <ActivityIndicator size="small" color={Colors.primary} />
-              : <><Ionicons name="pencil-outline" size={16} color={Colors.primary} /><Text style={styles.imageChangeBtnText}>{t('product.imagenCambiar')}</Text></>
-            }
+          <TouchableOpacity
+            testID="remove-image-button"
+            accessibilityLabel={t('product.imagenEliminar')}
+            style={styles.imageRemoveBtn}
+            onPress={() => setConfirmRemoveImage(true)}
+          >
+            <Ionicons name="trash-outline" size={16} color={Colors.error} />
+            <Text style={styles.imageRemoveBtnText}>{t('product.imagenEliminar')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
-        <TouchableOpacity style={styles.imageBtn} onPress={() => setShowImagePicker(true)} disabled={uploadingImage}>
+        <TouchableOpacity
+          testID="select-image-button"
+          style={styles.selectImageBtn}
+          onPress={() => setShowImagePicker(true)}
+          disabled={uploadingImage}
+        >
           {uploadingImage
             ? <ActivityIndicator size="small" color={Colors.primary} />
-            : <><Ionicons name="image-outline" size={20} color={Colors.primary} /><Text style={styles.imageBtnTextActive}>{t('product.imagenSeleccionar')}</Text></>
+            : <><Ionicons name="image-outline" size={18} color={Colors.primary} /><Text style={styles.selectImageBtnText}>{t('product.imagenSeleccionar')}</Text></>
           }
         </TouchableOpacity>
       )}
@@ -508,34 +524,37 @@ export default function ProductFormFields({
         overlayTestID="image-picker-overlay"
         sheetTestID="image-picker-sheet"
       >
-        <View style={styles.modalHandle} />
-        <Text style={styles.modalTitle}>{t('product.imagenSeleccionar')}</Text>
-
-        <TouchableOpacity style={styles.modalOption} onPress={() => doPick(pickFromCamera)}>
-          <View style={styles.modalOptionIcon}>
-            <Ionicons name="camera-outline" size={22} color={Colors.primary} />
-          </View>
-          <Text style={styles.modalOptionText}>{t('product.imagenCamara')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.modalOption} onPress={() => doPick(pickFromGallery)}>
-          <View style={styles.modalOptionIcon}>
+        {/* Mismo formato que las demás ventanas que suben desde abajo (escanear imagen, producto existente): título con
+            su botón de cerrar y las dos opciones como botones grandes */}
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>{t('product.imagenSeleccionar')}</Text>
+          <TouchableOpacity testID="image-picker-close" accessibilityLabel={t('scan.close')} onPress={() => setShowImagePicker(false)}>
+            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.modalContent}>
+          <TouchableOpacity testID="image-picker-camera" style={styles.bigButton} onPress={() => doPick(pickFromCamera)}>
+            <Ionicons name="camera-outline" size={22} color="#fff" />
+            <Text style={styles.bigButtonText}>{t('product.imagenCamara')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity testID="image-picker-gallery" style={[styles.bigButton, styles.bigButtonSecondary]} onPress={() => doPick(pickFromGallery)}>
             <Ionicons name="images-outline" size={22} color={Colors.primary} />
-          </View>
-          <Text style={styles.modalOptionText}>{t('product.imagenGaleria')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.modalCancel} onPress={() => setShowImagePicker(false)}>
-          <Text style={styles.modalCancelText}>Cancelar</Text>
-        </TouchableOpacity>
+            <Text style={styles.bigButtonSecondaryText}>{t('product.imagenGaleria')}</Text>
+          </TouchableOpacity>
+        </View>
       </BottomSheetModal>
 
-      {/* Antes de cargar la imagen se ve cómo quedó y se confirma; no hay recorte */}
-      <ImageConfirmModal
-        visible={pendingImage !== null}
-        uri={pendingImage?.uri ?? null}
-        onConfirm={confirmImage}
-        onCancel={() => setPendingImage(null)}
+
+      <ConfirmModal
+        visible={confirmRemoveImage}
+        message={t('product.imagenEliminarConfirm')}
+        confirmLabel={t('common.confirm')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={() => {
+          setConfirmRemoveImage(false);
+          set('imagen_url', undefined);
+        }}
+        onCancel={() => setConfirmRemoveImage(false)}
       />
     </View>
   );
@@ -566,11 +585,10 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  alertRow: { flexDirection: 'row', gap: 12 },
-  alertField: { flex: 1 },
-  // Reserva dos renglones y apoya el título contra el input: los dos campos quedan a la misma altura aunque un título ocupe más de una línea
-  alertLabelBox: { minHeight: 32, marginTop: 12, justifyContent: 'flex-end' },
-  alertLabel: { lineHeight: 16, marginTop: 0 },
+  // Título de la sección a la izquierda y el botón de abrir o cerrar a la derecha, en el borde del formulario
+  collapsibleHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 },
+  sectionLabelInRow: { flex: 1, fontSize: 14, fontWeight: '700', color: Colors.textSecondary },
+  collapsibleBtn: { width: 36, height: 36, alignItems: 'flex-end', justifyContent: 'center' },
   ruleHint: { fontSize: 11, color: Colors.textSecondary, marginTop: 3 },
   suggestionsBox: {
     marginTop: 4,
@@ -639,21 +657,33 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   selectedLoc: { fontSize: 12, color: Colors.textSecondary, marginTop: 4 },
-  imageBtn: {
+  // Mismo formato que los botones «Ingresar producto existente» y «Escanear» de la pantalla de carga
+  selectImageBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     borderWidth: 1,
     borderColor: Colors.primary,
-    borderRadius: 8,
-    padding: 10,
+    borderRadius: 10,
+    padding: 12,
+    backgroundColor: '#fff',
     marginTop: 4,
-    gap: 8,
-    backgroundColor: '#fafafa',
   },
-  imageBtnTextActive: { fontSize: 14, color: Colors.primary, fontWeight: '500' },
-  imagePreviewContainer: { marginTop: 4, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: Colors.inputBorder },
-  imagePreview: { width: '100%', height: 180 },
-  imageChangeBtn: {
+  selectImageBtnText: { color: Colors.primary, fontWeight: '600', fontSize: 14 },
+  // Vista previa cuadrada (1x1), centrada y con un tamaño máximo para que no ocupe toda la pantalla
+  imagePreviewContainer: {
+    marginTop: 4,
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 280,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+  },
+  imagePreview: { width: '100%', aspectRatio: 1 },
+  imageRemoveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -661,54 +691,36 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: '#fafafa',
   },
-  imageChangeBtnText: { fontSize: 13, color: Colors.primary },
+  imageRemoveBtnText: { fontSize: 13, color: Colors.error },
+  // Igual que las ventanas que suben desde abajo en el escaneo
   modalSheet: {
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    padding: 24,
-    paddingBottom: 36,
-    gap: 8,
+    maxHeight: '85%',
   },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#ddd',
-    alignSelf: 'center',
-    marginBottom: 12,
-  },
-  // Mismo formato que el título "Flujo de producto", un poco más chico
-  modalTitle: {
-    fontSize: 20,
-    lineHeight: 26,
-    fontFamily: 'Roboto_500Medium',
-    color: Colors.textPrimary,
-    marginBottom: 8,
-  },
-  modalOption: {
+  modalHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 14,
-    paddingVertical: 14,
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  modalOptionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f0f9f6',
+  // Mismo formato que el título "Flujo de producto", un poco más chico
+  modalTitle: { fontSize: 20, lineHeight: 26, fontFamily: 'Roboto_500Medium', color: Colors.textPrimary },
+  modalContent: { padding: 16, paddingBottom: 24 },
+  bigButton: {
+    flexDirection: 'row',
+    gap: 10,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  modalOptionText: { fontSize: 15, color: Colors.textPrimary, fontWeight: '500' },
-  modalCancel: {
-    marginTop: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
+    backgroundColor: Colors.primary,
     borderRadius: 10,
-    backgroundColor: '#f2f3f6',
+    padding: 14,
+    marginTop: 12,
   },
-  modalCancelText: { fontSize: 15, color: Colors.textSecondary, fontWeight: '600' },
+  bigButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  bigButtonSecondary: { backgroundColor: '#fff', borderWidth: 1, borderColor: Colors.primary },
+  bigButtonSecondaryText: { color: Colors.primary, fontWeight: 'bold', fontSize: 15 },
 });

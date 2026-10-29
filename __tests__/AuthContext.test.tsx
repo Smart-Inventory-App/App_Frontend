@@ -6,6 +6,7 @@ import * as SecureStore from 'expo-secure-store';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { authService } from '@/services/authService';
 import { setAuthToken, setUnauthorizedHandler } from '@/services/api';
+import { signOutFromGoogle } from '@/services/googleSignIn';
 import { clearFlashMessage, peekFlashMessage } from '@/utils/flashMessage';
 import { markWelcomeSeen, resetWelcome, shouldWelcome } from '@/utils/welcomeState';
 import {
@@ -26,6 +27,10 @@ jest.mock('@/services/authService', () => ({
     register: jest.fn(),
     googleLogin: jest.fn(),
   },
+}));
+
+jest.mock('@/services/googleSignIn', () => ({
+  signOutFromGoogle: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('@/services/api', () => ({
@@ -228,5 +233,18 @@ describe('AuthContext - welcome message', () => {
     await waitFor(() => expect(screen.getByTestId('authenticated').props.children).toBe('true'));
     expect(shouldWelcome()).toBe(false);
     resetWelcome();
+  });
+});
+
+describe('AuthContext - Google session', () => {
+  it('also signs out of Google when the user logs out, so another account can be chosen next time', async () => {
+    (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('stored');
+    render(<AuthProvider><Probe /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('authenticated').props.children).toBe('true'));
+    expect(signOutFromGoogle).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('logout'));
+    });
+    expect(signOutFromGoogle).toHaveBeenCalledTimes(1);
   });
 });

@@ -51,6 +51,25 @@ export interface ProductDefaults {
   last_ubicacion?: string;
 }
 
+export interface ConsumoPorDia {
+  day: string;
+  quantity: number;
+}
+
+export interface ProductoConsumo {
+  product_id: number;
+  nombre: string;
+  cantidad: number;
+}
+
+export interface TrendsResponse {
+  period_days: number;
+  total_consumido: number;
+  total_entradas: number;
+  consumo_por_dia: ConsumoPorDia[];
+  top_productos: ProductoConsumo[];
+}
+
 // Motivos de una salida de stock
 export type ExitReason = 'consumed' | 'expired' | 'sold' | 'rented';
 
@@ -65,21 +84,10 @@ export interface ConsumptionEvent {
   reversed: boolean;
 }
 
-// Los productos con el mismo nombre y categoría (la marca puede variar) se suman para ver el stock total:
-// pueden tener distinta marca, vencimiento, ubicación, imagen o stock.
-export interface ProductGroupKey {
-  nombre: string;
-  categoria: string;
-}
-
-export interface ProductGroupSummary extends ProductGroupKey {
+/** Stock sumado de los productos que cumplen unos filtros, y cuántos son. */
+export interface StockTotal {
   stock_total: number;
-  lotes: number;
-  proximo_vencimiento?: string | null;
-}
-
-export interface ProductGroupDetail extends ProductGroupSummary {
-  productos: Product[];
+  products: number;
 }
 
 // Un cambio del stock de un producto: una entrada, una salida o una modificación al editarlo

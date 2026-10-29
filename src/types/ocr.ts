@@ -106,3 +106,10 @@ export interface SalidaOCRResult {
 
 /** Umbral bajo el cual conviene mostrar un campo como "poco confiable" (matching.UMBRAL_CONFIABLE). */
 export const CONFIDENCE_THRESHOLD = 0.85;
+
+/** Lo que se leyó de una etiqueta (con la foto ya recortada) y todavía no se cargó en ningún formulario. */
+export interface LabelScan {
+  draft: ProductDraft;
+  /** La foto que se escaneó: si el usuario confirma, pasa a ser la imagen del producto. */
+  asset: { uri: string; fileName?: string | null; mimeType?: string | null; width?: number; height?: number } | null;
+}

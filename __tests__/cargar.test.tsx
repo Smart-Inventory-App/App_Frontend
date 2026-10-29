@@ -72,7 +72,7 @@ jest.mock('@/components/ProductFormFields', () => {
 
 jest.mock('@/components/ExistingProductModal', () => {
   const { View: RNView, Text: RNText, TouchableOpacity } = require('react-native');
-  return function MockExistingProductModal({ visible, mode, onSuccess, onClose, onSelectProduct, onPickReceipt }: any) {
+  return function MockExistingProductModal({ visible, mode, onSuccess, onClose, onSelectProduct, onPickReceipt, initialLabel, onLoadAsNew, onBackToLabel }: any) {
     if (!visible) return null;
     return (
       <RNView testID="mock-existing-modal">
@@ -89,6 +89,13 @@ jest.mock('@/components/ExistingProductModal', () => {
         <TouchableOpacity testID="mock-existing-close" onPress={onClose}>
           <RNText>close</RNText>
         </TouchableOpacity>
+        <RNText testID="mock-existing-initial">{JSON.stringify(initialLabel ?? null)}</RNText>
+        <TouchableOpacity testID="mock-existing-load-new" onPress={() => onLoadAsNew({ draft: { nombre: 'Yogur', confianzas: {}, coincidencias: [] }, asset: { uri: 'file://l.jpg' } })}>
+          <RNText>load new</RNText>
+        </TouchableOpacity>
+        <TouchableOpacity testID="mock-existing-back" onPress={() => onBackToLabel({ draft: { nombre: 'Yogur editado', confianzas: {}, coincidencias: [] }, asset: null })}>
+          <RNText>back</RNText>
+        </TouchableOpacity>
       </RNView>
     );
   };
@@ -96,7 +103,7 @@ jest.mock('@/components/ExistingProductModal', () => {
 
 jest.mock('@/components/ScanModal', () => {
   const { View: RNView, Text: RNText, TouchableOpacity } = require('react-native');
-  return function MockScanModal({ visible, onSuccess, onClose, onApplyToForm, fixedDocType, receiptDirection }: any) {
+  return function MockScanModal({ visible, onSuccess, onClose, onApplyToForm, fixedDocType, receiptDirection, initialLabel, onLoadAsExisting }: any) {
     if (!visible) return null;
     return (
       <RNView testID="mock-scan-modal">
@@ -126,6 +133,10 @@ jest.mock('@/components/ScanModal', () => {
         <TouchableOpacity testID="mock-scan-close" onPress={onClose}>
           <RNText>close</RNText>
         </TouchableOpacity>
+        <RNText testID="mock-scan-initial">{JSON.stringify(initialLabel ?? null)}</RNText>
+        <TouchableOpacity testID="mock-scan-load-existing" onPress={() => onLoadAsExisting({ draft: { nombre: 'Leche', confianzas: {}, coincidencias: [] }, asset: null })}>
+          <RNText>load existing</RNText>
+        </TouchableOpacity>
       </RNView>
     );
   };
@@ -137,7 +148,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockFocusCleanups.length = 0;
   mockedProducts.getDefaults.mockResolvedValue({});
-  mockedProducts.getFilterOptions.mockResolvedValue({ categorias: [], ubicaciones: [], marcas: [] });
+  // Por defecto las opciones de los filtros no llegan nunca: así no hay un setState tardío fuera de act en cada test.
+  // Los tests que necesitan opciones las definen con mockResolvedValue.
+  mockedProducts.getFilterOptions.mockReturnValue(new Promise(() => {}));
   mockedProducts.suggestProducts.mockResolvedValue([]);
 });
 
@@ -488,6 +501,16 @@ describe('CargarScreen - Entrada/Salida buttons', () => {
     expect(flat('direction-row').flexDirection).toBe('row');
     expect(flat('direction-entrada').flex).toBe(1);
     expect(flat('direction-salida').flex).toBe(1);
+  });
+
+  it('keep a margin below them, as big as the one above and of the color of the background, while the content scrolls under them', () => {
+    render(<CargarScreen />);
+    const row = StyleSheet.flatten(screen.getByTestId('direction-row').props.style);
+    expect(row.paddingTop).toBe(14);
+    expect(row.paddingBottom).toBe(row.paddingTop);
+    // el mismo color del fondo del contenido que pasa por debajo
+    const content = StyleSheet.flatten(screen.UNSAFE_getByType(ScrollView).props.style);
+    expect(row.backgroundColor).toBe(content.backgroundColor);
   });
 
   it('are big enough to be pressed easily', () => {
@@ -861,6 +884,14 @@ describe('CargarScreen - salida: motivos y escaneo', () => {
     expect(StyleSheet.flatten(screen.getByTestId('open-exit-scan-modal').props.style).borderRadius).toBe(10);
   });
 
+  it('shows the scan button in red on an exit, and the one of an entry in the color of the app', () => {
+    goToSalida();
+    expect(StyleSheet.flatten(screen.getByTestId('open-exit-scan-modal').props.style).borderColor).toBe('#FF3B30');
+    expect(StyleSheet.flatten(screen.getByText('Escanear imágenes').props.style).color).toBe('#FF3B30');
+    fireEvent.press(screen.getByText('Entrada'));
+    expect(StyleSheet.flatten(screen.getByTestId('open-scan-modal').props.style).borderColor).toBe('#2CC4B4');
+  });
+
   it('opens the exit scan menu from the button, and not the entry one', () => {
     goToSalida();
     fireEvent.press(screen.getByTestId('open-exit-scan-modal'));
@@ -1145,5 +1176,102 @@ describe('CargarScreen - success screen buttons and check mark', () => {
     expect(mockReplace).not.toHaveBeenCalled();
     expect(duration()).toBe(280);
     expect(screen.getByText('Guardar producto')).toBeTruthy();
+  });
+});
+
+describe('CargarScreen - the scanned label moves between the two windows', () => {
+  it('"Cargar como producto existente" closes the scan window and opens the existing product one with the label', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    expect(screen.getByTestId('mock-scan-initial').props.children).toBe('null');
+    fireEvent.press(screen.getByTestId('mock-scan-load-existing'));
+    expect(screen.queryByTestId('mock-scan-modal')).toBeNull();
+    expect(JSON.parse(screen.getByTestId('mock-existing-initial').props.children).draft.nombre).toBe('Leche');
+  });
+
+  it('"Cargar nuevo producto" closes the existing window and opens the scan one on the label data', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-existing-modal'));
+    fireEvent.press(screen.getByTestId('mock-existing-load-new'));
+    expect(screen.queryByTestId('mock-existing-modal')).toBeNull();
+    expect(JSON.parse(screen.getByTestId('mock-scan-initial').props.children).draft.nombre).toBe('Yogur');
+    expect(screen.getByTestId('mock-scan-target').props.children).toBe('null');
+  });
+
+  it('going back from the existing window returns to the label data, as it was edited', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-scan-load-existing'));
+    fireEvent.press(screen.getByTestId('mock-existing-back'));
+    expect(screen.queryByTestId('mock-existing-modal')).toBeNull();
+    expect(JSON.parse(screen.getByTestId('mock-scan-initial').props.children).draft.nombre).toBe('Yogur editado');
+  });
+
+  it('opening the windows again from their buttons starts them clean, without the label', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-existing-modal'));
+    fireEvent.press(screen.getByTestId('mock-existing-load-new'));
+    fireEvent.press(screen.getByTestId('mock-scan-close'));
+    fireEvent.press(screen.getByTestId('open-scan-modal'));
+    expect(screen.getByTestId('mock-scan-initial').props.children).toBe('null');
+    fireEvent.press(screen.getByTestId('mock-scan-load-existing'));
+    fireEvent.press(screen.getByTestId('mock-existing-close'));
+    fireEvent.press(screen.getByTestId('open-existing-modal'));
+    expect(screen.getByTestId('mock-existing-initial').props.children).toBe('null');
+  });
+
+  it('the invoice scan of an exit and the field scans do not inherit a previous label', () => {
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-existing-modal'));
+    fireEvent.press(screen.getByTestId('mock-existing-load-new'));
+    fireEvent.press(screen.getByTestId('mock-scan-close'));
+    fireEvent.press(screen.getByTestId('mock-scan-expiry'));
+    expect(screen.getByTestId('mock-scan-initial').props.children).toBe('null');
+    fireEvent.press(screen.getByTestId('mock-scan-close'));
+    fireEvent.press(screen.getByText('Salida'));
+    fireEvent.press(screen.getByTestId('open-exit-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-existing-receipt'));
+    expect(screen.getByTestId('mock-scan-initial').props.children).toBe('null');
+  });
+});
+
+describe('CargarScreen - the keyboard closes on the success screen', () => {
+  afterEach(() => { jest.restoreAllMocks(); });
+
+  it('closes the keyboard when an entry is confirmed', async () => {
+    mockedProducts.createProduct.mockResolvedValue({ id: 1 } as any);
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    render(<CargarScreen />);
+    fireEvent.changeText(screen.getByTestId('mock-form-nombre'), 'Leche');
+    dismiss.mockClear();
+    await act(async () => { fireEvent.press(screen.getByText('Guardar producto')); });
+    expect(screen.getByText('¡Listo!')).toBeTruthy();
+    expect(dismiss).toHaveBeenCalled();
+  });
+
+  it('closes the keyboard when an exit is confirmed', async () => {
+    mockedProducts.suggestProducts.mockResolvedValue([{ id: 7, nombre: 'Yogur', categoria: 'Lacteos', stock: 5 }]);
+    mockedProducts.registerEvent.mockResolvedValue({ event_type: 'consumed', quantity: 1, remaining_stock: 4 });
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByText('Salida'));
+    fireEvent.press(screen.getByTestId('open-exit-scan-modal'));
+    fireEvent.press(screen.getByTestId('mock-existing-select'));
+    fireEvent.changeText(screen.getByPlaceholderText('0'), '1');
+    fireEvent.press(screen.getByTestId('salida-motivo-consumed'));
+    dismiss.mockClear();
+    await act(async () => { fireEvent.press(screen.getByText('Registrar salida')); });
+    expect(screen.getByText('¡Listo!')).toBeTruthy();
+    expect(dismiss).toHaveBeenCalled();
+  });
+
+  it('closes the keyboard when a scan or an existing product entry finishes', () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    render(<CargarScreen />);
+    fireEvent.press(screen.getByTestId('open-existing-modal'));
+    dismiss.mockClear();
+    fireEvent.press(screen.getByTestId('mock-existing-success'));
+    expect(screen.getByText('¡Listo!')).toBeTruthy();
+    expect(dismiss).toHaveBeenCalled();
   });
 });

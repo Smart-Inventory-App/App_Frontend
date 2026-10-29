@@ -257,7 +257,7 @@ describe('ChangesHistoryModal - product information', () => {
     expect(screen.getByTestId('product-detail-card')).toBeTruthy();
     expect(screen.getByTestId('detail-nombre').props.children).toBe('Leche');
     expect(screen.getByTestId('detail-descripcion').props.children).toEqual('Entera');
-    expect(screen.getByTestId('detail-stock-minimo').props.children).toEqual('7 unidades');
+    expect(screen.getByTestId('detail-stock-minimo').props.children).toEqual('7 días');
     expect(screen.queryByTestId('detail-total-button')).toBeNull();
     expect(screen.queryByText('Stock total')).toBeNull();
   });

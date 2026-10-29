@@ -12,17 +12,9 @@ interface Props {
   product: Product;
   /** Se llama al tocar la información del producto (la imagen se abre a pantalla completa por su cuenta). */
   onPress: (product: Product) => void;
-  /** Si se indica `onToggle`, aparece a la derecha una casilla para incluir o sacar el producto de una suma. */
-  selected?: boolean;
-  onToggle?: (product: Product) => void;
   /** Si se indica, muestra arriba de la fila, pegada a la esquina superior izquierda, la fecha de carga del producto, resaltada. */
   showLoadDate?: boolean;
-  /** Alto fijo de la fila: así todas las de un listado miden lo mismo (los textos largos se cortan en un renglón). */
-  height?: number;
 }
-
-// Alto de las filas del listado de "Stock total de producto": todas miden lo mismo
-export const LOT_ROW_HEIGHT = 124;
 
 // Color del punto según lo cerca que está el vencimiento (el mismo criterio que el listado de Inventario)
 const statusColor = (product: Product): 'green' | 'yellow' | 'red' => {
@@ -34,10 +26,9 @@ const statusColor = (product: Product): 'green' | 'yellow' | 'red' => {
 };
 
 // Fila de un producto como en el listado de Inventario, sin acciones de edición: imagen, datos principales y estado.
-export default function ProductLotRow({ product, onPress, selected = false, onToggle, showLoadDate = false, height }: Props) {
+export default function ProductLotRow({ product, onPress, showLoadDate = false }: Props) {
   const { t } = useTranslation();
   const color = statusColor(product);
-  const oneLine = height !== undefined ? 1 : undefined;
   const dotStyle = [
     styles.dot,
     color === 'green' && styles.dotGreen,
@@ -46,7 +37,7 @@ export default function ProductLotRow({ product, onPress, selected = false, onTo
   ];
 
   return (
-    <View testID={`lot-row-${product.id}`} style={[styles.item, height !== undefined && { height }]}>
+    <View testID={`lot-row-${product.id}`} style={styles.item}>
       {showLoadDate && product.created_at ? (
         <View testID={`lot-loaded-${product.id}`} style={styles.loadDate}>
           <Ionicons name="time-outline" size={12} color={Colors.primary} />
@@ -55,7 +46,7 @@ export default function ProductLotRow({ product, onPress, selected = false, onTo
           </Text>
         </View>
       ) : null}
-      <View style={[styles.mainRow, height !== undefined && styles.mainRowFill]}>
+      <View style={styles.mainRow}>
       <ProductImage uri={product.imagen_url} style={styles.image} />
       <TouchableOpacity
         testID={`lot-info-${product.id}`}
@@ -63,11 +54,11 @@ export default function ProductLotRow({ product, onPress, selected = false, onTo
         activeOpacity={0.7}
         onPress={() => onPress(product)}
       >
-        <Text style={styles.name} numberOfLines={oneLine}>{product.nombre}</Text>
-        {product.marca ? <Text style={styles.sub} numberOfLines={oneLine}>{truncateLabel(product.marca)}</Text> : null}
-        <Text style={styles.sub} numberOfLines={oneLine}>{t('inventory.filterCategory')}: {truncateLabel(product.categoria)}</Text>
+        <Text style={styles.name}>{product.nombre}</Text>
+        {product.marca ? <Text style={styles.sub}>{truncateLabel(product.marca)}</Text> : null}
+        <Text style={styles.sub}>{t('inventory.filterCategory')}: {truncateLabel(product.categoria)}</Text>
         {product.ubicacion ? (
-          <Text style={styles.sub} numberOfLines={oneLine}>
+          <Text style={styles.sub}>
             <Ionicons name="location-outline" size={11} /> {truncateLabel(product.ubicacion)}
           </Text>
         ) : null}
@@ -77,24 +68,6 @@ export default function ProductLotRow({ product, onPress, selected = false, onTo
           <View testID={`lot-status-${product.id}`} style={dotStyle} />
         </View>
       </TouchableOpacity>
-      {onToggle && (
-        <TouchableOpacity
-          testID={`lot-check-${product.id}`}
-          accessibilityRole="checkbox"
-          accessibilityLabel={t('stockTotal.includeInTotal')}
-          accessibilityState={{ checked: selected }}
-          style={styles.check}
-          hitSlop={8}
-          onPress={() => onToggle(product)}
-        >
-          <Ionicons
-            testID={`lot-check-icon-${product.id}`}
-            name={selected ? 'checkbox' : 'square-outline'}
-            size={24}
-            color={selected ? Colors.primary : Colors.placeholder}
-          />
-        </TouchableOpacity>
-      )}
       </View>
     </View>
   );
@@ -109,10 +82,8 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   mainRow: { flexDirection: 'row', alignItems: 'center' },
-  mainRowFill: { flex: 1 },
   image: { width: 44, height: 44, borderRadius: 8, marginRight: 12 },
   info: { flex: 1 },
-  check: { marginLeft: 8 },
   name: { fontSize: 15, fontWeight: 'bold', color: Colors.textPrimary },
   sub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
   row: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 12 },

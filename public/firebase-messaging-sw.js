@@ -25,7 +25,7 @@ messaging.onBackgroundMessage((payload) => {
   console.log("deberia mostrar algo")
   self.registration.showNotification(payload.notification.title, {
     body: payload.notification.body,
-    icon: "/firebase-logo.png"
+    icon: "/notification-icon-192.png"
   });
 });
 
@@ -34,6 +34,6 @@ self.addEventListener("push", (event) => {
   const data = event.data?.json() || {};
   self.registration.showNotification(data.notification?.title || "Test", {
     body: data.notification?.body || "Mensaje de prueba",
-    icon: "/firebase-logo.png"
+    icon: "/notification-icon-192.png"
   });
 });

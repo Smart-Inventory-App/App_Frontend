@@ -58,29 +58,28 @@ describe('HomeHeader', () => {
     expect(StyleSheet.flatten(screen.getByTestId('home-name').props.style).color).toBe('#fff');
   });
 
-  it('shows a logo a bit smaller than before, and keeps the size of the words', () => {
+  it('shows the white logo at 80px, and keeps the size of the words', () => {
     render(<HomeHeader greeting="Bienvenido" name="ana" />);
-    expect(StyleSheet.flatten(screen.getByTestId('home-logo-frame').props.style)).toMatchObject({ width: 80, height: 80 });
+    expect(StyleSheet.flatten(screen.getByTestId('home-logo').props.style)).toMatchObject({ width: 80, height: 80 });
     expect(StyleSheet.flatten(screen.getByTestId('home-greeting').props.style).fontSize).toBe(17);
     expect(StyleSheet.flatten(screen.getByTestId('home-name').props.style).fontSize).toBe(28);
   });
 
-  it('shows just the logo: the white margin of the image is cropped out with the corners of the logo', () => {
+  it('shows the white logo alone: no frame, no white circle or square around it', () => {
     render(<HomeHeader greeting="Bienvenido" name="ana" />);
-    const frame = StyleSheet.flatten(screen.getByTestId('home-logo-frame').props.style);
-    expect(frame.overflow).toBe('hidden');
-    expect(frame.borderRadius).toBeGreaterThan(0);
-    expect(frame.backgroundColor).toBeUndefined();
-    const image = StyleSheet.flatten(screen.getByTestId('home-logo').props.style);
-    expect(image.position).toBe('absolute');
-    expect(image.width).toBeGreaterThan(frame.width);
-    expect(image.height).toBeGreaterThan(frame.height);
-    expect(image.top).toBeLessThan(0);
-    expect(image.left).toBeLessThan(0);
-    // la imagen queda centrada dentro del marco
-    expect(image.width + 2 * image.left).toBe(frame.width);
+    const logo = StyleSheet.flatten(screen.getByTestId('home-logo').props.style);
+    expect(logo.backgroundColor).toBeUndefined();
+    expect(logo.borderRadius).toBeUndefined();
+    expect(logo.borderWidth).toBeUndefined();
+    expect(screen.queryByTestId('home-logo-frame')).toBeNull();
     const banner: any = screen.toJSON();
-    expect(banner.children[0].props.testID).toBe('home-logo-frame');
+    expect(banner.children[0].props.testID).toBe('home-logo');
+  });
+
+  it('moves the logo a bit to the left, keeping the greeting where it was', () => {
+    render(<HomeHeader greeting="Bienvenido" name="ana" />);
+    const logo = StyleSheet.flatten(screen.getByTestId('home-logo').props.style);
+    expect(logo.marginLeft).toBeLessThan(0);
   });
 
   it('is a low banner: little space above and below the logo', () => {

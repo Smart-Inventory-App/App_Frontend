@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { Platform } from 'react-native';
+import { signOutFromGoogle } from '../services/googleSignIn';
 import { authService } from '../services/authService';
 import { setAuthToken, setUnauthorizedHandler } from '../services/api';
 import {
@@ -38,7 +39,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: (accessToken: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -88,6 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await storage.delete(TOKEN_KEY);
     setAuthToken(null);
     setToken(null);
+    // También se cierra la sesión de Google del teléfono, para poder elegir otra cuenta la próxima vez
+    await signOutFromGoogle();
   };
 
   const logout = () => endSession('login.sessionClosed');
@@ -96,8 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authService.register(email, password);
   };
 
-  const loginWithGoogle = async (accessToken: string) => {
-    const result = await authService.googleLogin(accessToken);
+  const loginWithGoogle = async (idToken: string) => {
+    const result = await authService.googleLogin(idToken);
     await _afterLogin(result.access_token);
   };
 

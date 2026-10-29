@@ -41,13 +41,14 @@ describe('humanizeEventNote', () => {
   ];
 
   it('replaces the record number with the time and date of that record', () => {
-    expect(humanizeEventNote('Deshecho: revierte el registro #43', events)).toBe('Deshecho: revierte el registro 17:43:23 10/10/2026');
-    expect(humanizeEventNote('Corrección: revierte el registro #44', events)).toBe('Corrección: revierte el registro 18:00:00 10/10/2026');
-    expect(humanizeEventNote('Corrige el registro #43 (antes: 5 consumed)', events)).toBe('Corrige el registro 17:43:23 10/10/2026 (antes: 5 consumed)');
+    expect(humanizeEventNote('Deshecho: revierte el registro #43', events)).toBe('Deshace el registro del 10/10/2026 17:43');
+    expect(humanizeEventNote('Corrección: revierte el registro #44', events)).toBe('Corrige el registro del 10/10/2026 18:00');
+    expect(humanizeEventNote('Corrige el registro #43 (antes: 5 consumed)', events)).toBe('Corrige el registro del 10/10/2026 17:43');
   });
 
   it('leaves the text alone when the record is unknown or there is no reference', () => {
-    expect(humanizeEventNote('Deshecho: revierte el registro #99', events)).toBe('Deshecho: revierte el registro #99');
+    expect(humanizeEventNote('Deshecho: revierte el registro #99', events)).toBe('Deshace un registro anterior');
+    expect(humanizeEventNote('Corrige el registro del 10/10/2026 17:43', events)).toBe('Corrige el registro del 10/10/2026 17:43');
     expect(humanizeEventNote('compré de más', events)).toBe('compré de más');
   });
 });

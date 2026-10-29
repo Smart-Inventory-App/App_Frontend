@@ -27,6 +27,16 @@ export function setUnauthorizedHandler(handler: (() => void) | null) {
   _unauthorizedHandler = handler;
 }
 
+// Sesión vencida o inválida: un 401 con sesión activa cierra la sesión. Lo usan todas las instancias de axios con token
+// (la del backend y la del servicio de auth), así no importa cuál de los dos servicios detecte primero el vencimiento.
+export function handleUnauthorized(error: AxiosError) {
+  if (error.response?.status === 401 && _token && _unauthorizedHandler) {
+    // Se descarta el token antes de avisar, así los 401 simultáneos no disparan varios cierres.
+    _token = null;
+    _unauthorizedHandler();
+  }
+}
+
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (_token) {
     config.headers = config.headers ?? {};
@@ -38,11 +48,7 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
-    if (error.response?.status === 401 && _token && _unauthorizedHandler) {
-      // Se descarta el token antes de avisar, así los 401 simultáneos no disparan varios cierres.
-      _token = null;
-      _unauthorizedHandler();
-    }
+    handleUnauthorized(error);
     return Promise.reject(error);
   },
 );

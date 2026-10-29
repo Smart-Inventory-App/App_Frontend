@@ -114,3 +114,12 @@ describe('VerifyCodeScreen', () => {
     expect(boxes[0].props.value).toBe('9');
   });
 });
+
+describe('VerifyCodeScreen - logo', () => {
+  it('shows the horizontal logo of the app instead of the vertical one with text', () => {
+    render(<VerifyCodeScreen />);
+    expect(screen.getByTestId('auth-logo')).toBeTruthy();
+    expect(screen.queryByText('Smart')).toBeNull();
+    expect(screen.queryByText('Inventory')).toBeNull();
+  });
+});

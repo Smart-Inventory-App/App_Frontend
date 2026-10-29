@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getFirebaseToken } from './firebaseService';
+import { getFirebaseToken } from './notificationService';
 
 
 const AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL;
@@ -15,6 +15,12 @@ export interface LoginResponse {
   token_type: string;
 }
 
+export interface EmailStatus {
+  exists: boolean;
+  /** Solo viene si el email tiene cuenta. `false` = cuenta creada con Google que todavía no definió contraseña. */
+  password_set?: boolean;
+}
+
 export const authService = {
   async login(email: string, password: string): Promise<LoginResponse> {
     const firebase_token = await getFirebaseToken();
@@ -25,6 +31,12 @@ export const authService = {
 
   async register(email: string, password: string): Promise<void> {
     await api.post('/auth/register', { email, password });
+  },
+
+  // Si el email tiene cuenta y si esa cuenta ya tiene contraseña (las creadas con Google todavía no)
+  async getEmailStatus(email: string): Promise<EmailStatus> {
+    const { data } = await api.post<EmailStatus>('/auth/check-email', { email });
+    return data;
   },
 
   async checkEmail(email: string): Promise<boolean> {
@@ -50,8 +62,9 @@ export const authService = {
     return data.different;
   },
 
-  async googleLogin(accessToken: string): Promise<LoginResponse> {
-    const { data } = await api.post<LoginResponse>('/auth/google', { access_token: accessToken });
+  // Se manda el idToken de Google: el servidor lo verifica y comprueba que fue emitido para esta app
+  async googleLogin(idToken: string): Promise<LoginResponse> {
+    const { data } = await api.post<LoginResponse>('/auth/google', { id_token: idToken });
     return data;
   },
 };

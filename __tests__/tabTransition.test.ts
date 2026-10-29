@@ -52,6 +52,14 @@ describe('slideTransition', () => {
     expect(translateX(1)).toBe(800);
   });
 
+  it('eases in and out with a smooth curve: slow at the ends, faster in the middle', () => {
+    const { easing } = (slideTransition.transitionSpec as { config: { easing: (t: number) => number } }).config;
+    expect(easing(0)).toBe(0);
+    expect(easing(1)).toBe(1);
+    expect(easing(0.1)).toBeLessThan(0.1 + 0.1);
+    expect(easing(0.5)).toBeGreaterThan(0.5);
+  });
+
   it('is an animation with a duration, not an instant jump', () => {
     expect(slideTransition.transitionSpec).toMatchObject({ animation: 'timing', config: { duration: TAB_SLIDE_DURATION_MS } });
     expect(TAB_SLIDE_DURATION_MS).toBeGreaterThan(100);

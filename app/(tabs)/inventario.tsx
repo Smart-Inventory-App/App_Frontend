@@ -16,13 +16,13 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/colors';
 import { productService } from '@/services/productService';
 import { profileService } from '@/services/profileService';
-import { Product, ProductCreate, ProductGroupKey } from '@/types/product';
+import { Product, ProductCreate, StockTotal } from '@/types/product';
 import { isValidBarcode } from '@/utils/barcode';
+import { formatThousands } from '@/utils/formatNumber';
 import { truncateLabel } from '@/utils/text';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
 import ProductDetailModal, { GeneralAlertRules } from '@/components/ProductDetailModal';
 import ProductImage from '@/components/ProductImage';
-import StockTotalModal from '@/components/StockTotalModal';
 import { selectedFirst } from '@/utils/selectedFirst';
 import ProductFormFields from '@/components/ProductFormFields';
 import BottomSheetModal from '@/components/BottomSheetModal';
@@ -52,9 +52,8 @@ export default function InventarioScreen() {
   const [historialProduct, setHistorialProduct] = useState<Product | null>(null);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [generalRules, setGeneralRules] = useState<GeneralAlertRules | null>(null);
-  const [stockTotalVisible, setStockTotalVisible] = useState(false);
-  // Producto con el que se abre "Stock total" cuando se llega desde su ventana de información
-  const [stockTotalInitial, setStockTotalInitial] = useState<ProductGroupKey | null>(null);
+  // Stock total y cantidad de productos de la lista (con los filtros elegidos); null hasta que llega el primero
+  const [stockTotal, setStockTotal] = useState<StockTotal | null>(null);
   const [editForm, setEditForm] = useState<Partial<ProductCreate>>({});
   const [saving, setSaving] = useState(false);
   const [filterOptions, setFilterOptions] = useState<{ categorias: string[]; ubicaciones: string[]; marcas: string[] }>({
@@ -87,6 +86,20 @@ export default function InventarioScreen() {
 
   // Para ignorar una respuesta vieja si mientras tanto cambiaron los filtros o se recargó la lista
   const requestRef = useRef(0);
+  const stockRequestRef = useRef(0);
+
+  // El total es el de todos los productos que cumplen la búsqueda y los filtros, no solo el de los que ya se cargaron.
+  // Si falla se deja el último valor: es un dato informativo.
+  const loadStockTotal = useCallback(async () => {
+    const request = ++stockRequestRef.current;
+    const { search: text, categoria, ubicacion } = currentFilters();
+    try {
+      const total = await productService.getStockTotal({ search: text, categoria, ubicacion });
+      if (request === stockRequestRef.current) setStockTotal(total);
+    } catch {
+      // se mantiene el valor anterior
+    }
+  }, [currentFilters]);
   const loadedCountRef = useRef(0);
   loadedCountRef.current = products.length;
 
@@ -96,6 +109,7 @@ export default function InventarioScreen() {
     const limit = Math.max(FIRST_PAGE_SIZE, keep);
     setLoading(true);
     setLoadingMore(false);
+    void loadStockTotal();
     try {
       const data = await productService.getProducts({ ...currentFilters(), limit, offset: 0 });
       if (request !== requestRef.current) return;
@@ -106,7 +120,7 @@ export default function InventarioScreen() {
     } finally {
       if (request === requestRef.current) setLoading(false);
     }
-  }, [currentFilters, t]);
+  }, [currentFilters, loadStockTotal, t]);
 
   // Suma los 10 productos que siguen a los ya cargados, sin repetir ninguno
   const loadMore = async () => {
@@ -191,6 +205,7 @@ export default function InventarioScreen() {
       await productService.deleteProduct(product.id);
       setProducts(prev => prev.filter(p => p.id !== product.id));
       loadFilterOptions();
+      void loadStockTotal();
       showBanner(t('inventory.deletedOk', { name: product.nombre }));
     } catch {
       Alert.alert('Error', t('inventory.deleteError'));
@@ -224,6 +239,7 @@ export default function InventarioScreen() {
     try {
       const updated = await productService.updateProduct(editingProduct.id, editForm);
       setProducts(prev => prev.map(p => (p.id === updated.id ? updated : p)));
+      void loadStockTotal();
       setEditingProduct(null);
       loadFilterOptions();
       showBanner(t('inventory.editedOk', { name: updated.nombre }));
@@ -297,15 +313,6 @@ export default function InventarioScreen() {
   // Todo lo que está arriba de las entradas se desliza junto con la lista: solo el banner queda fijo
   const listHeader = (
     <>
-      <TouchableOpacity
-        testID="open-stock-total"
-        style={styles.stockTotalBtn}
-        onPress={() => { setStockTotalInitial(null); setStockTotalVisible(true); }}
-      >
-        <Ionicons name="layers-outline" size={18} color={Colors.primary} />
-        <Text style={styles.stockTotalBtnText}>{t('stockTotal.openButton')}</Text>
-      </TouchableOpacity>
-
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={16} color={Colors.placeholder} style={styles.searchIcon} />
         <TextInput
@@ -385,6 +392,19 @@ export default function InventarioScreen() {
     <View style={styles.container}>
       <ScreenHeader title={t('inventory.title')} onHomePress={() => router.navigate('/(tabs)/')} />
 
+      {/* Resumen fijo: no se va al desplazar la lista. Se actualiza con la búsqueda, los filtros y cada vez que cambia el inventario */}
+      {stockTotal && (
+        <View testID="stock-total-summary" style={styles.stockSummary}>
+          <Text style={styles.stockSummaryLabel}>{t('inventory.stockTotalTitle')}</Text>
+          <Text testID="stock-total-value" style={styles.stockSummaryValue}>
+            {t(stockTotal.stock_total === 1 ? 'detail.unitOne' : 'detail.unitMany', { count: formatThousands(stockTotal.stock_total) })}
+          </Text>
+          <Text testID="stock-total-products" style={styles.stockSummarySub}>
+            {t(stockTotal.products === 1 ? 'inventory.stockTotalAmongOne' : 'inventory.stockTotalAmongMany', { count: formatThousands(stockTotal.products) })}
+          </Text>
+        </View>
+      )}
+
       <FlatList
         data={loading ? [] : products}
         keyExtractor={item => String(item.id)}
@@ -456,18 +476,6 @@ export default function InventarioScreen() {
         product={detailProduct}
         generalRules={generalRules}
         onClose={() => setDetailProduct(null)}
-        onShowTotal={product => {
-          setDetailProduct(null);
-          setStockTotalInitial({ nombre: product.nombre, categoria: product.categoria });
-          setStockTotalVisible(true);
-        }}
-      />
-
-      <StockTotalModal
-        visible={stockTotalVisible}
-        initial={stockTotalInitial}
-        generalRules={generalRules}
-        onClose={() => setStockTotalVisible(false)}
       />
 
       <ConfirmModal
@@ -496,25 +504,24 @@ export default function InventarioScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f2f3f6' },
   headerGap: { height: 14 },
-  stockTotalBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-    borderRadius: 10,
-    padding: 12,
+  stockSummary: {
     backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 12,
+    marginBottom: 10,
+    elevation: 1,
   },
-  stockTotalBtnText: { color: Colors.primary, fontWeight: '600', fontSize: 14 },
+  stockSummaryLabel: { fontSize: 12, fontWeight: '700', color: Colors.primary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  stockSummaryValue: { fontSize: 28, fontWeight: '700', color: Colors.primary, marginTop: 2 },
+  stockSummarySub: { fontSize: 13, color: Colors.textSecondary, marginTop: 4 },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
     margin: 16,
+    marginTop: 10,
     marginBottom: 8,
     borderRadius: 10,
     paddingHorizontal: 12,

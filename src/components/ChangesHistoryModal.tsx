@@ -76,7 +76,7 @@ export default function ChangesHistoryModal({ visible, onClose, generalRules }: 
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="slide" hardwareAccelerated
       statusBarTranslucent
       navigationBarTranslucent
       onRequestClose={onClose}

@@ -2,8 +2,6 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   Image,
-  KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -12,22 +10,22 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppTextInput from '@/components/AppTextInput';
 import KeyboardAwareScrollView from '@/components/KeyboardAwareScrollView';
+import KeyboardAvoidingView from '@/components/KeyboardAvoidingView';
+import ConfirmModal from '../../src/components/ConfirmModal';
 import { Ionicons } from '@expo/vector-icons';
 import { GoogleSignin, isErrorWithCode, statusCodes } from '@react-native-google-signin/google-signin';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { authService } from '../../src/services/authService';
+import { GOOGLE_ENABLED, configureGoogleSignIn } from '../../src/services/googleSignIn';
 import TopBanner from '../../src/components/TopBanner';
 import { getAuthError } from '../../src/utils/authError';
 import { clearFlashMessage, peekFlashMessage } from '../../src/utils/flashMessage';
 
 type Step = 'email' | 'password';
 
-const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
-const GOOGLE_ENABLED = !!(GOOGLE_ANDROID_CLIENT_ID && GOOGLE_WEB_CLIENT_ID);
-
-GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID! });
+configureGoogleSignIn();
 
 function GoogleButton({ onError }: { onError: (msg: string) => void }) {
   const { loginWithGoogle } = useAuth();
@@ -38,10 +36,14 @@ function GoogleButton({ onError }: { onError: (msg: string) => void }) {
     setLoading(true);
     try {
       await GoogleSignin.hasPlayServices();
-      await GoogleSignin.signIn();
-      const { accessToken } = await GoogleSignin.getTokens();
-      if (!accessToken) throw new Error('No access token');
-      await loginWithGoogle(accessToken);
+      const response = await GoogleSignin.signIn();
+      // Si el usuario cierra la ventana de Google, la librería lo informa sin lanzar un error
+      if (response?.type === 'cancelled') return;
+      // El servidor verifica este idToken y comprueba que fue emitido para nuestra app (el cliente Web)
+      const signedIn = response as unknown as { data?: { idToken?: string | null } } | undefined;
+      const idToken = signedIn?.data?.idToken ?? (await GoogleSignin.getTokens()).idToken;
+      if (!idToken) throw new Error('No id token');
+      await loginWithGoogle(idToken);
       router.replace('/(app)/');
     } catch (err: any) {
       if (isErrorWithCode(err)) {
@@ -60,9 +62,9 @@ function GoogleButton({ onError }: { onError: (msg: string) => void }) {
       onPress={handlePress}
       disabled={loading}
     >
-      <Ionicons name="logo-google" size={18} color={loading ? Colors.textSecondary : '#DB4437'} style={styles.googleIcon} />
+      <Ionicons name="logo-google" size={18} color={loading ? Colors.textSecondary : Colors.primary} style={styles.googleIcon} />
       <Text style={styles.googleButtonText}>
-        {loading ? 'Conectando...' : 'Continuar con Google'}
+        {loading ? t('login.connecting') : t('login.continueWithGoogle')}
       </Text>
     </TouchableOpacity>
   );
@@ -79,15 +81,31 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [flashKey, setFlashKey] = useState<string | null>(peekFlashMessage);
+  const [checkingEmail, setCheckingEmail] = useState(false);
+  // El email es de una cuenta creada con Google que todavía no tiene contraseña
+  const [googleOnly, setGoogleOnly] = useState(false);
 
   const dismissFlash = () => {
     clearFlashMessage();
     setFlashKey(null);
   };
 
-  const handleEmailContinue = () => {
-    if (!email.trim()) return;
+  const handleEmailContinue = async () => {
+    if (!email.trim() || checkingEmail) return;
     setError('');
+    setCheckingEmail(true);
+    try {
+      const status = await authService.getEmailStatus(email.trim());
+      // Una cuenta de Google sin contraseña no puede entrar con contraseña: se le explica qué hacer
+      if (status.exists && status.password_set === false) {
+        setGoogleOnly(true);
+        return;
+      }
+    } catch {
+      // Si no se pudo consultar, se sigue como siempre: el login dirá si algo está mal
+    } finally {
+      setCheckingEmail(false);
+    }
     setStep('password');
   };
 
@@ -108,10 +126,9 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.flex, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <KeyboardAwareScrollView contentContainerStyle={styles.container}>
-        <Image source={require('../../assets/icon.png')} style={styles.logo} />
+        <Image source={require('../../assets/logo.png')} style={styles.logo} />
         <Text style={styles.titleSmart}>Smart</Text>
         <Text style={styles.titleInventory}>Inventory</Text>
 
@@ -122,32 +139,30 @@ export default function LoginScreen() {
               placeholder={t('login.emailPlaceholder')}
               placeholderTextColor={Colors.placeholder}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(v) => { setEmail(v); setGoogleOnly(false); }}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
             />
 
             <TouchableOpacity
-              style={[styles.button, !email.trim() && styles.buttonDisabled]}
+              style={[styles.button, (!email.trim() || checkingEmail) && styles.buttonDisabled]}
               onPress={handleEmailContinue}
-              disabled={!email.trim()}
+              disabled={!email.trim() || checkingEmail}
             >
               <Text style={styles.buttonText}>{t('common.continue')}</Text>
             </TouchableOpacity>
 
-            {/* Google sign-in temporarily hidden. To bring it back, uncomment this block.
             {GOOGLE_ENABLED && (
               <>
                 <View style={styles.dividerRow}>
                   <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>o</Text>
+                  <Text style={styles.dividerText}>{t('login.or')}</Text>
                   <View style={styles.dividerLine} />
                 </View>
                 <GoogleButton onError={setError} />
               </>
             )}
-            */}
 
             <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
               <Text style={styles.link}>{t('login.createAccount')}</Text>
@@ -193,6 +208,20 @@ export default function LoginScreen() {
           </>
         )}
       </KeyboardAwareScrollView>
+      {/* Cuenta creada con Google y sin contraseña: pop up con las dos salidas */}
+      <ConfirmModal
+        visible={googleOnly}
+        message={t('login.googleAccountNotice')}
+        confirmLabel={t('login.createPassword')}
+        cancelLabel={t('login.backToLogin')}
+        confirmTone="primary"
+        stacked
+        onConfirm={() => {
+          setGoogleOnly(false);
+          router.push({ pathname: '/(auth)/forgot-password', params: { email: email.trim() } });
+        }}
+        onCancel={() => setGoogleOnly(false)}
+      />
       {!!flashKey && <TopBanner message={t(flashKey as any)} onDismiss={dismissFlash} autoDismissMs={5000} />}
     </KeyboardAvoidingView>
   );
@@ -207,7 +236,7 @@ const styles = StyleSheet.create({
     paddingTop: 80,
     paddingBottom: 40,
   },
-  logo: { width: 100, height: 100, borderRadius: 20, marginBottom: 12 },
+  logo: { width: 100, height: 100, resizeMode: 'contain', marginBottom: 12 },
   titleSmart: { fontSize: 32, fontWeight: '800', color: Colors.primary, lineHeight: 36 },
   titleInventory: { fontSize: 32, fontWeight: '800', color: Colors.primaryDark, marginBottom: 36 },
   input: {

@@ -1,6 +1,6 @@
 import api from '../src/services/api';
 import authApi from '../src/services/authApi';
-import { getFirebaseToken } from '../src/services/firebaseService';
+import { getFirebaseToken } from '../src/services/notificationService';
 import { profileService } from '../src/services/profileService';
 
 jest.mock('../src/services/api', () => ({
@@ -13,8 +13,14 @@ jest.mock('../src/services/authApi', () => ({
   default: { get: jest.fn() },
 }));
 
-jest.mock('../src/services/firebaseService', () => ({
+jest.mock('../src/services/notificationService', () => ({
   getFirebaseToken: jest.fn(),
+}));
+
+// El de firebaseService es solo para la web: en el celular siempre devuelve null
+const mockWebToken = jest.fn().mockResolvedValue(null);
+jest.mock('../src/services/firebaseService', () => ({
+  getFirebaseToken: (...args: unknown[]) => mockWebToken(...args),
 }));
 
 const mockedApi = api as jest.Mocked<typeof api>;
@@ -72,6 +78,13 @@ describe('profileService.activateNotifications', () => {
     expect(mockedApi.post).toHaveBeenCalledWith('/profile/register_notification_token', { token: 'fcm-token' });
   });
 
+  it('uses the token of the phone (notificationService), not the web-only one that is always null on the phone', async () => {
+    (getFirebaseToken as jest.Mock).mockResolvedValue('fcm-token');
+    mockedApi.post.mockResolvedValue({ status: 200 });
+    await expect(profileService.activateNotifications()).resolves.toBe(true);
+    expect(mockWebToken).not.toHaveBeenCalled();
+  });
+
   it('throws when there is no firebase token', async () => {
     (getFirebaseToken as jest.Mock).mockResolvedValue(null);
     await expect(profileService.activateNotifications()).rejects.toThrow('Failed to get Firebase token');
@@ -94,5 +107,18 @@ describe('profileService.deactivateNotifications', () => {
   it('throws when the backend does not confirm with 200', async () => {
     mockedApi.delete.mockResolvedValue({ status: 500 });
     await expect(profileService.deactivateNotifications()).rejects.toThrow('Failed to deactivate notifications');
+  });
+});
+
+describe('profileService.isUsernameAvailable', () => {
+  it('asks the server if the username is free', async () => {
+    mockedApi.get.mockResolvedValue({ data: { available: false } });
+    await expect(profileService.isUsernameAvailable('anag')).resolves.toBe(false);
+    expect(mockedApi.get).toHaveBeenCalledWith('/profile/username-available', { params: { username: 'anag' } });
+  });
+
+  it('returns true when it is free', async () => {
+    mockedApi.get.mockResolvedValue({ data: { available: true } });
+    await expect(profileService.isUsernameAvailable('libre')).resolves.toBe(true);
   });
 });

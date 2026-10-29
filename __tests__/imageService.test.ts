@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
-import { getAuthToken } from '../src/services/api';
+import { getAuthToken, handleUnauthorized } from '../src/services/api';
 import { pickFromCamera, pickFromGallery, uploadImage } from '../src/services/imageService';
 
 jest.mock('expo-image-picker', () => ({
@@ -19,6 +19,7 @@ jest.mock('axios', () => ({
 jest.mock('../src/services/api', () => ({
   __esModule: true,
   getAuthToken: jest.fn(),
+  handleUnauthorized: jest.fn(),
 }));
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -39,7 +40,7 @@ describe('imageService.pickFromGallery', () => {
     await expect(pickFromGallery()).resolves.toBeNull();
   });
 
-  it('returns the picked image without uploading it: it is uploaded after the user confirms', async () => {
+  it('returns the picked (and cropped) image without uploading it: the caller uploads it', async () => {
     (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
     const asset = { uri: 'file://a.jpg', fileName: 'a.jpg', mimeType: 'image/jpeg' };
     (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({ canceled: false, assets: [asset] });
@@ -48,11 +49,11 @@ describe('imageService.pickFromGallery', () => {
     expect(mockedAxios.post).not.toHaveBeenCalled();
   });
 
-  it('does not offer to crop the image', async () => {
+  it('opens the system screen that offers to crop the image and confirm it', async () => {
     (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
     (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({ canceled: true });
     await pickFromGallery();
-    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: false }));
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: true }));
   });
 });
 
@@ -68,18 +69,27 @@ describe('imageService.pickFromCamera', () => {
     await expect(pickFromCamera()).resolves.toBeNull();
   });
 
-  it('returns the captured photo without uploading it, and without offering to crop it', async () => {
+  it('returns the captured photo without uploading it, after offering to crop it', async () => {
     (ImagePicker.requestCameraPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
     const asset = { uri: 'file://b.jpg' };
     (ImagePicker.launchCameraAsync as jest.Mock).mockResolvedValue({ canceled: false, assets: [asset] });
 
     await expect(pickFromCamera()).resolves.toBe(asset);
     expect(mockedAxios.post).not.toHaveBeenCalled();
-    expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: false }));
+    expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: true }));
   });
 });
 
 describe('imageService.uploadImage', () => {
+  it('lets the session end when the image service rejects the token, and still fails the upload', async () => {
+    (getAuthToken as jest.Mock).mockReturnValue('tok123');
+    const error = { response: { status: 401 } };
+    mockedAxios.post.mockRejectedValue(error);
+
+    await expect(uploadImage({ uri: 'file://a.jpg', fileName: 'a.jpg', mimeType: 'image/jpeg' } as any)).rejects.toBe(error);
+    expect(handleUnauthorized).toHaveBeenCalledWith(error);
+  });
+
   it('uploads the image and returns its url, attaching the auth token', async () => {
     (getAuthToken as jest.Mock).mockReturnValue('tok123');
     mockedAxios.post.mockResolvedValue({ data: { url: 'https://cdn/a.jpg' } });
