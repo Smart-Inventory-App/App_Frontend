@@ -148,7 +148,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockFocusCleanups.length = 0;
   mockedProducts.getDefaults.mockResolvedValue({});
-  mockedProducts.getFilterOptions.mockResolvedValue({ categorias: [], ubicaciones: [], marcas: [] });
+  // Por defecto las opciones de los filtros no llegan nunca: así no hay un setState tardío fuera de act en cada test.
+  // Los tests que necesitan opciones las definen con mockResolvedValue.
+  mockedProducts.getFilterOptions.mockReturnValue(new Promise(() => {}));
   mockedProducts.suggestProducts.mockResolvedValue([]);
 });
 

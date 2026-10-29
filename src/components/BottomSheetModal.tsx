@@ -44,15 +44,27 @@ export default function BottomSheetModal({
   // La ventana ya está en pantalla / la subida de esta apertura ya empezó
   const shown = useRef(visible);
   const entered = useRef(visible);
+  // Si la hoja se desmontó, lo que termine de animarse después no tiene que tocar el estado ni nada más
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      fade.stopAnimation();
+      slide.stopAnimation();
+    };
+  }, [fade, slide]);
 
   const enter = useCallback(() => {
     entered.current = true;
-    if (Platform.OS === 'android') setAnimating(true);
+    // La plataforma se consulta acá y no en el callback: ese corre cuando termina la animación, que puede ser tarde
+    const android = Platform.OS === 'android';
+    if (android) setAnimating(true);
     Animated.parallel([
       Animated.timing(fade, { toValue: 1, duration: FADE_MS, easing: Easing.out(Easing.quad), useNativeDriver }),
       Animated.timing(slide, { toValue: 1, duration: SLIDE_MS, easing: ENTER_EASING, useNativeDriver }),
     ]).start(({ finished }) => {
-      if (finished && Platform.OS === 'android') setAnimating(false);
+      if (alive.current && finished && android) setAnimating(false);
     });
   }, [fade, slide]);
 
@@ -70,14 +82,15 @@ export default function BottomSheetModal({
       const fallback = setTimeout(() => { if (!entered.current) enter(); }, ENTER_FALLBACK_MS);
       return () => clearTimeout(fallback);
     }
-    if (Platform.OS === 'android') setAnimating(true);
+    const android = Platform.OS === 'android';
+    if (android) setAnimating(true);
     Animated.parallel([
       Animated.timing(fade, { toValue: 0, duration: EXIT_FADE_MS, easing: Easing.in(Easing.quad), useNativeDriver }),
       Animated.timing(slide, { toValue: 0, duration: EXIT_SLIDE_MS, easing: EXIT_EASING, useNativeDriver }),
     ]).start(({ finished }) => {
-      if (finished) {
+      if (alive.current && finished) {
         shown.current = false;
-        if (Platform.OS === 'android') setAnimating(false);
+        if (android) setAnimating(false);
         setMounted(false);
       }
     });
